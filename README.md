@@ -24,7 +24,7 @@ $y = X\beta + u$, $u = \lambda Wu + \epsilon$
 
 $y = \rho Wy + X\beta + WX\theta + \epsilon$
 
-#### SDEM*
+#### SDEM
 
 $y = X\beta + WX\theta + u$, $u = \lambda Wu + \epsilon$
 
@@ -36,19 +36,19 @@ $y_{it} = x_{it}' \beta + a_i + \tau_t + \epsilon_{it}$
 
 #### SAR panel
 
-$y_{it} = \rho (Wy)_{it} + x_{it}'\beta + a_i + \tau_t + \epsilon_{it}$
+$y_{it} = \rho (Wy)_{it} + x_{it} ' \beta + a_i + \tau_t + \epsilon_{it}$
 
 #### SEM panel
 
-$y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it},\; u_{it}=\lambda (Wu)_{it}+\epsilon_{it}$
+$y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it}, \ ; u_{it}=\lambda (Wu)_{it}+ \epsilon_{it}$
 
 #### SDM panel
 
-$y_{it} = \rho (Wy)_{it} + x_{it}' \beta + (Wx)_{it}'\theta + a_i + \tau_t + \epsilon_{it}$
+$y_{it} = \rho (Wy)_{it} + x_{it} ' \beta + (Wx)_{it}' \theta + a_i + \tau_t + \epsilon_{it}$
 
 #### SDEM panel
 
-$y_{it} = x_{it}' \beta + (Wx)_{it}'\theta + a_i + \tau_t + u_{it},\; u_{it}=\lambda (Wu)_{it}+\epsilon_{it}$
+$y_{it} = x_{it}' \beta + (Wx)_{it} ' \theta + a_i + \tau_t + u_{it},\ ; u_{it}=\lambda (Wu)_{it}+ \epsilon_{it}$
 
 ### Non-Linear Models
 
