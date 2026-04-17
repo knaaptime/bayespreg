@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 
 [project]
-name = "bayespreg"
+name = "bayespecon"
 dynamic = ["version"]
 description = "Bayesian spatial regression models in Python"
 readme = "README.md"
@@ -23,7 +23,7 @@ dependencies = [
 
 
 [tool.setuptools.packages.find]
-include = ["bayespreg", "bayespreg.*"]
+include = ["bayespecon", "bayespecon.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

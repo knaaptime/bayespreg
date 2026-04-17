@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bayespreg import SpatialProbit
+from bayespecon import SpatialProbit
 from tests.helpers import (
     SAMPLE_KWARGS,
     make_line_W,

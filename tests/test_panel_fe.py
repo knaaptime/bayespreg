@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bayespreg import OLSPanelFE, SARPanelFE, SDEMPanelFE, SDMPanelFE, SEMPanelFE
+from bayespecon import OLSPanelFE, SARPanelFE, SDEMPanelFE, SDMPanelFE, SEMPanelFE
 from tests.helpers import (
     PANEL_N,
     PANEL_T,

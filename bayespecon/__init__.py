@@ -7,11 +7,11 @@ Examples
 --------
 Import a model class directly from the package namespace::
 
-	from bayespreg import SAR
+	from bayespecon import SAR
 
 Import MATLAB-style statistics helpers from the stats submodule::
 
-	from bayespreg import stats
+	from bayespecon import stats
 """
 
 from . import stats
@@ -79,4 +79,4 @@ import contextlib
 from importlib.metadata import PackageNotFoundError, version
 
 with contextlib.suppress(PackageNotFoundError):
-    __version__ = version("bayespreg")
+    __version__ = version("bayespecon")

@@ -136,7 +136,7 @@ class SARPanelRE(SpatialPanelModel):
     Parameters
     ----------
     formula, data, y, X, W, unit_col, time_col, N, T, priors, logdet_method
-        See :class:`~bayespreg.models.panel_base.SpatialPanelModel`.
+        See :class:`~bayespecon.models.panel_base.SpatialPanelModel`.
         ``model`` is forced to 0 (no within-transform demeaning).
 
     Priors (``priors`` dict keys)
@@ -241,7 +241,7 @@ class SEMPanelRE(SpatialPanelModel):
     Parameters
     ----------
     formula, data, y, X, W, unit_col, time_col, N, T, priors, logdet_method
-        See :class:`~bayespreg.models.panel_base.SpatialPanelModel`.
+        See :class:`~bayespecon.models.panel_base.SpatialPanelModel`.
         ``model`` is forced to 0.
 
     Priors (``priors`` dict keys)

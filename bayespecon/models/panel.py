@@ -18,12 +18,12 @@ class OLSPanelFE(SpatialPanelModel):
     ----------
     formula, data, y, X, W, unit_col, time_col, N, T, model, priors,
     logdet_method
-        See :class:`~bayespreg.models.panel_base.SpatialPanelModel`.
+        See :class:`~bayespecon.models.panel_base.SpatialPanelModel`.
 
     Notes
     -----
     This class mirrors MATLAB ``ols_panel_FE_g`` behavior through the shared
-    :class:`~bayespreg.models.panel_base.SpatialPanelModel` transformation
+    :class:`~bayespecon.models.panel_base.SpatialPanelModel` transformation
     pipeline.
     """
 
@@ -81,7 +81,7 @@ class SARPanelFE(SpatialPanelModel):
     ----------
     formula, data, y, X, W, unit_col, time_col, N, T, model, priors,
     logdet_method
-        See :class:`~bayespreg.models.panel_base.SpatialPanelModel`.
+        See :class:`~bayespecon.models.panel_base.SpatialPanelModel`.
 
     Notes
     -----
@@ -161,7 +161,7 @@ class SEMPanelFE(SpatialPanelModel):
     ----------
     formula, data, y, X, W, unit_col, time_col, N, T, model, priors,
     logdet_method
-        See :class:`~bayespreg.models.panel_base.SpatialPanelModel`.
+        See :class:`~bayespecon.models.panel_base.SpatialPanelModel`.
 
     Notes
     -----
@@ -303,7 +303,7 @@ class SDMPanelFE(SpatialPanelModel):
     ----------
     formula, data, y, X, W, unit_col, time_col, N, T, model, priors,
     logdet_method
-        See :class:`~bayespreg.models.panel_base.SpatialPanelModel`.
+        See :class:`~bayespecon.models.panel_base.SpatialPanelModel`.
 
     Notes
     -----
@@ -402,7 +402,7 @@ class SDEMPanelFE(SpatialPanelModel):
     ----------
     formula, data, y, X, W, unit_col, time_col, N, T, model, priors,
     logdet_method
-        See :class:`~bayespreg.models.panel_base.SpatialPanelModel`.
+        See :class:`~bayespecon.models.panel_base.SpatialPanelModel`.
 
     Notes
     -----

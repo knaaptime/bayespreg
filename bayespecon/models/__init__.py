@@ -1,4 +1,4 @@
-"""Model class exports for bayespreg.
+"""Model class exports for bayespecon.
 
 This subpackage groups cross-sectional and panel spatial model classes under a
 single import surface.

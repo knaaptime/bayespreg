@@ -386,7 +386,7 @@ class SpatialModel(ABC):
         Returns
         -------
         dict
-            Diagnostics from :func:`bayespreg.diagnostics.rdiagnose_like`.
+            Diagnostics from :func:`bayespecon.diagnostics.rdiagnose_like`.
         """
         self._require_fit()
         resid = self.residuals()

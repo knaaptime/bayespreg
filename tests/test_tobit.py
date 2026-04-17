@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bayespreg import SARTobit, SDMTobit, SEMTobit
+from bayespecon import SARTobit, SDMTobit, SEMTobit
 from tests.helpers import SAMPLE_KWARGS
 
 pytestmark = pytest.mark.slow

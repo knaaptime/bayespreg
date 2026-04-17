@@ -1,4 +1,4 @@
-name: bayespreg
+name: bayespecon
 channels:
   - conda-forge
 dependencies:

@@ -9,13 +9,13 @@ import sys
 
 from packaging.version import Version
 
-import bayespreg
+import bayespecon
 
-project = "bayespreg"
+project = "bayespecon"
 copyright = "2018-, pysal developers"  # noqa: A001 - shadowing a Python builtin
 author = "pysal developers"
 
-version = Version(bayespreg.__version__).public  # remove commit hash
+version = Version(bayespecon.__version__).public  # remove commit hash
 release = version
 
 language = "en"
@@ -89,10 +89,10 @@ html_theme_options = {
         "repo": "fontawesome/brands/github",
         "edit": "material/file-code",
     },
-    "site_url": "https://pysal.org/bayespreg",
-    "repo_url": "https://github.com/pysal/bayespreg/",
+    "site_url": "https://pysal.org/bayespecon",
+    "repo_url": "https://github.com/pysal/bayespecon/",
     "edit_uri": "blob/main/docs",
-    "repo_name": "pysal/bayespreg",
+    "repo_name": "pysal/bayespecon",
     "features": [
         # "navigation.expand",
         # "navigation.tabs",
@@ -146,7 +146,7 @@ html_theme_options = {
         },
     ],
     "version_dropdown": True,
-    "version_json": "https://pysal.org/bayespreg/versions.json",
+    "version_json": "https://pysal.org/bayespecon/versions.json",
 }
 nb_execution_mode = "cache"
 nb_execution_timeout = -1
@@ -167,15 +167,15 @@ def linkcode_resolve(domain, info):
         import os
 
         fn = inspect.getsourcefile(obj)
-        fn = os.path.relpath(fn, start=os.path.dirname(bayespreg.__file__))
+        fn = os.path.relpath(fn, start=os.path.dirname(bayespecon.__file__))
         source, lineno = inspect.getsourcelines(obj)
         return fn, lineno, lineno + len(source) - 1
 
     if domain != "py" or not info["module"]:
         return None
     try:
-        filename = "bayespreg/%s#L%d-L%d" % find_source()  # noqa: UP031
+        filename = "bayespecon/%s#L%d-L%d" % find_source()  # noqa: UP031
     except Exception:
         filename = info["module"].replace(".", "/") + ".py"
     tag = "main" if "dev" in release else ("v" + release)
-    return f"https://github.com/pysal/bayespreg/blob/{tag}/{filename}"
+    return f"https://github.com/pysal/bayespecon/blob/{tag}/{filename}"

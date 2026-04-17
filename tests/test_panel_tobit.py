@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bayespreg import SARPanelTobit, SEMPanelTobit
+from bayespecon import SARPanelTobit, SEMPanelTobit
 from tests.helpers import PANEL_N, PANEL_T, SAMPLE_KWARGS
 
 pytestmark = pytest.mark.slow
