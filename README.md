@@ -2,6 +2,8 @@
 
 **Bayesian Spatial Econometric Regression**
 
+Bayesians are cool but MATLAB is not
+
 This package is a Python port of Jim LeSage's [spatial econometrics toolbox](https://www.spatial-econometrics.com/) with a few minor enhancements. Models are specified using the familiar Wilkinson format via [`formulaic`](https://matthew.wardrop.casa/formulaic/latest/) (but you can pass design matrices if you prefer), and spatial weights matrices $W$ are represented by PySAL [`graph`](https://pysal.org/libpysal/stable/generated/libpysal.graph.Graph.html#libpysal.graph.Graph) objects (or sparse matrices if you prefer). Estimation is handled by [`pymc`](https://www.pymc.io/welcome.html)
 
 ## Supported Models
@@ -10,45 +12,45 @@ This package is a Python port of Jim LeSage's [spatial econometrics toolbox](htt
 
 #### SLX
 
-$y = X\beta + WX\theta + \epsilon$
+$$y = X\beta + WX\theta + \epsilon$$
 
 #### SAR
 
-$y = \rho Wy + X\beta + \epsilon$
+$$y = \rho Wy + X\beta + \epsilon$$
 
 #### SEM
 
-$y = X\beta + u$, $u = \lambda Wu + \epsilon$
+$$y = X\beta + u, u = \lambda Wu + \epsilon$$
 
 #### SDM
 
-$y = \rho Wy + X\beta + WX\theta + \epsilon$
+$$y = \rho Wy + X\beta + WX\theta + \epsilon$$
 
 #### SDEM
 
-$y = X\beta + WX\theta + u$, $u = \lambda Wu + \epsilon$
+$$y = X\beta + WX\theta + u,  u = \lambda Wu + \epsilon$$
 
 ### Panel Models
 
 #### OLS panel
 
-$y_{it} = x_{it}' \beta + a_i + \tau_t + \epsilon_{it}$
+$$y_{it} = x_{it}' \beta + a_i + \tau_t + \epsilon_{it}$$
 
 #### SAR panel
 
-$y_{it} = \rho Wy_{it} + x_{it} ' \beta + a_i + \tau_t + \epsilon_{it}$
+$$y_{it} = \rho Wy_{it} + x_{it} ' \beta + a_i + \tau_t + \epsilon_{it}$$
 
 #### SEM panel
 
-$y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}$
+$$y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}$$
 
 #### SDM panel
 
-$y_{it} = \rho Wy_{it} + x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + \epsilon_{it}$
+$$y_{it} = \rho Wy_{it} + x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + \epsilon_{it}$$
 
 #### SDEM panel
 
-$y_{it} = x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}$
+$$y_{it} = x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}$$
 
 ### Non-Linear Models
 
@@ -82,10 +84,10 @@ $$y_i = \max(c,\, y^*_i)$$
 
 spatial lag in the latent outcome:
 
-$y^*_t = \rho W y^*_t + X_t \beta + \varepsilon_t$  
+$$y^*_t = \rho W y^*_t + X_t \beta + \varepsilon_t$$
 
 #### SEMPanelTobit
 
 spatial lag in the disturbance:
 
-$y^*_t = X_t \beta + u_t,  u_t = \lambda W u_t + \varepsilon_t$
+$$y^*_t = X_t \beta + u_t,  u_t = \lambda W u_t + \varepsilon_t$$
