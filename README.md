@@ -1,8 +1,8 @@
 # bayespreg
 
-Bayesian Spatial Econometric Regression Models
+**Bayesian Spatial Econometric Regression**
 
-This package is a Python port of Jim LeSage's [spatial econometrics toolbox](https://www.spatial-econometrics.com/) with a few minor enhancements. Models are specified using the familiar Wilkinson format via [`formulaic`](https://matthew.wardrop.casa/formulaic/latest/) (but you can pass design matrixes if you prefer), and spatial weights matrices $W$ are represented by PySAL [`graph`](https://pysal.org/libpysal/stable/generated/libpysal.graph.Graph.html#libpysal.graph.Graph) objects (or sparse matrices if you prefer). Estimation is handled by [`pymc`](https://www.pymc.io/welcome.html)
+This package is a Python port of Jim LeSage's [spatial econometrics toolbox](https://www.spatial-econometrics.com/) with a few minor enhancements. Models are specified using the familiar Wilkinson format via [`formulaic`](https://matthew.wardrop.casa/formulaic/latest/) (but you can pass design matrices if you prefer), and spatial weights matrices $W$ are represented by PySAL [`graph`](https://pysal.org/libpysal/stable/generated/libpysal.graph.Graph.html#libpysal.graph.Graph) objects (or sparse matrices if you prefer). Estimation is handled by [`pymc`](https://www.pymc.io/welcome.html)
 
 ## Supported Models
 
@@ -36,19 +36,19 @@ $y_{it} = x_{it}' \beta + a_i + \tau_t + \epsilon_{it}$
 
 #### SAR panel
 
-$y_{it} = \rho (Wy)_{it} + x_{it} ' \beta + a_i + \tau_t + \epsilon_{it}$
+$y_{it} = \rho Wy_{it} + x_{it} ' \beta + a_i + \tau_t + \epsilon_{it}$
 
 #### SEM panel
 
-$y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it}, \ ; u_{it}=\lambda (Wu)_{it}+ \epsilon_{it}$
+$y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}$
 
 #### SDM panel
 
-$y_{it} = \rho (Wy)_{it} + x_{it} ' \beta + (Wx)_{it}' \theta + a_i + \tau_t + \epsilon_{it}$
+$y_{it} = \rho Wy_{it} + x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + \epsilon_{it}$
 
 #### SDEM panel
 
-$y_{it} = x_{it}' \beta + (Wx)_{it} ' \theta + a_i + \tau_t + u_{it},\ ; u_{it}=\lambda (Wu)_{it}+ \epsilon_{it}$
+$y_{it} = x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}$
 
 ### Non-Linear Models
 
@@ -85,6 +85,6 @@ $y^*_t = \rho W y^*_t + X_t \beta + \varepsilon_t$
 
 #### SEMPanelTobit
 
-spatial lag in the disturbance: 
+spatial lag in the disturbance:
 
 $y^*_t = X_t \beta + u_t$, $u_t = \lambda W u_t + \varepsilon_t$
