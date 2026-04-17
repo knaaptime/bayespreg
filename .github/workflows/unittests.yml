@@ -77,12 +77,13 @@ jobs:
 
       - name: run tests
         run: |
-          pytest bayespreg \
+          pytest tests \
+          -m slow \
           -v \
           -r a \
           -n auto \
           --color yes \
-          --cov bayespreg \
+          --cov tests \
           --cov-append \
           --cov-report term-missing \
           --cov-report xml .
