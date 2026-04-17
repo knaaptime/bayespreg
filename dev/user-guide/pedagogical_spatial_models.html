@@ -671,6 +671,30 @@
   
   
     <li class="md-nav__item">
+      <a href="jgsy2024_replication_bayespecon.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Replicating Elhorst et al 2024</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../references.html" class="md-nav__link">
         
   
@@ -1139,6 +1163,7 @@ Predictors: [&#39;poverty&#39;, &#39;rev_rating&#39;, &#39;num_spots&#39;, &#39;
         <span class="n">target_accept</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
         <span class="n">random_seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
         <span class="n">progressbar</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">idata_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;log_likelihood&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
     <span class="p">)</span>
 
     <span class="n">summary</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
@@ -1212,7 +1237,7 @@ Multiprocess sampling (4 chains in 2 jobs)
 NUTS: [beta, sigma]
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 30 seconds.
+Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 23 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><div>
@@ -1541,7 +1566,7 @@ Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws tota
     </tr>
   </tbody>
 </table>
-</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_5859/3308626596.py:12: UserWarning: The figure layout has changed to tight
+</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_6222/3308626596.py:12: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -1581,7 +1606,7 @@ NUTS: [rho, beta, sigma]
   return 0.5 * np.dot(x, v_out)
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 20 seconds.
+Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 16 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><div>
@@ -1857,7 +1882,7 @@ Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws tota
     </tr>
   </tbody>
 </table>
-</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_5859/3308626596.py:12: UserWarning: The figure layout has changed to tight
+</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_6222/3308626596.py:12: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -1897,7 +1922,7 @@ NUTS: [lam, beta, sigma]
   return 0.5 * np.dot(x, v_out)
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 16 seconds.
+Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 14 seconds.
 There were 8 divergences after tuning. Increase `target_accept` or reparameterize.
 </code></pre></div>
 </div>
@@ -2173,7 +2198,7 @@ There were 8 divergences after tuning. Increase `target_accept` or reparameteriz
     </tr>
   </tbody>
 </table>
-</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_5859/3308626596.py:12: UserWarning: The figure layout has changed to tight
+</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_6222/3308626596.py:12: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2212,7 +2237,7 @@ NUTS: [rho, beta, sigma]
   return 0.5 * np.dot(x, v_out)
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 34 seconds.
+Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 26 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><div>
@@ -2561,7 +2586,7 @@ Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws tota
     </tr>
   </tbody>
 </table>
-</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_5859/3308626596.py:12: UserWarning: The figure layout has changed to tight
+</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_6222/3308626596.py:12: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2601,7 +2626,7 @@ NUTS: [lam, beta, sigma]
   return 0.5 * np.dot(x, v_out)
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 32 seconds.
+Sampling 4 chains for 400 tune and 400 draw iterations (1_600 + 1_600 draws total) took 25 seconds.
 There were 7 divergences after tuning. Increase `target_accept` or reparameterize.
 </code></pre></div>
 </div>
@@ -2950,7 +2975,7 @@ There were 7 divergences after tuning. Increase `target_accept` or reparameteriz
     </tr>
   </tbody>
 </table>
-</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_5859/3308626596.py:12: UserWarning: The figure layout has changed to tight
+</div></div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_6222/3308626596.py:12: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -3068,6 +3093,7 @@ Lower values are better on these scales.</p>
 <ul class="simple">
 <li><p>These comparisons are only meaningful when models are fit to the same data.</p></li>
 <li><p>For robust results, increase <code class="docutils literal notranslate"><span class="pre">draws</span></code> and <code class="docutils literal notranslate"><span class="pre">tune</span></code> beyond this pedagogical setup.</p></li>
+<li><p>Some model formulations may not expose pointwise <code class="docutils literal notranslate"><span class="pre">log_likelihood</span></code>; those are skipped in the joint comparison and still reported in per-model attempts.</p></li>
 </ul>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
@@ -3079,28 +3105,303 @@ Lower values are better on these scales.</p>
     <span class="s2">&quot;SDEM&quot;</span><span class="p">:</span> <span class="n">idata_sdem</span><span class="p">,</span>
 <span class="p">}</span>
 
-<span class="k">try</span><span class="p">:</span>
-    <span class="n">waic_cmp</span> <span class="o">=</span> <span class="n">az</span><span class="o">.</span><span class="n">compare</span><span class="p">(</span><span class="n">idata_dict</span><span class="p">,</span> <span class="n">ic</span><span class="o">=</span><span class="s2">&quot;waic&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;WAIC comparison&quot;</span><span class="p">)</span>
-    <span class="n">display</span><span class="p">(</span><span class="n">waic_cmp</span><span class="p">)</span>
-<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WAIC comparison not available: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-<span class="k">try</span><span class="p">:</span>
-    <span class="n">loo_cmp</span> <span class="o">=</span> <span class="n">az</span><span class="o">.</span><span class="n">compare</span><span class="p">(</span><span class="n">idata_dict</span><span class="p">,</span> <span class="n">ic</span><span class="o">=</span><span class="s2">&quot;loo&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;LOO comparison&quot;</span><span class="p">)</span>
-    <span class="n">display</span><span class="p">(</span><span class="n">loo_cmp</span><span class="p">)</span>
-<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LOO comparison not available: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_has_loglik</span><span class="p">(</span><span class="n">idata</span><span class="p">):</span>
+    <span class="k">if</span> <span class="s2">&quot;log_likelihood&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">idata</span><span class="o">.</span><span class="n">groups</span><span class="p">():</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">idata</span><span class="o">.</span><span class="n">log_likelihood</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mi">0</span>
+
+
+<span class="n">valid_for_compare</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">idata</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">idata</span> <span class="ow">in</span> <span class="n">idata_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">_has_loglik</span><span class="p">(</span><span class="n">idata</span><span class="p">)}</span>
+<span class="n">missing_loglik</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">idata</span> <span class="ow">in</span> <span class="n">idata_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">_has_loglik</span><span class="p">(</span><span class="n">idata</span><span class="p">)]</span>
+
+<span class="k">if</span> <span class="n">missing_loglik</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped (no log_likelihood group):&quot;</span><span class="p">,</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">missing_loglik</span><span class="p">))</span>
+
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_for_compare</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Need at least two models with valid log_likelihood for WAIC/LOO compare.&quot;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">ic</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;waic&quot;</span><span class="p">,</span> <span class="s2">&quot;loo&quot;</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cmp</span> <span class="o">=</span> <span class="n">az</span><span class="o">.</span><span class="n">compare</span><span class="p">(</span><span class="n">valid_for_compare</span><span class="p">,</span> <span class="n">ic</span><span class="o">=</span><span class="n">ic</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;BB-pseudo-BMA&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ic</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2"> comparison&quot;</span><span class="p">)</span>
+            <span class="n">display</span><span class="p">(</span><span class="n">cmp</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ic</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2"> comparison not available: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Always provide per-model IC attempts so the cell remains informative.</span>
+<span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">idata</span> <span class="ow">in</span> <span class="n">idata_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">row</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">}</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">waic_res</span> <span class="o">=</span> <span class="n">az</span><span class="o">.</span><span class="n">waic</span><span class="p">(</span><span class="n">idata</span><span class="p">)</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;elpd_waic&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">waic_res</span><span class="o">.</span><span class="n">elpd_waic</span><span class="p">)</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;p_waic&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">waic_res</span><span class="o">.</span><span class="n">p_waic</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;elpd_waic&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;p_waic&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;waic_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">loo_res</span> <span class="o">=</span> <span class="n">az</span><span class="o">.</span><span class="n">loo</span><span class="p">(</span><span class="n">idata</span><span class="p">)</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;elpd_loo&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">loo_res</span><span class="o">.</span><span class="n">elpd_loo</span><span class="p">)</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;p_loo&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">loo_res</span><span class="o">.</span><span class="n">p_loo</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;elpd_loo&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;p_loo&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="n">row</span><span class="p">[</span><span class="s2">&quot;loo_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+
+<span class="n">ic_table</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">&quot;model&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">display</span><span class="p">(</span><span class="n">ic_table</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>WAIC comparison not available: Encountered error in ELPD computation of compare.
-LOO comparison not available: Encountered error in ELPD computation of compare.
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Skipped (no log_likelihood group): SEM, SDEM
+WAIC comparison
+LOO comparison
 </code></pre></div>
 </div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/arviz/stats/stats.py:1652: UserWarning: For one or more samples the posterior variance of the log predictive densities exceeds 0.4. This could be indication of WAIC starting to fail. 
+See http://arxiv.org/abs/1507.04544 for details
+  warnings.warn(
+/home/runner/micromamba/envs/test/lib/python3.14/site-packages/arviz/stats/stats.py:1652: UserWarning: For one or more samples the posterior variance of the log predictive densities exceeds 0.4. This could be indication of WAIC starting to fail. 
+See http://arxiv.org/abs/1507.04544 for details
+  warnings.warn(
+/home/runner/micromamba/envs/test/lib/python3.14/site-packages/arviz/stats/stats.py:1652: UserWarning: For one or more samples the posterior variance of the log predictive densities exceeds 0.4. This could be indication of WAIC starting to fail. 
+See http://arxiv.org/abs/1507.04544 for details
+  warnings.warn(
+/home/runner/micromamba/envs/test/lib/python3.14/site-packages/arviz/stats/stats.py:1652: UserWarning: For one or more samples the posterior variance of the log predictive densities exceeds 0.4. This could be indication of WAIC starting to fail. 
+See http://arxiv.org/abs/1507.04544 for details
+  warnings.warn(
+/home/runner/micromamba/envs/test/lib/python3.14/site-packages/arviz/stats/stats.py:1652: UserWarning: For one or more samples the posterior variance of the log predictive densities exceeds 0.4. This could be indication of WAIC starting to fail. 
+See http://arxiv.org/abs/1507.04544 for details
+  warnings.warn(
+/home/runner/micromamba/envs/test/lib/python3.14/site-packages/arviz/stats/stats.py:1652: UserWarning: For one or more samples the posterior variance of the log predictive densities exceeds 0.4. This could be indication of WAIC starting to fail. 
+See http://arxiv.org/abs/1507.04544 for details
+  warnings.warn(
+</code></pre></div>
 </div>
+<div class="output text_html"><div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>rank</th>
+      <th>elpd_waic</th>
+      <th>p_waic</th>
+      <th>elpd_diff</th>
+      <th>weight</th>
+      <th>se</th>
+      <th>dse</th>
+      <th>warning</th>
+      <th>scale</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>SDM</th>
+      <td>0</td>
+      <td>-313.403244</td>
+      <td>10.204040</td>
+      <td>0.000000</td>
+      <td>0.593783</td>
+      <td>7.995193</td>
+      <td>0.000000</td>
+      <td>True</td>
+      <td>log</td>
+    </tr>
+    <tr>
+      <th>SLX</th>
+      <td>1</td>
+      <td>-314.677063</td>
+      <td>9.908099</td>
+      <td>1.273819</td>
+      <td>0.197581</td>
+      <td>7.827743</td>
+      <td>1.058572</td>
+      <td>True</td>
+      <td>log</td>
+    </tr>
+    <tr>
+      <th>SAR</th>
+      <td>2</td>
+      <td>-315.358505</td>
+      <td>7.352979</td>
+      <td>1.955261</td>
+      <td>0.208636</td>
+      <td>7.178594</td>
+      <td>2.578512</td>
+      <td>True</td>
+      <td>log</td>
+    </tr>
+  </tbody>
+</table>
+</div></div><div class="output text_html"><div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>rank</th>
+      <th>elpd_loo</th>
+      <th>p_loo</th>
+      <th>elpd_diff</th>
+      <th>weight</th>
+      <th>se</th>
+      <th>dse</th>
+      <th>warning</th>
+      <th>scale</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>SDM</th>
+      <td>0</td>
+      <td>-313.734415</td>
+      <td>10.535212</td>
+      <td>0.000000</td>
+      <td>0.564234</td>
+      <td>8.199387</td>
+      <td>0.000000</td>
+      <td>False</td>
+      <td>log</td>
+    </tr>
+    <tr>
+      <th>SLX</th>
+      <td>1</td>
+      <td>-314.861513</td>
+      <td>10.092549</td>
+      <td>1.127098</td>
+      <td>0.194927</td>
+      <td>7.966005</td>
+      <td>1.074014</td>
+      <td>False</td>
+      <td>log</td>
+    </tr>
+    <tr>
+      <th>SAR</th>
+      <td>2</td>
+      <td>-315.528165</td>
+      <td>7.522640</td>
+      <td>1.793750</td>
+      <td>0.240839</td>
+      <td>7.520403</td>
+      <td>2.612835</td>
+      <td>False</td>
+      <td>log</td>
+    </tr>
+  </tbody>
+</table>
+</div></div><div class="output text_html"><div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>model</th>
+      <th>elpd_waic</th>
+      <th>p_waic</th>
+      <th>elpd_loo</th>
+      <th>p_loo</th>
+      <th>waic_error</th>
+      <th>loo_error</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>SAR</td>
+      <td>-315.358505</td>
+      <td>7.352979</td>
+      <td>-315.528165</td>
+      <td>7.522640</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>SDEM</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>log likelihood not found in inference data object</td>
+      <td>log likelihood not found in inference data object</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>SDM</td>
+      <td>-313.403244</td>
+      <td>10.204040</td>
+      <td>-313.734415</td>
+      <td>10.535212</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>SEM</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>log likelihood not found in inference data object</td>
+      <td>log likelihood not found in inference data object</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>SLX</td>
+      <td>-314.677063</td>
+      <td>9.908099</td>
+      <td>-314.861513</td>
+      <td>10.092549</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+  </tbody>
+</table>
+</div></div></div>
 </div>
 <h2 id="matlab-style-residual-diagnostics-per-model">MATLAB-Style Residual Diagnostics (Per Model)<a class="headerlink" href="#matlab-style-residual-diagnostics-per-model" title="Link to this heading">¶</a></h2>
 <p>This section mirrors the MATLAB reference diagnostics module:</p>
@@ -3413,7 +3714,7 @@ NUTS: [rho, beta, sigma]
   return 0.5 * np.dot(x, v_out)
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 2 chains for 200 tune and 200 draw iterations (400 + 400 draws total) took 7 seconds.
+Sampling 2 chains for 200 tune and 200 draw iterations (400 + 400 draws total) took 6 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details

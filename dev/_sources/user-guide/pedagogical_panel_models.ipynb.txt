@@ -8,11 +8,8 @@
     "# Bayesian Spatial Panel Models and Diagnostics\n",
     "\n",
     "This notebook demonstrates the panel-model classes in `bayespecon`:\n",
-    "- `OLSPanelFE`\n",
-    "- `SARPanelFE`\n",
-    "- `SEMPanelFE`\n",
-    "- `SDMPanelFE`\n",
-    "- `SDEMPanelFE`\n",
+    "- Fixed effects / pooled panel models: `OLSPanelFE`, `SARPanelFE`, `SEMPanelFE`, `SDMPanelFE`, `SDEMPanelFE`\n",
+    "- Random effects panel models: `OLSPanelRE`, `SARPanelRE`, `SEMPanelRE`\n",
     "\n",
     "It also demonstrates diagnostics inspired by the MATLAB reference code:\n",
     "- `rdiagnose`-style influence diagnostics\n",
@@ -31,22 +28,30 @@
     "\n",
     "Let observations be stacked by time, then unit (panel_g convention).\n",
     "\n",
+    "Fixed-effects / pooled classes:\n",
     "- OLS panel: $y_{it} = x_{it}'\\beta + a_i + \\tau_t + \\epsilon_{it}$\n",
     "- SAR panel: $y_{it} = \\rho (Wy)_{it} + x_{it}'\\beta + a_i + \\tau_t + \\epsilon_{it}$\n",
     "- SEM panel: $y_{it} = x_{it}'\\beta + a_i + \\tau_t + u_{it},\\; u_{it}=\\lambda (Wu)_{it}+\\epsilon_{it}$\n",
     "- SDM panel: $y_{it} = \\rho (Wy)_{it} + x_{it}'\\beta + (Wx)_{it}'\\theta + a_i + \\tau_t + \\epsilon_{it}$\n",
     "- SDEM panel: $y_{it} = x_{it}'\\beta + (Wx)_{it}'\\theta + a_i + \\tau_t + u_{it},\\; u_{it}=\\lambda (Wu)_{it}+\\epsilon_{it}$\n",
     "\n",
-    "The `model` argument selects FE specification:\n",
+    "Random-effects classes:\n",
+    "- OLS random effects: $y_{it} = x_{it}'\\beta + \\alpha_i + \\epsilon_{it},\\; \\alpha_i \\sim N(0, \\sigma_\\alpha^2)$\n",
+    "- SAR random effects: $y_{it} = \\rho (Wy)_{it} + x_{it}'\\beta + \\alpha_i + \\epsilon_{it},\\; \\alpha_i \\sim N(0, \\sigma_\\alpha^2)$\n",
+    "- SEM random effects: $y_{it} = x_{it}'\\beta + \\alpha_i + u_{it},\\; u_{it}=\\lambda (Wu)_{it}+\\epsilon_{it},\\; \\alpha_i \\sim N(0, \\sigma_\\alpha^2)$\n",
+    "\n",
+    "The `model` argument selects the pooled or fixed-effects specification for the FE classes:\n",
     "- `0` pooled\n",
     "- `1` unit FE\n",
     "- `2` time FE\n",
-    "- `3` two-way FE"
+    "- `3` two-way FE\n",
+    "\n",
+    "The RE classes are hierarchical models with unit-level random intercepts, so they internally use the pooled design and estimate `sigma_alpha` directly."
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 1,
+   "execution_count": null,
    "id": "dd7aa74e",
    "metadata": {},
    "outputs": [],
@@ -69,10 +74,13 @@
     "\n",
     "from bayespecon import (\n",
     "    OLSPanelFE,\n",
+    "    OLSPanelRE,\n",
     "    SARPanelFE,\n",
-    "    SEMPanelFE,\n",
-    "    SDMPanelFE,\n",
+    "    SARPanelRE,\n",
     "    SDEMPanelFE,\n",
+    "    SDMPanelFE,\n",
+    "    SEMPanelFE,\n",
+    "    SEMPanelRE,\n",
     ")\n",
     "\n",
     "az.style.use(\"arviz-white\")"
@@ -2365,15 +2373,97 @@
   },
   {
    "cell_type": "markdown",
-   "id": "a6e240ac",
+   "id": "01cc406c",
    "metadata": {},
    "source": [
-    "## MATLAB-Style Diagnostics Across Panel Models"
+    "## Random-Effects Panel Models\n",
+    "\n",
+    "The random-effects models replace deterministic unit fixed effects with latent unit intercepts $\\alpha_i \\sim N(0, \\sigma_\\alpha^2)$. That lets the notebook estimate the variance of unit heterogeneity directly and compare FE and RE behavior on the same synthetic balanced panel."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "e69c7c40",
+   "metadata": {},
+   "source": [
+    "### Fit: OLSPanelRE"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 9,
+   "execution_count": null,
+   "id": "ceab3f8c",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "ols_panel_re, idata_ols_re, summary_ols_re, effects_ols_re = fit_panel_model(\n",
+    "    OLSPanelRE, formula, panel, W, model=0\n",
+    ")\n",
+    "display(summary_ols_re)\n",
+    "display(effects_ols_re)\n",
+    "display(diagnostics_table(idata_ols_re, [\"beta\", \"sigma\", \"sigma_alpha\"]))\n",
+    "show_trace(idata_ols_re, [\"sigma\", \"sigma_alpha\"], \"OLSPanelRE trace\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "6522b0b6",
+   "metadata": {},
+   "source": [
+    "### Fit: SARPanelRE"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "989bce92",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "sar_panel_re, idata_sar_re, summary_sar_re, effects_sar_re = fit_panel_model(\n",
+    "    SARPanelRE, formula, panel, W, model=0\n",
+    ")\n",
+    "display(summary_sar_re)\n",
+    "display(effects_sar_re)\n",
+    "display(diagnostics_table(idata_sar_re, [\"rho\", \"beta\", \"sigma\", \"sigma_alpha\"]))\n",
+    "show_trace(idata_sar_re, [\"rho\", \"sigma\", \"sigma_alpha\"], \"SARPanelRE trace\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "dbc43cc8",
+   "metadata": {},
+   "source": [
+    "### Fit: SEMPanelRE"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "d8a50628",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "sem_panel_re, idata_sem_re, summary_sem_re, effects_sem_re = fit_panel_model(\n",
+    "    SEMPanelRE, formula, panel, W, model=0\n",
+    ")\n",
+    "display(summary_sem_re)\n",
+    "display(effects_sem_re)\n",
+    "display(diagnostics_table(idata_sem_re, [\"lam\", \"beta\", \"sigma\", \"sigma_alpha\"]))\n",
+    "show_trace(idata_sem_re, [\"lam\", \"sigma\", \"sigma_alpha\"], \"SEMPanelRE trace\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "a6e240ac",
+   "metadata": {},
+   "source": [
+    "## MATLAB-Style Diagnostics Across FE and RE Models"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
    "id": "e661f74c",
    "metadata": {},
    "outputs": [
@@ -2523,6 +2613,9 @@
     "    \"SEMPanelFE\": sem_panel,\n",
     "    \"SDMPanelFE\": sdm_panel,\n",
     "    \"SDEMPanelFE\": sdem_panel,\n",
+    "    \"OLSPanelRE\": ols_panel_re,\n",
+    "    \"SARPanelRE\": sar_panel_re,\n",
+    "    \"SEMPanelRE\": sem_panel_re,\n",
     "}\n",
     "\n",
     "rows = []\n",
@@ -2558,12 +2651,12 @@
    "id": "daf0a260",
    "metadata": {},
    "source": [
-    "## Model Comparison (WAIC and LOO)"
+    "## Model Comparison (WAIC and LOO) Across FE and RE Models"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 18,
+   "execution_count": null,
    "id": "1bf278ba",
    "metadata": {},
    "outputs": [
@@ -2877,6 +2970,9 @@
     "    \"SEMPanelFE\": idata_sem,\n",
     "    \"SDMPanelFE\": idata_sdm,\n",
     "    \"SDEMPanelFE\": idata_sdem,\n",
+    "    \"OLSPanelRE\": idata_ols_re,\n",
+    "    \"SARPanelRE\": idata_sar_re,\n",
+    "    \"SEMPanelRE\": idata_sem_re,\n",
     "}\n",
     "\n",
     "\n",
