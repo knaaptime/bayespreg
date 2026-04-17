@@ -8,19 +8,47 @@ This package is a Python port of Jim LeSage's [spatial econometrics toolbox](htt
 
 ### Cross Sectional Models
 
-- **SLX**: $y = X\beta + WX\theta + \epsilon$
-- **SAR**: $y = \rho Wy + X\beta + \epsilon$
-- **SEM**: $y = X\beta + u$, $u = \lambda Wu + \epsilon$
-- **SDM**: $y = \rho Wy + X\beta + WX\theta + \epsilon$
-- **SDEM**: $y = X\beta + WX\theta + u$, $u = \lambda Wu + \epsilon$
+#### SLX
+
+$y = X\beta + WX\theta + \epsilon$
+
+#### SAR
+
+$y = \rho Wy + X\beta + \epsilon$
+
+#### SEM
+
+$y = X\beta + u$, $u = \lambda Wu + \epsilon$
+
+#### SDM
+
+$y = \rho Wy + X\beta + WX\theta + \epsilon$
+
+#### SDEM*
+
+$y = X\beta + WX\theta + u$, $u = \lambda Wu + \epsilon$
 
 ### Panel Models
 
-- OLS panel: $y_{it} = x_{it}' \beta + a_i + \tau_t + \epsilon_{it}$
-- SAR panel: $y_{it} = \rho (Wy)_{it} + x_{it}'\beta + a_i + \tau_t + \epsilon_{it}$
-- SEM panel: $y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it},\; u_{it}=\lambda (Wu)_{it}+\epsilon_{it}$
-- SDM panel: $y_{it} = \rho (Wy)_{it} + x_{it}' \beta + (Wx)_{it}'\theta + a_i + \tau_t + \epsilon_{it}$
-- SDEM panel: $y_{it} = x_{it}' \beta + (Wx)_{it}'\theta + a_i + \tau_t + u_{it},\; u_{it}=\lambda (Wu)_{it}+\epsilon_{it}$
+#### OLS panel
+
+$y_{it} = x_{it}' \beta + a_i + \tau_t + \epsilon_{it}$
+
+#### SAR panel
+
+$y_{it} = \rho (Wy)_{it} + x_{it}'\beta + a_i + \tau_t + \epsilon_{it}$
+
+#### SEM panel
+
+$y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it},\; u_{it}=\lambda (Wu)_{it}+\epsilon_{it}$
+
+#### SDM panel
+
+$y_{it} = \rho (Wy)_{it} + x_{it}' \beta + (Wx)_{it}'\theta + a_i + \tau_t + \epsilon_{it}$
+
+#### SDEM panel
+
+$y_{it} = x_{it}' \beta + (Wx)_{it}'\theta + a_i + \tau_t + u_{it},\; u_{it}=\lambda (Wu)_{it}+\epsilon_{it}$
 
 ### Non-Linear Models
 
@@ -50,5 +78,13 @@ $$y_i = \max(c,\, y^*_i)$$
 
 ### Non-Linear Panel Models
 
-- **SARPanelTobit** — spatial lag in the latent outcome: $y^*_t = \rho W y^*_t + X_t \beta + \varepsilon_t$
-- **SEMPanelTobit** — spatial lag in the disturbance: $y^*_t = X_t \beta + u_t$, $u_t = \lambda W u_t + \varepsilon_t$
+#### SARPanelTobit
+spatial lag in the latent outcome: 
+
+$y^*_t = \rho W y^*_t + X_t \beta + \varepsilon_t$  
+
+#### SEMPanelTobit
+
+spatial lag in the disturbance: 
+
+$y^*_t = X_t \beta + u_t$, $u_t = \lambda W u_t + \varepsilon_t$
