@@ -19,6 +19,7 @@ Panel Models <user-guide/pedagogical_panel_models>
 Nonlinear Models <user-guide/nonlinear_models>
 Nonlinear Panel Models <user-guide/nonlinear_panel_models>
 Recovering Parameters <user-guide/faithfulness_bayespecon>
+Replicating Elhorst et al 2024 <user-guide/jgsy2024_replication_bayespecon>
 references
 ```
 
