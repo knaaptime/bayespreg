@@ -3,8 +3,6 @@
 This module implements the computational functionality from:
 - lmerror, lmlag, lmrho, lmrhorob, lmsar
 - lratios, moran, walds
-- model_probs
-- prt_spat, prt_spat2, prt_old, plt_spat
 """
 
 from __future__ import annotations

@@ -129,7 +129,11 @@ class SpatialModel(ABC):
         How to compute ``log|I - rho*W|``. ``"eigenvalue"`` (default)
         pre-computes W's eigenvalues once and evaluates O(n) per step;
         ``"exact"`` uses symbolic pytensor det (slow for n > 500);
-        ``"grid"`` uses spline interpolation (approximate).
+        ``"grid"`` uses spline interpolation (approximate);
+        ``"full"`` uses sparse-LU grid (MATLAB-style ``lndetfull``);
+        ``"int"`` uses sparse-LU + spline interpolation (``lndetint``);
+        ``"mc"`` uses Monte Carlo trace approximation (``lndetmc``);
+        ``"ichol"`` uses ILU-based approximation (``lndetichol`` analog).
     w_vars : list of str, optional
         Names of X columns to spatially lag. Only relevant for models that
         include ``WX`` terms (SLX, SDM, SDEM and their panel/Tobit variants).
