@@ -22,3 +22,5 @@ dependencies:
   - pytest-xdist
   - twine
   - openpyxl
+  - numpyro
+  - blackjax

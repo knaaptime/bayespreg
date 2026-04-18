@@ -21,6 +21,9 @@ dependencies:
   - pytest-mpl
   - pytest-xdist
   - openpyxl
+  - numpyro
+  - blackjax
+
   # docs
   - twine
   - sphinx>=1.4.3
