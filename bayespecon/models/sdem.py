@@ -86,18 +86,24 @@ class SDEM(SpatialModel):
         dict
             Direct, indirect, total effects and feature names.
         """
-        # For SDEM: spatial multiplier applies to errors, not X.
-        # dy/dX_k = beta1_k, dy/dWX_k = beta2_k (local impacts only)
-        # Direct = beta1, Indirect = beta2 (interpreted as neighbour effect),
-        # Total = beta1 + beta2.
+        # For SDEM (no y-lag), impacts match SLX form:
+        # S_k = d y / d X_k = beta1_k * I + beta2_k * W
+        # Direct   = mean(diag(S_k))
+        # Total    = mean(row_sums(S_k))
+        # Indirect = Total - Direct
         beta = self._posterior_mean("beta")
         k = self._X.shape[1]
         kw = self._WX.shape[1]
         beta1, beta2 = beta[:k], beta[k:k + kw]
+        W = self._W_dense
+        mean_diag_w = float(np.diag(W).mean())
+        mean_row_sum_w = float(W.sum(axis=1).mean())
+        direct = beta1[self._wx_column_indices] + beta2 * mean_diag_w
+        total = beta1[self._wx_column_indices] + beta2 * mean_row_sum_w
         return {
-            "direct": beta1[self._wx_column_indices],
-            "indirect": beta2,
-            "total": beta1[self._wx_column_indices] + beta2,
+            "direct": direct,
+            "indirect": total - direct,
+            "total": total,
             "feature_names": self._wx_feature_names,
         }
 

@@ -316,8 +316,10 @@ class SpatialModel(ABC):
     def spatial_effects(self) -> dict[str, np.ndarray]:
         """Compute posterior direct, indirect, and total impacts.
 
-        For models without a spatial lag on y (SLX, SDEM), the
-        derivative matrix is diagonal, so indirect = 0.
+        Models without a spatial lag on y do not exhibit global
+        feedback propagation through :math:`(I-\rho W)^{-1}`. However,
+        models with spatially lagged covariates (SLX, SDEM) can still
+        have non-zero neighbour spillovers captured in the indirect term.
 
         Returns
         -------

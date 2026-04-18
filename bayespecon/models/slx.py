@@ -79,13 +79,17 @@ class SLX(SpatialModel):
         beta1 = beta[:k]   # coefficients on X
         beta2 = beta[k:k + kw]   # coefficients on WX (excluding intercept-like terms)
 
-        # For SLX: dy/dX_k = beta1_k * I + beta2_k * W
-        # Direct = beta1 (diagonal mean of derivative matrix = beta1)
-        # Indirect = beta2 * (mean row sum of W) = beta2 * 1 (row-standardised W)
+        # For SLX: S_k = d y / d X_k = beta1_k * I + beta2_k * W
+        # Direct   = mean(diag(S_k))
+        # Total    = mean(row_sums(S_k))
+        # Indirect = Total - Direct
         W = self._W_dense
-        direct = beta1[self._wx_column_indices]
-        indirect = beta2 * W.mean(axis=1).mean()  # scalar row mean (=1 for row-standardised)
-        total = direct + indirect
+        mean_diag_w = float(np.diag(W).mean())
+        mean_row_sum_w = float(W.sum(axis=1).mean())
+
+        direct = beta1[self._wx_column_indices] + beta2 * mean_diag_w
+        total = beta1[self._wx_column_indices] + beta2 * mean_row_sum_w
+        indirect = total - direct
 
         return {
             "direct": direct,

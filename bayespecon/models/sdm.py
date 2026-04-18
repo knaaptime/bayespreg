@@ -97,7 +97,7 @@ class SDM(SpatialModel):
             for j, b2 in zip(self._wx_column_indices, beta2)
         ])
         total = np.array([
-            (M @ (beta1[j] * np.eye(n) + b2 * W)).mean()
+            (M @ (beta1[j] * np.eye(n) + b2 * W)).sum(axis=1).mean()
             for j, b2 in zip(self._wx_column_indices, beta2)
         ])
         indirect = total - direct

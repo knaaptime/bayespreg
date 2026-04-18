@@ -89,7 +89,7 @@ class SAR(SpatialModel):
 
         S = np.linalg.inv(np.eye(n) - rho * W)  # (n, n)
         direct = np.diag(S).mean() * beta
-        total = S.mean(axis=1).mean() * beta
+        total = S.sum(axis=1).mean() * beta
         indirect = total - direct
 
         return {

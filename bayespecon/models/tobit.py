@@ -96,7 +96,7 @@ class SARTobit(_SpatialTobitBase):
         n = self._W_dense.shape[0]
         S = np.linalg.inv(np.eye(n) - rho * self._W_dense)
         direct = np.diag(S).mean() * beta
-        total = S.mean(axis=1).mean() * beta
+        total = S.sum(axis=1).mean() * beta
         indirect = total - direct
         return {
             "direct": direct,
@@ -224,7 +224,7 @@ class SDMTobit(_SpatialTobitBase):
             for j, b2 in zip(self._wx_column_indices, beta2)
         ])
         total = np.array([
-            (M @ (beta1[j] * np.eye(n) + b2 * W)).mean()
+            (M @ (beta1[j] * np.eye(n) + b2 * W)).sum(axis=1).mean()
             for j, b2 in zip(self._wx_column_indices, beta2)
         ])
         indirect = total - direct

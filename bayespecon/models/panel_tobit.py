@@ -101,7 +101,7 @@ class SARPanelTobit(_PanelTobitBase):
         n = self._W_dense.shape[0]
         S = np.linalg.inv(np.eye(n) - rho * self._W_dense)
         direct = np.diag(S).mean() * beta
-        total = S.mean(axis=1).mean() * beta
+        total = S.sum(axis=1).mean() * beta
         indirect = total - direct
         return {
             "direct": direct,

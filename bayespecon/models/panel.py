@@ -144,7 +144,7 @@ class SARPanelFE(SpatialPanelModel):
         n = self._W_dense.shape[0]
         S = np.linalg.inv(np.eye(n) - rho * self._W_dense)
         direct = np.diag(S).mean() * beta
-        total = S.mean(axis=1).mean() * beta
+        total = S.sum(axis=1).mean() * beta
         indirect = total - direct
         return {
             "direct": direct,
@@ -382,7 +382,7 @@ class SDMPanelFE(SpatialPanelModel):
             for j, b2 in zip(self._wx_column_indices, beta2)
         ])
         total = np.array([
-            (M @ (beta1[j] * np.eye(n) + b2 * W)).mean()
+            (M @ (beta1[j] * np.eye(n) + b2 * W)).sum(axis=1).mean()
             for j, b2 in zip(self._wx_column_indices, beta2)
         ])
         indirect = total - direct
@@ -538,9 +538,14 @@ class SDEMPanelFE(SpatialPanelModel):
         k = self._X.shape[1]
         kw = self._WX.shape[1]
         beta1, beta2 = beta[:k], beta[k:k + kw]
+        W = self._W_dense
+        mean_diag_w = float(np.diag(W).mean())
+        mean_row_sum_w = float(W.sum(axis=1).mean())
+        direct = beta1[self._wx_column_indices] + beta2 * mean_diag_w
+        total = beta1[self._wx_column_indices] + beta2 * mean_row_sum_w
         return {
-            "direct": beta1[self._wx_column_indices],
-            "indirect": beta2,
-            "total": beta1[self._wx_column_indices] + beta2,
+            "direct": direct,
+            "indirect": total - direct,
+            "total": total,
             "feature_names": self._wx_feature_names,
         }

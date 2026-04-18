@@ -216,7 +216,7 @@ class SARPanelRE(SpatialPanelModel):
         W = self._W_dense
         S = np.linalg.inv(np.eye(n) - rho * W)
         direct = np.diag(S).mean() * beta
-        total = S.mean(axis=1).mean() * beta
+        total = S.sum(axis=1).mean() * beta
         return {
             "direct": direct,
             "indirect": total - direct,
