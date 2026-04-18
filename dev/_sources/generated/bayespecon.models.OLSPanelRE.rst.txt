@@ -30,4 +30,10 @@
 
    
    
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~OLSPanelRE.pymc_model
+   
    

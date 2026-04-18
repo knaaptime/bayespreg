@@ -30,4 +30,10 @@
 
    
    
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~SEMPanelRE.pymc_model
+   
    

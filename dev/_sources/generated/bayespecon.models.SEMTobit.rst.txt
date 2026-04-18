@@ -29,4 +29,10 @@
 
    
    
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~SEMTobit.pymc_model
+   
    

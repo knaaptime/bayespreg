@@ -30,4 +30,10 @@
 
    
    
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~SDEMPanelFE.pymc_model
+   
    
