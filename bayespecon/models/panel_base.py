@@ -212,7 +212,7 @@ class SpatialPanelModel(ABC):
         T: Optional[int] = None,
         model: int = 0,
         priors: Optional[dict] = None,
-        logdet_method: str = "auto",
+        logdet_method: str = "eigenvalue",
     ):
         if W is None:
             raise ValueError("W is required.")

@@ -128,7 +128,7 @@ def logdet_interpolated(rho, W_dense: np.ndarray, rho_min: float = -1.0, rho_max
     return value
 
 
-def make_logdet_fn(W, method: str = "auto", rho_min: float = -1.0, rho_max: float = 1.0, T: int = 1):
+def make_logdet_fn(W, method: str = "eigenvalue", rho_min: float = -1.0, rho_max: float = 1.0, T: int = 1):
     """Return a function (rho) -> pytensor log|I - rho*W| expression.
 
     Parameters
@@ -144,7 +144,6 @@ def make_logdet_fn(W, method: str = "auto", rho_min: float = -1.0, rho_max: floa
         subsequent evaluation costs O(n) and is exact (default).
         ``"exact"`` — exact O(n³) symbolic det via pytensor (slow for n > 500).
         ``"grid"``  — spline interpolation over pre-computed grid (approximate).
-        ``"auto"``  — same as ``"eigenvalue"``.
     rho_min : float, default=-1.0
         Lower bound for the grid method.
     rho_max : float, default=1.0
@@ -168,7 +167,7 @@ def make_logdet_fn(W, method: str = "auto", rho_min: float = -1.0, rho_max: floa
         eigs = W
         if method in ("grid", "exact"):
             method = "eigenvalue"
-        if method in ("auto", "eigenvalue"):
+        if method == "eigenvalue":
             if T == 1:
                 return lambda rho: logdet_eigenvalue(rho, eigs)
             return lambda rho: T * logdet_eigenvalue(rho, eigs)
@@ -176,9 +175,6 @@ def make_logdet_fn(W, method: str = "auto", rho_min: float = -1.0, rho_max: floa
 
     # 2-D dense matrix path.
     W_dense = W
-    if method == "auto":
-        method = "eigenvalue"
-
     if method == "eigenvalue":
         eigs = np.linalg.eigvals(W_dense).real
         if T == 1:
@@ -210,4 +206,4 @@ def make_logdet_fn(W, method: str = "auto", rho_min: float = -1.0, rho_max: floa
 
         return _interp
     else:
-        raise ValueError(f"Unknown method: {method!r}. Choose 'eigenvalue', 'exact', 'grid', or 'auto'.")
+        raise ValueError(f"Unknown method: {method!r}. Choose 'eigenvalue', 'exact', or 'grid'.")

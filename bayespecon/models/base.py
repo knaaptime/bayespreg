@@ -126,9 +126,9 @@ class SpatialModel(ABC):
         Override default priors. Keys depend on the model subclass; see
         each model's docstring for supported keys.
     logdet_method : str
-        How to compute ``log|I - rho*W|``. ``"auto"`` / ``"eigenvalue"``
-        (default) pre-computes W's eigenvalues once and evaluates O(n) per
-        step; ``"exact"`` uses symbolic pytensor det (slow for n > 500);
+        How to compute ``log|I - rho*W|``. ``"eigenvalue"`` (default)
+        pre-computes W's eigenvalues once and evaluates O(n) per step;
+        ``"exact"`` uses symbolic pytensor det (slow for n > 500);
         ``"grid"`` uses spline interpolation (approximate).
     w_vars : list of str, optional
         Names of X columns to spatially lag. Only relevant for models that
@@ -146,7 +146,7 @@ class SpatialModel(ABC):
         X: Optional[Union[np.ndarray, pd.DataFrame]] = None,
         W: Optional[Union[Graph, sp.spmatrix]] = None,
         priors: Optional[dict] = None,
-        logdet_method: str = "auto",
+        logdet_method: str = "eigenvalue",
         w_vars: Optional[list] = None,
     ):
         if W is None:
