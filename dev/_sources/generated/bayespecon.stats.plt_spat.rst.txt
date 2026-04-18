@@ -1,6 +1,0 @@
-﻿bayespecon.stats.plt\_spat
-==========================
-
-.. currentmodule:: bayespecon.stats
-
-.. autofunction:: plt_spat

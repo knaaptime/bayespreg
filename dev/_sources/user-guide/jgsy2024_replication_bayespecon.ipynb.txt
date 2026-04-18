@@ -165,7 +165,7 @@
     "        N=N,\n",
     "        T=T,\n",
     "        model=3,\n",
-    "        logdet_method=\"auto\",\n",
+    "        logdet_method=\"eigenvalue\",\n",
     "    )\n",
     "\n",
     "    idata = model.fit(\n",

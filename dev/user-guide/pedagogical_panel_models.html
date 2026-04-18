@@ -721,6 +721,30 @@
   
   
     <li class="md-nav__item">
+      <a href="logdet_profiling.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Log-<wbr>Determinant Methods</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../references.html" class="md-nav__link">
         
   
@@ -1321,7 +1345,7 @@ For pedagogy, we synthesize a balanced panel by replicating units across time wi
         <span class="n">unit_col</span><span class="o">=</span><span class="s2">&quot;unit&quot;</span><span class="p">,</span>
         <span class="n">time_col</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span>
         <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
-        <span class="n">logdet_method</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+        <span class="n">logdet_method</span><span class="o">=</span><span class="s2">&quot;eigenvalue&quot;</span><span class="p">,</span>
     <span class="p">)</span>
 
     <span class="n">idata</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
@@ -1378,9 +1402,9 @@ For pedagogy, we synthesize a balanced panel by replicating units across time wi
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 7 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -1646,10 +1670,10 @@ We recommend running at least 4 chains for robust computation of convergence dia
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 8 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 7 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -1935,10 +1959,10 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [lam, beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 9 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 8 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2224,10 +2248,10 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 8 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 7 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2586,10 +2610,10 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [lam, beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 9 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 8 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2952,13 +2976,13 @@ Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [beta, sigma, sigma_alpha, alpha]
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 27 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 20 seconds.
 There were 300 divergences after tuning. Increase `target_accept` or reparameterize.
 Chain 1 reached the maximum tree depth. Increase `max_treedepth`, increase `target_accept` or reparameterize.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -3297,12 +3321,12 @@ NUTS: [rho, beta, sigma, sigma_alpha, alpha]
   return 0.5 * np.dot(x, v_out)
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 13 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 11 seconds.
 There were 599 divergences after tuning. Increase `target_accept` or reparameterize.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -3649,14 +3673,14 @@ NUTS: [lam, beta, sigma, sigma_alpha, alpha]
   return 0.5 * np.dot(x, v_out)
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/pymc/step_methods/hmc/quadpotential.py:316: RuntimeWarning: overflow encountered in dot
   return 0.5 * np.dot(x, v_out)
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 39 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 33 seconds.
 There were 44 divergences after tuning. Increase `target_accept` or reparameterize.
 Chain 0 reached the maximum tree depth. Increase `max_treedepth`, increase `target_accept` or reparameterize.
 Chain 1 reached the maximum tree depth. Increase `max_treedepth`, increase `target_accept` or reparameterize.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_5490/2150201610.py:42: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_5569/3755175936.py:42: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -4309,8 +4333,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-420.419406</td>
       <td>2.847150</td>
       <td>0.000000</td>
-      <td>7.695913e-01</td>
-      <td>11.132957</td>
+      <td>7.703937e-01</td>
+      <td>11.223999</td>
       <td>0.000000</td>
       <td>False</td>
       <td>log</td>
@@ -4321,8 +4345,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-421.713865</td>
       <td>4.144399</td>
       <td>1.294459</td>
-      <td>2.303941e-01</td>
-      <td>11.032568</td>
+      <td>2.295919e-01</td>
+      <td>11.158173</td>
       <td>0.634598</td>
       <td>False</td>
       <td>log</td>
@@ -4333,8 +4357,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-431.651953</td>
       <td>3.027109</td>
       <td>11.232546</td>
-      <td>1.045930e-05</td>
-      <td>11.086097</td>
+      <td>1.037397e-05</td>
+      <td>11.179470</td>
       <td>0.250243</td>
       <td>False</td>
       <td>log</td>
@@ -4345,8 +4369,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-432.612882</td>
       <td>3.861372</td>
       <td>12.193476</td>
-      <td>4.114308e-06</td>
-      <td>11.058700</td>
+      <td>4.085758e-06</td>
+      <td>11.142267</td>
       <td>0.305076</td>
       <td>False</td>
       <td>log</td>
@@ -4357,8 +4381,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-461.456743</td>
       <td>2.802304</td>
       <td>41.037337</td>
-      <td>3.163612e-09</td>
-      <td>14.886751</td>
+      <td>3.952570e-12</td>
+      <td>14.509539</td>
       <td>7.580607</td>
       <td>False</td>
       <td>log</td>
@@ -4369,8 +4393,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-486.471303</td>
       <td>40.622194</td>
       <td>66.051897</td>
-      <td>2.863252e-15</td>
-      <td>11.544629</td>
+      <td>2.141119e-15</td>
+      <td>12.311399</td>
       <td>9.449001</td>
       <td>True</td>
       <td>log</td>
@@ -4381,8 +4405,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-712.096677</td>
       <td>48.757222</td>
       <td>291.677271</td>
-      <td>5.106497e-113</td>
-      <td>12.540486</td>
+      <td>5.465918e-109</td>
+      <td>12.198330</td>
       <td>12.214892</td>
       <td>True</td>
       <td>log</td>
@@ -4425,8 +4449,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-420.435444</td>
       <td>2.863188</td>
       <td>0.000000</td>
-      <td>7.648588e-01</td>
-      <td>10.816037</td>
+      <td>7.698050e-01</td>
+      <td>11.666766</td>
       <td>0.000000</td>
       <td>False</td>
       <td>log</td>
@@ -4437,8 +4461,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-421.736727</td>
       <td>4.167261</td>
       <td>1.301283</td>
-      <td>2.351267e-01</td>
-      <td>10.745491</td>
+      <td>2.301806e-01</td>
+      <td>11.599555</td>
       <td>0.634481</td>
       <td>False</td>
       <td>log</td>
@@ -4449,8 +4473,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-431.672159</td>
       <td>3.047315</td>
       <td>11.236715</td>
-      <td>1.035683e-05</td>
-      <td>10.767425</td>
+      <td>1.037420e-05</td>
+      <td>11.628667</td>
       <td>0.250093</td>
       <td>False</td>
       <td>log</td>
@@ -4461,8 +4485,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-432.632104</td>
       <td>3.880593</td>
       <td>12.196660</td>
-      <td>4.074025e-06</td>
-      <td>10.727874</td>
+      <td>4.070492e-06</td>
+      <td>11.592180</td>
       <td>0.304948</td>
       <td>False</td>
       <td>log</td>
@@ -4473,8 +4497,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-461.476913</td>
       <td>2.822474</td>
       <td>41.041469</td>
-      <td>2.584750e-12</td>
-      <td>14.382405</td>
+      <td>1.175732e-11</td>
+      <td>15.096419</td>
       <td>7.581942</td>
       <td>False</td>
       <td>log</td>
@@ -4485,8 +4509,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-484.232105</td>
       <td>38.382996</td>
       <td>63.796661</td>
-      <td>3.203744e-15</td>
-      <td>11.538606</td>
+      <td>3.410813e-18</td>
+      <td>11.774859</td>
       <td>9.223597</td>
       <td>True</td>
       <td>log</td>
@@ -4497,8 +4521,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-713.511597</td>
       <td>50.172142</td>
       <td>293.076153</td>
-      <td>1.500653e-116</td>
-      <td>12.571402</td>
+      <td>3.256396e-113</td>
+      <td>12.056067</td>
       <td>11.997792</td>
       <td>True</td>
       <td>log</td>
