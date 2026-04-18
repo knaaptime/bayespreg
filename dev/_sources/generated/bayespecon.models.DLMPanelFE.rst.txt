@@ -1,0 +1,33 @@
+﻿bayespecon.models.DLMPanelFE
+============================
+
+.. currentmodule:: bayespecon.models
+
+.. autoclass:: DLMPanelFE
+
+   
+   .. automethod:: __init__
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+      ~DLMPanelFE.__init__
+      ~DLMPanelFE.autocorrelation_diagnostics
+      ~DLMPanelFE.diagnostics
+      ~DLMPanelFE.fit
+      ~DLMPanelFE.fitted_values
+      ~DLMPanelFE.heteroskedasticity_diagnostics
+      ~DLMPanelFE.outlier_diagnostics
+      ~DLMPanelFE.panel_diagnostics
+      ~DLMPanelFE.regression_diagnostics
+      ~DLMPanelFE.residuals
+      ~DLMPanelFE.spatial_effects
+      ~DLMPanelFE.summary
+   
+   
+
+   
+   
+   
