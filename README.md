@@ -1,5 +1,9 @@
 # bayespecon
 
+[![Continuous Integration](https://github.com/knaaptime/bayespecon/actions/workflows/unittests.yml/badge.svg)](https://github.com/knaaptime/bayespecon/actions/workflows/unittests.yml)
+[![codecov](https://codecov.io/gh/knaaptime/bayespecon/branch/main/graph/badge.svg?token=XO4SilfBEb)](https://codecov.io/gh/knaaptime/bayespecon)
+
+
 **Bayesian Spatial Econometric Models**
 
 Bayesians are cool but MATLAB is not

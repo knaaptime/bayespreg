@@ -55,6 +55,17 @@ Panel Spatial Models
    SDMPanelFE
    SDEMPanelFE
 
+Panel Spatial Models (Random Effects)
+--------------------------------------
+
+.. currentmodule:: bayespecon.models
+
+.. autosummary::
+   :toctree: generated/
+
+   OLSPanelRE
+   SARPanelRE
+   SEMPanelRE
 
 Dynamic Panel Spatial Models
 ----------------------------
@@ -69,31 +80,6 @@ Dynamic Panel Spatial Models
    SDMUPanelFE
 
 
-Panel Spatial Models (Random Effects)
---------------------------------------
-
-.. currentmodule:: bayespecon.models
-
-.. autosummary::
-   :toctree: generated/
-
-   OLSPanelRE
-   SARPanelRE
-   SEMPanelRE
-
-
-Panel Spatial Models (Tobit)
------------------------------
-
-.. currentmodule:: bayespecon.models
-
-.. autosummary::
-   :toctree: generated/
-
-   SARPanelTobit
-   SEMPanelTobit
-
-
 Non-Linear Spatial Models
 ---------
 
@@ -106,6 +92,18 @@ Non-Linear Spatial Models
    SARTobit
    SEMTobit
    SDMTobit
+
+
+Panel Spatial Models (Tobit)
+-----------------------------
+
+.. currentmodule:: bayespecon.models
+
+.. autosummary::
+   :toctree: generated/
+
+   SARPanelTobit
+   SEMPanelTobit
 
 
 Regression Diagnostics
