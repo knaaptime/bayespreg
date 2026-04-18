@@ -62,6 +62,7 @@ intersphinx_mapping = {
     "numpy": ("https://docs.scipy.org/doc/numpy", None),
     "pymc": ("https://docs.pymc.io/en/stable", None),
     "libpysal": ("https://pysal.org/libpysal/stable/", None),
+    "pytensor": ("https://pytensor.readthedocs.io/en/stable/", None),
 }
 
 # -- Options for HTML output -------------------------------------------------

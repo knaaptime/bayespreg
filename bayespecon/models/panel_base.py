@@ -221,6 +221,7 @@ class SpatialPanelModel(ABC):
         self.logdet_method = logdet_method
         self.model = int(model)
         self._idata: Optional[az.InferenceData] = None
+        self._pymc_model: Optional[pm.Model] = None
         self._W_dense_cache: Optional[np.ndarray] = None
 
         if formula is not None:
@@ -432,6 +433,7 @@ class SpatialPanelModel(ABC):
             Posterior samples and diagnostics.
         """
         model = self._build_pymc_model()
+        self._pymc_model = model
         with model:
             self._idata = pm.sample(
                 draws=draws,
@@ -442,6 +444,18 @@ class SpatialPanelModel(ABC):
                 **sample_kwargs,
             )
         return self._idata
+
+    @property
+    def pymc_model(self) -> Optional[pm.Model]:
+        """Return the PyMC model object built for the most recent fit.
+
+        Returns
+        -------
+        pymc.Model or None
+            The model object used by :meth:`fit`, or ``None`` if the instance
+            has not been fit yet.
+        """
+        return self._pymc_model
 
     def _require_fit(self):
         if self._idata is None:

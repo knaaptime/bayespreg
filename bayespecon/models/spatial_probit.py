@@ -88,6 +88,7 @@ class SpatialProbit:
 
         self.priors = priors or {}
         self._idata: Optional[az.InferenceData] = None
+        self._pymc_model: Optional[pm.Model] = None
 
         self._W_dense = self._as_dense_region_W(W)
         self._m = self._W_dense.shape[0]
@@ -257,6 +258,7 @@ class SpatialProbit:
     ) -> az.InferenceData:
         """Draw samples from the posterior."""
         model = self._build_pymc_model()
+        self._pymc_model = model
         with model:
             self._idata = pm.sample(
                 draws=draws,
@@ -267,6 +269,18 @@ class SpatialProbit:
                 **sample_kwargs,
             )
         return self._idata
+
+    @property
+    def pymc_model(self) -> Optional[pm.Model]:
+        """Return the PyMC model object built for the most recent fit.
+
+        Returns
+        -------
+        pymc.Model or None
+            The model object used by :meth:`fit`, or ``None`` if the instance
+            has not been fit yet.
+        """
+        return self._pymc_model
 
     def _require_fit(self):
         if self._idata is None:
