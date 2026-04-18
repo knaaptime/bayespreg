@@ -14,7 +14,7 @@ Import MATLAB-style statistics helpers from the stats submodule::
 	from bayespecon import stats
 """
 
-from . import stats
+from . import dgp, stats
 from .diagnostics import (
     arch_test,
     bpagan_test,
@@ -78,6 +78,7 @@ __all__ = [
 	"panel_residual_structure",
 	"pesaran_cd_test",
 	"stats",
+	"dgp",
 ]
 
 

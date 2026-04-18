@@ -8,7 +8,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from libpysal.graph import Graph
-from scipy.special import erf
+
+from bayespecon import dgp
 
 
 # ---------------------------------------------------------------------------
@@ -91,13 +92,8 @@ def make_sar_data(
     sigma: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate SAR data: y = (I - rho*W)^{-1}(X@beta + eps)."""
-    n = W.shape[0]
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    X = np.column_stack([np.ones(n), rng.standard_normal((n, len(beta) - 1))])
-    eps = sigma * rng.standard_normal(n)
-    y = np.linalg.solve(np.eye(n) - rho * W, X @ beta + eps)
-    return y, X
+    out = dgp.simulate_sar(W=W, rho=rho, beta=beta, sigma=sigma, rng=rng)
+    return out["y"], out["X"]
 
 
 def make_sem_data(
@@ -108,14 +104,8 @@ def make_sem_data(
     sigma: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate SEM data: u = (I - lam*W)^{-1}*eps; y = X@beta + u."""
-    n = W.shape[0]
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    X = np.column_stack([np.ones(n), rng.standard_normal((n, len(beta) - 1))])
-    eps = sigma * rng.standard_normal(n)
-    u = np.linalg.solve(np.eye(n) - lam * W, eps)
-    y = X @ beta + u
-    return y, X
+    out = dgp.simulate_sem(W=W, lam=lam, beta=beta, sigma=sigma, rng=rng)
+    return out["y"], out["X"]
 
 
 def make_slx_data(
@@ -126,15 +116,8 @@ def make_slx_data(
     sigma: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate SLX data: y = X@beta1 + W@X_noint@beta2 + eps."""
-    n = W.shape[0]
-    if beta1 is None:
-        beta1 = np.array([1.0, 2.0])
-    if beta2 is None:
-        beta2 = np.array([0.8])
-    X = np.column_stack([np.ones(n), rng.standard_normal(n)])
-    Wx = W @ X[:, 1:]
-    y = X @ beta1 + Wx @ beta2 + sigma * rng.standard_normal(n)
-    return y, X
+    out = dgp.simulate_slx(W=W, beta1=beta1, beta2=beta2, sigma=sigma, rng=rng)
+    return out["y"], out["X"]
 
 
 def make_sdm_data(
@@ -146,16 +129,15 @@ def make_sdm_data(
     sigma: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate SDM data: y = (I-rho*W)^{-1}(X@beta1 + WX_noint@beta2 + eps)."""
-    n = W.shape[0]
-    if beta1 is None:
-        beta1 = np.array([1.0, 2.0])
-    if beta2 is None:
-        beta2 = np.array([0.8])
-    X = np.column_stack([np.ones(n), rng.standard_normal(n)])
-    Wx = W @ X[:, 1:]
-    eps = sigma * rng.standard_normal(n)
-    y = np.linalg.solve(np.eye(n) - rho * W, X @ beta1 + Wx @ beta2 + eps)
-    return y, X
+    out = dgp.simulate_sdm(
+        W=W,
+        rho=rho,
+        beta1=beta1,
+        beta2=beta2,
+        sigma=sigma,
+        rng=rng,
+    )
+    return out["y"], out["X"]
 
 
 def make_sdem_data(
@@ -167,16 +149,15 @@ def make_sdem_data(
     sigma: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate SDEM data: y = X@beta1 + WX_noint@beta2 + (I-lam*W)^{-1}eps."""
-    n = W.shape[0]
-    if beta1 is None:
-        beta1 = np.array([1.0, 2.0])
-    if beta2 is None:
-        beta2 = np.array([0.8])
-    X = np.column_stack([np.ones(n), rng.standard_normal(n)])
-    Wx = W @ X[:, 1:]
-    u = np.linalg.solve(np.eye(n) - lam * W, sigma * rng.standard_normal(n))
-    y = X @ beta1 + Wx @ beta2 + u
-    return y, X
+    out = dgp.simulate_sdem(
+        W=W,
+        lam=lam,
+        beta1=beta1,
+        beta2=beta2,
+        sigma=sigma,
+        rng=rng,
+    )
+    return out["y"], out["X"]
 
 
 # ---------------------------------------------------------------------------
@@ -193,19 +174,18 @@ def make_panel_ols_data(
     sigma_alpha: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Generate panel OLS data with unit random effects."""
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    alpha = rng.normal(0, sigma_alpha, N)
-    y_list, X_list = [], []
-    for _ in range(T):
-        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
-        yt = Xt @ beta + alpha + sigma * rng.standard_normal(N)
-        y_list.append(yt)
-        X_list.append(Xt)
-    y = np.concatenate(y_list)
-    X = np.vstack(X_list)
-    units = np.tile(np.arange(N), T)
-    times = np.repeat(np.arange(T), N)
+    out = dgp.simulate_panel_ols_fe(
+        N=N,
+        T=T,
+        beta=beta,
+        sigma=sigma,
+        sigma_alpha=sigma_alpha,
+        W=W,
+        rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units = out["unit"]
+    times = out["time"]
     df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
     return y, X, df
 
@@ -221,21 +201,19 @@ def make_panel_sar_data(
     sigma_alpha: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Generate SAR panel data with unit random effects."""
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    alpha = rng.normal(0, sigma_alpha, N)
-    A_inv = np.linalg.inv(np.eye(N) - rho * W)
-    y_list, X_list = [], []
-    for _ in range(T):
-        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
-        eps = sigma * rng.standard_normal(N)
-        yt = A_inv @ (Xt @ beta + alpha + eps)
-        y_list.append(yt)
-        X_list.append(Xt)
-    y = np.concatenate(y_list)
-    X = np.vstack(X_list)
-    units = np.tile(np.arange(N), T)
-    times = np.repeat(np.arange(T), N)
+    out = dgp.simulate_panel_sar_fe(
+        N=N,
+        T=T,
+        rho=rho,
+        beta=beta,
+        sigma=sigma,
+        sigma_alpha=sigma_alpha,
+        W=W,
+        rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units = out["unit"]
+    times = out["time"]
     df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
     return y, X, df
 
@@ -251,21 +229,19 @@ def make_panel_sem_data(
     sigma_alpha: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Generate SEM panel data with unit random effects."""
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    alpha = rng.normal(0, sigma_alpha, N)
-    A_inv = np.linalg.inv(np.eye(N) - lam * W)
-    y_list, X_list = [], []
-    for _ in range(T):
-        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
-        u = A_inv @ (sigma * rng.standard_normal(N))
-        yt = Xt @ beta + alpha + u
-        y_list.append(yt)
-        X_list.append(Xt)
-    y = np.concatenate(y_list)
-    X = np.vstack(X_list)
-    units = np.tile(np.arange(N), T)
-    times = np.repeat(np.arange(T), N)
+    out = dgp.simulate_panel_sem_fe(
+        N=N,
+        T=T,
+        lam=lam,
+        beta=beta,
+        sigma=sigma,
+        sigma_alpha=sigma_alpha,
+        W=W,
+        rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units = out["unit"]
+    times = out["time"]
     df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
     return y, X, df
 
@@ -281,24 +257,19 @@ def make_panel_dlm_data(
     sigma_alpha: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Generate dynamic non-spatial panel data with unit effects."""
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    alpha = rng.normal(0, sigma_alpha, N)
-
-    y_prev = rng.normal(scale=sigma, size=N)
-    y_list, X_list = [], []
-    for _ in range(T):
-        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
-        eps = sigma * rng.standard_normal(N)
-        yt = phi * y_prev + Xt @ beta + alpha + eps
-        y_list.append(yt)
-        X_list.append(Xt)
-        y_prev = yt
-
-    y = np.concatenate(y_list)
-    X = np.vstack(X_list)
-    units = np.tile(np.arange(N), T)
-    times = np.repeat(np.arange(T), N)
+    out = dgp.simulate_panel_dlm_fe(
+        N=N,
+        T=T,
+        phi=phi,
+        beta=beta,
+        sigma=sigma,
+        sigma_alpha=sigma_alpha,
+        W=W,
+        rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units = out["unit"]
+    times = out["time"]
     df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
     return y, X, df
 
@@ -315,26 +286,20 @@ def make_panel_sdmr_data(
     sigma_alpha: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Generate dynamic restricted SDM panel data with unit effects."""
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    alpha = rng.normal(0, sigma_alpha, N)
-    A_inv = np.linalg.inv(np.eye(N) - rho * W)
-
-    y_prev = rng.normal(scale=sigma, size=N)
-    y_list, X_list = [], []
-    for _ in range(T):
-        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
-        eps = sigma * rng.standard_normal(N)
-        rhs = phi * y_prev - rho * phi * (W @ y_prev) + Xt @ beta + alpha + eps
-        yt = A_inv @ rhs
-        y_list.append(yt)
-        X_list.append(Xt)
-        y_prev = yt
-
-    y = np.concatenate(y_list)
-    X = np.vstack(X_list)
-    units = np.tile(np.arange(N), T)
-    times = np.repeat(np.arange(T), N)
+    out = dgp.simulate_panel_sdmr_fe(
+        N=N,
+        T=T,
+        rho=rho,
+        phi=phi,
+        beta=beta,
+        sigma=sigma,
+        sigma_alpha=sigma_alpha,
+        W=W,
+        rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units = out["unit"]
+    times = out["time"]
     df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
     return y, X, df
 
@@ -352,26 +317,21 @@ def make_panel_sdmu_data(
     sigma_alpha: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Generate dynamic unrestricted SDM panel data with unit effects."""
-    if beta is None:
-        beta = np.array([1.0, 2.0])
-    alpha = rng.normal(0, sigma_alpha, N)
-    A_inv = np.linalg.inv(np.eye(N) - rho * W)
-
-    y_prev = rng.normal(scale=sigma, size=N)
-    y_list, X_list = [], []
-    for _ in range(T):
-        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
-        eps = sigma * rng.standard_normal(N)
-        rhs = phi * y_prev + theta * (W @ y_prev) + Xt @ beta + alpha + eps
-        yt = A_inv @ rhs
-        y_list.append(yt)
-        X_list.append(Xt)
-        y_prev = yt
-
-    y = np.concatenate(y_list)
-    X = np.vstack(X_list)
-    units = np.tile(np.arange(N), T)
-    times = np.repeat(np.arange(T), N)
+    out = dgp.simulate_panel_sdmu_fe(
+        N=N,
+        T=T,
+        rho=rho,
+        phi=phi,
+        theta=theta,
+        beta=beta,
+        sigma=sigma,
+        sigma_alpha=sigma_alpha,
+        W=W,
+        rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units = out["unit"]
+    times = out["time"]
     df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
     return y, X, df
 
@@ -399,19 +359,12 @@ def make_spatial_probit_data(
     region_ids : np.ndarray
         Region code for each observation, shape ``(nobs,)``.
     """
-    m = W.shape[0]
-    if beta is None:
-        beta = np.array([0.3, 1.0])
-
-    # Spatially correlated regional effects: a = (I - rho W)^(-1) sigma_a z
-    a = np.linalg.solve(np.eye(m) - rho * W, sigma_a * rng.standard_normal(m))
-
-    nobs = m * n_per_region
-    region_ids = np.repeat(np.arange(m), n_per_region)
-    x1 = rng.standard_normal(nobs)
-    X = np.column_stack([np.ones(nobs), x1])
-
-    eta = X @ beta + a[region_ids]
-    p = 0.5 * (1.0 + erf(eta / np.sqrt(2.0)))
-    y = rng.binomial(1, p).astype(float)
-    return y, X, region_ids
+    out = dgp.simulate_spatial_probit(
+        W=W,
+        rho=rho,
+        beta=beta,
+        sigma_a=sigma_a,
+        n_per_region=n_per_region,
+        rng=rng,
+    )
+    return out["y"], out["X"], out["region_ids"]
