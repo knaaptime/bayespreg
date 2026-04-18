@@ -270,6 +270,112 @@ def make_panel_sem_data(
     return y, X, df
 
 
+def make_panel_dlm_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    phi: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate dynamic non-spatial panel data with unit effects."""
+    if beta is None:
+        beta = np.array([1.0, 2.0])
+    alpha = rng.normal(0, sigma_alpha, N)
+
+    y_prev = rng.normal(scale=sigma, size=N)
+    y_list, X_list = [], []
+    for _ in range(T):
+        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
+        eps = sigma * rng.standard_normal(N)
+        yt = phi * y_prev + Xt @ beta + alpha + eps
+        y_list.append(yt)
+        X_list.append(Xt)
+        y_prev = yt
+
+    y = np.concatenate(y_list)
+    X = np.vstack(X_list)
+    units = np.tile(np.arange(N), T)
+    times = np.repeat(np.arange(T), N)
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
+def make_panel_sdmr_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    rho: float = 0.3,
+    phi: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate dynamic restricted SDM panel data with unit effects."""
+    if beta is None:
+        beta = np.array([1.0, 2.0])
+    alpha = rng.normal(0, sigma_alpha, N)
+    A_inv = np.linalg.inv(np.eye(N) - rho * W)
+
+    y_prev = rng.normal(scale=sigma, size=N)
+    y_list, X_list = [], []
+    for _ in range(T):
+        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
+        eps = sigma * rng.standard_normal(N)
+        rhs = phi * y_prev - rho * phi * (W @ y_prev) + Xt @ beta + alpha + eps
+        yt = A_inv @ rhs
+        y_list.append(yt)
+        X_list.append(Xt)
+        y_prev = yt
+
+    y = np.concatenate(y_list)
+    X = np.vstack(X_list)
+    units = np.tile(np.arange(N), T)
+    times = np.repeat(np.arange(T), N)
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
+def make_panel_sdmu_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    rho: float = 0.3,
+    phi: float = 0.4,
+    theta: float = -0.1,
+    beta: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate dynamic unrestricted SDM panel data with unit effects."""
+    if beta is None:
+        beta = np.array([1.0, 2.0])
+    alpha = rng.normal(0, sigma_alpha, N)
+    A_inv = np.linalg.inv(np.eye(N) - rho * W)
+
+    y_prev = rng.normal(scale=sigma, size=N)
+    y_list, X_list = [], []
+    for _ in range(T):
+        Xt = np.column_stack([np.ones(N), rng.standard_normal(N)])
+        eps = sigma * rng.standard_normal(N)
+        rhs = phi * y_prev + theta * (W @ y_prev) + Xt @ beta + alpha + eps
+        yt = A_inv @ rhs
+        y_list.append(yt)
+        X_list.append(Xt)
+        y_prev = yt
+
+    y = np.concatenate(y_list)
+    X = np.vstack(X_list)
+    units = np.tile(np.arange(N), T)
+    times = np.repeat(np.arange(T), N)
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
 # ---------------------------------------------------------------------------
 # Spatial probit data generator
 # ---------------------------------------------------------------------------

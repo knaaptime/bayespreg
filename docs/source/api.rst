@@ -56,6 +56,19 @@ Panel Spatial Models
    SDEMPanelFE
 
 
+Dynamic Panel Spatial Models
+----------------------------
+
+.. currentmodule:: bayespecon.models
+
+.. autosummary::
+   :toctree: generated/
+
+   DLMPanelFE
+   SDMRPanelFE
+   SDMUPanelFE
+
+
 Panel Spatial Models (Random Effects)
 --------------------------------------
 
