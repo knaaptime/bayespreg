@@ -10,9 +10,43 @@ Implemented counterparts:
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 
 import numpy as np
 from scipy.stats import chi2
+
+
+@dataclass
+class DiagnosticResult:
+    """Standardized container for a single hypothesis test result.
+
+    Attributes
+    ----------
+    name : str
+        Short identifier for the test (e.g. ``"bpagan"``, ``"arch"``).
+    statistic : float or np.ndarray
+        Test statistic value(s). Arrays for multi-lag tests.
+    pvalue : float or np.ndarray
+        P-value(s) corresponding to ``statistic``.
+    extra : dict
+        Test-specific supplementary values (e.g. ``dof``, ``lags``).
+    """
+
+    name: str
+    statistic: float | np.ndarray
+    pvalue: float | np.ndarray
+    extra: dict = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        stat = self.statistic
+        pval = self.pvalue
+        if isinstance(stat, np.ndarray):
+            stat_str = f"[{', '.join(f'{v:.4f}' for v in stat)}]"
+            pval_str = f"[{', '.join(f'{v:.4f}' for v in pval)}]"
+        else:
+            stat_str = f"{stat:.4f}"
+            pval_str = f"{pval:.4f}"
+        return f"DiagnosticResult(name={self.name!r}, statistic={stat_str}, pvalue={pval_str})"
 
 
 def _as_lag_array(lags: int | Iterable[int]) -> np.ndarray:
@@ -153,12 +187,12 @@ def bpagan_test(resid: np.ndarray, X: np.ndarray) -> dict[str, float | int | str
     dof = max(k - 1, 1)
     prob = float(1.0 - chi2.cdf(lm, dof))
 
-    return {
-        "meth": "bpagan",
-        "lm": lm,
-        "dof": dof,
-        "prob": prob,
-    }
+    return DiagnosticResult(
+        name="bpagan",
+        statistic=lm,
+        pvalue=prob,
+        extra={"dof": dof},
+    )
 
 
 def arch_test(resid: np.ndarray, lags: int | Iterable[int] = 1) -> dict[str, np.ndarray | str]:
@@ -204,12 +238,12 @@ def arch_test(resid: np.ndarray, lags: int | Iterable[int] = 1) -> dict[str, np.
         stats.append(stat)
         pvals.append(pval)
 
-    return {
-        "meth": "arch",
-        "lags": p_arr,
-        "archstat": np.asarray(stats),
-        "pval": np.asarray(pvals),
-    }
+    return DiagnosticResult(
+        name="arch",
+        statistic=np.asarray(stats),
+        pvalue=np.asarray(pvals),
+        extra={"lags": p_arr},
+    )
 
 
 def ljung_box_q(resid: np.ndarray, lags: int | Iterable[int] = 1) -> dict[str, np.ndarray | str]:
@@ -248,12 +282,12 @@ def ljung_box_q(resid: np.ndarray, lags: int | Iterable[int] = 1) -> dict[str, n
         stats.append(q)
         pvals.append(pval)
 
-    return {
-        "meth": "ljung_box_q",
-        "lags": p_arr,
-        "qstat": np.asarray(stats),
-        "pval": np.asarray(pvals),
-    }
+    return DiagnosticResult(
+        name="ljung_box_q",
+        statistic=np.asarray(stats),
+        pvalue=np.asarray(pvals),
+        extra={"lags": p_arr},
+    )
 
 
 def outlier_candidates(
@@ -356,7 +390,7 @@ def pesaran_cd_test(resid: np.ndarray, N: int, T: int) -> dict[str, float | str]
     if r.size != N * T:
         raise ValueError("resid length must be N*T")
     if N < 2 or T < 2:
-        return {"meth": "pesaran_cd", "cd": np.nan, "pval": np.nan}
+        return DiagnosticResult(name="pesaran_cd", statistic=np.nan, pvalue=np.nan)
 
     r2 = r.reshape(T, N)
     corr = np.corrcoef(r2, rowvar=False)
@@ -364,11 +398,11 @@ def pesaran_cd_test(resid: np.ndarray, N: int, T: int) -> dict[str, float | str]
     rho_ij = corr[iu]
     rho_ij = rho_ij[np.isfinite(rho_ij)]
     if rho_ij.size == 0:
-        return {"meth": "pesaran_cd", "cd": np.nan, "pval": np.nan}
+        return DiagnosticResult(name="pesaran_cd", statistic=np.nan, pvalue=np.nan)
 
     cd = float(np.sqrt(2.0 * T / (N * (N - 1))) * rho_ij.sum())
     # Asymptotically N(0,1)
     from scipy.stats import norm
 
     pval = float(2.0 * (1.0 - norm.cdf(abs(cd))))
-    return {"meth": "pesaran_cd", "cd": cd, "pval": pval}
+    return DiagnosticResult(name="pesaran_cd", statistic=cd, pvalue=pval)

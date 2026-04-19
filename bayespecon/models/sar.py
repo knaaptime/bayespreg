@@ -117,3 +117,115 @@ class SAR(SpatialModel):
         rho = float(self._posterior_mean("rho"))
         beta = self._posterior_mean("beta")
         return rho * self._Wy + self._X @ beta
+
+    # ------------------------------------------------------------------
+    # Spatial specification tests
+    # ------------------------------------------------------------------
+
+    def lm_error_test(self) -> "DiagnosticResult":
+        """LM test for omitted spatial error autocorrelation.
+
+        Tests whether residuals from the SAR fit show additional spatial
+        error structure (i.e. whether SARAR or SDM might be more
+        appropriate than a pure SAR model).
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"lm_error"``
+
+            ``statistic`` : float — LM statistic.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(1)` null.
+
+        Notes
+        -----
+        H\\ :sub:`0`: no spatial error autocorrelation in OLS residuals.
+
+        References
+        ----------
+        .. [1] Anselin, L. (1988). *Spatial Econometrics: Methods and Models*.
+               Kluwer Academic Publishers.
+        """
+        from ..stats.core import lmerror
+        raw = lmerror(self._y, self._X, self._W_sparse.toarray())
+        return self._wrap_stats_result("lm_error", raw, "lm")
+
+    def lm_rho_test(self) -> "DiagnosticResult":
+        """LM test for the SAR spatial autoregressive parameter :math:`\\rho`.
+
+        Tests the null hypothesis :math:`\\rho = 0` (no spatial lag on y)
+        using the LM statistic derived from the OLS score.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"lm_rho"``
+
+            ``statistic`` : float — LM statistic for :math:`\\rho`.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(1)` null.
+
+        References
+        ----------
+        .. [1] Anselin, L. (1988). *Spatial Econometrics: Methods and Models*.
+               Kluwer Academic Publishers.
+        """
+        from ..stats.core import lmrho
+        raw = lmrho(self._y, self._X, self._W_sparse.toarray())
+        return self._wrap_stats_result("lm_rho", raw, "lmrho")
+
+    def lm_rho_robust_test(self) -> "DiagnosticResult":
+        """Robust LM test for the SAR parameter :math:`\\rho`.
+
+        A robust version of :meth:`lm_rho_test` that accounts for the
+        possible presence of spatial error autocorrelation under the
+        alternative, reducing size distortion when both spatial
+        structures are present.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"lm_rho_robust"``
+
+            ``statistic`` : float — robust LM statistic.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(1)` null.
+
+        References
+        ----------
+        .. [1] Anselin, L., Bera, A. K., Florax, R., & Yoon, M. J. (1996).
+               Simple diagnostic tests for spatial dependence.
+               *Regional Science and Urban Economics*, 26(1), 77–104.
+        """
+        from ..stats.core import lmrhorob
+        raw = lmrhorob(self._y, self._X, self._W_sparse.toarray())
+        return self._wrap_stats_result("lm_rho_robust", raw, "lmrhorob")
+
+    def spatial_specification_tests(self) -> dict:
+        """Run a battery of spatial specification tests on OLS residuals.
+
+        Combines Moran's I, the LM-error test, the LM-:math:`\\rho` test,
+        and its robust version.  Useful for post-estimation model checking
+        and for deciding whether a more complex spatial specification
+        is warranted.
+
+        Returns
+        -------
+        dict[str, DiagnosticResult]
+            Keys: ``"moran"``, ``"lm_error"``, ``"lm_rho"``,
+            ``"lm_rho_robust"``.
+
+        See Also
+        --------
+        moran_test : Moran's I for residual spatial autocorrelation.
+        lm_error_test : LM test for spatial error dependence.
+        lm_rho_test : LM test for the SAR parameter.
+        lm_rho_robust_test : Robust LM test for the SAR parameter.
+        """
+        return {
+            "moran": self.moran_test(),
+            "lm_error": self.lm_error_test(),
+            "lm_rho": self.lm_rho_test(),
+            "lm_rho_robust": self.lm_rho_robust_test(),
+        }

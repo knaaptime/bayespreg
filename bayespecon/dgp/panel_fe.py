@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .utils import ensure_rng, make_design_matrix, panel_index, resolve_weights
+from .utils import ensure_rng, make_design_matrix, make_panel_output_geodataframe, panel_index, resolve_weights
 
 
 def _panel_finalize(y_list: list[np.ndarray], X_list: list[np.ndarray], N: int, T: int) -> tuple[np.ndarray, np.ndarray, dict]:
@@ -25,6 +25,9 @@ def simulate_panel_ols_fe(
     W=None,
     gdf=None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate pooled data compatible with OLSPanelFE model assumptions.
 
@@ -68,7 +71,7 @@ def simulate_panel_ols_fe(
         X_list.append(Xt)
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -77,6 +80,9 @@ def simulate_panel_ols_fe(
         "W_graph": Wg,
         "params_true": {"beta": beta, "sigma": sigma, "sigma_alpha": sigma_alpha},
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out
 
 
 def simulate_panel_sar_fe(
@@ -90,7 +96,11 @@ def simulate_panel_sar_fe(
     seed: int | None = None,
     W=None,
     gdf=None,
+    n: int | None = None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate SAR panel data in time-first stacking order.
 
@@ -123,7 +133,7 @@ def simulate_panel_sar_fe(
         ``params_true``.
     """
     rng = ensure_rng(rng, seed)
-    Wd, Wg = resolve_weights(W=W, gdf=gdf, contiguity=contiguity)
+    Wd, Wg = resolve_weights(W=W, gdf=gdf, n=n, contiguity=contiguity)
     if Wd.shape[0] != N:
         raise ValueError("N must match W/gdf unit count.")
 
@@ -142,7 +152,7 @@ def simulate_panel_sar_fe(
         X_list.append(Xt)
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -151,6 +161,9 @@ def simulate_panel_sar_fe(
         "W_graph": Wg,
         "params_true": {"rho": rho, "beta": beta, "sigma": sigma, "sigma_alpha": sigma_alpha},
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out
 
 
 def simulate_panel_sem_fe(
@@ -164,7 +177,11 @@ def simulate_panel_sem_fe(
     seed: int | None = None,
     W=None,
     gdf=None,
+    n: int | None = None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate SEM panel data in time-first stacking order.
 
@@ -196,7 +213,7 @@ def simulate_panel_sem_fe(
         ``params_true``.
     """
     rng = ensure_rng(rng, seed)
-    Wd, Wg = resolve_weights(W=W, gdf=gdf, contiguity=contiguity)
+    Wd, Wg = resolve_weights(W=W, gdf=gdf, n=n, contiguity=contiguity)
     if Wd.shape[0] != N:
         raise ValueError("N must match W/gdf unit count.")
 
@@ -215,7 +232,7 @@ def simulate_panel_sem_fe(
         X_list.append(Xt)
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -224,6 +241,9 @@ def simulate_panel_sem_fe(
         "W_graph": Wg,
         "params_true": {"lam": lam, "beta": beta, "sigma": sigma, "sigma_alpha": sigma_alpha},
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out
 
 
 def simulate_panel_sdm_fe(
@@ -239,6 +259,9 @@ def simulate_panel_sdm_fe(
     W=None,
     gdf=None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate SDM panel FE data.
 
@@ -296,7 +319,7 @@ def simulate_panel_sdm_fe(
         X_list.append(Xt)
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -311,6 +334,9 @@ def simulate_panel_sdm_fe(
             "sigma_alpha": sigma_alpha,
         },
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out
 
 
 def simulate_panel_sdem_fe(
@@ -326,6 +352,9 @@ def simulate_panel_sdem_fe(
     W=None,
     gdf=None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate SDEM panel FE data.
 
@@ -384,7 +413,7 @@ def simulate_panel_sdem_fe(
         X_list.append(Xt)
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -399,3 +428,6 @@ def simulate_panel_sdem_fe(
             "sigma_alpha": sigma_alpha,
         },
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out

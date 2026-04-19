@@ -15,6 +15,7 @@ from formulaic import model_matrix
 from libpysal.graph import Graph
 
 from ..diagnostics import (
+    DiagnosticResult,
     arch_test,
     bpagan_test,
     ljung_box_q,
@@ -460,6 +461,38 @@ class SpatialPanelModel(ABC):
     def _require_fit(self):
         if self._idata is None:
             raise RuntimeError("Model has not been fit yet. Call .fit() first.")
+
+    @staticmethod
+    def _wrap_stats_result(
+        name: str,
+        raw: dict,
+        stat_key: str,
+        extra_keys: tuple[str, ...] = (),
+    ) -> DiagnosticResult:
+        """Convert a raw stats-function result dict to a DiagnosticResult.
+
+        Parameters
+        ----------
+        name : str
+            Short test identifier for the DiagnosticResult.
+        raw : dict
+            Raw result dictionary from a ``bayespecon.stats`` function.
+        stat_key : str
+            Key in *raw* that holds the test statistic value.
+        extra_keys : tuple of str, optional
+            Additional keys from *raw* to carry over into ``extra``.
+
+        Returns
+        -------
+        DiagnosticResult
+        """
+        extra = {k: raw[k] for k in extra_keys if k in raw}
+        return DiagnosticResult(
+            name=name,
+            statistic=raw[stat_key],
+            pvalue=raw["prob"],
+            extra=extra,
+        )
 
     def _posterior_mean(self, var: str) -> np.ndarray:
         return self._idata.posterior[var].mean(("chain", "draw")).to_numpy()

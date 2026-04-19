@@ -5,9 +5,30 @@
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+import os
 import sys
 
 from packaging.version import Version
+
+# Ensure pyproj uses the active environment's proj.db during notebook execution.
+try:
+    from pathlib import Path
+
+    from pyproj import datadir as pyproj_datadir
+
+    candidates = [
+        Path(sys.prefix) / "share" / "proj",
+        Path(pyproj_datadir.get_data_dir()),
+    ]
+    for candidate in candidates:
+        proj_db = candidate / "proj.db"
+        if proj_db.exists():
+            proj_data_dir = str(candidate)
+            os.environ["PROJ_LIB"] = proj_data_dir
+            os.environ["PROJ_DATA"] = proj_data_dir
+            break
+except Exception:
+    pass
 
 import bayespecon
 

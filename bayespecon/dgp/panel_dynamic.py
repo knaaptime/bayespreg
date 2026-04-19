@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from .panel_fe import _panel_finalize
-from .utils import ensure_rng, make_design_matrix, resolve_weights
+from .utils import ensure_rng, make_design_matrix, make_panel_output_geodataframe, resolve_weights
 
 
 def simulate_panel_dlm_fe(
@@ -20,6 +20,9 @@ def simulate_panel_dlm_fe(
     W=None,
     gdf=None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate dynamic non-spatial panel FE data.
 
@@ -71,7 +74,7 @@ def simulate_panel_dlm_fe(
         y_prev = yt
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -80,6 +83,9 @@ def simulate_panel_dlm_fe(
         "W_graph": Wg,
         "params_true": {"phi": phi, "beta": beta, "sigma": sigma, "sigma_alpha": sigma_alpha},
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out
 
 
 def simulate_panel_sdmr_fe(
@@ -95,6 +101,9 @@ def simulate_panel_sdmr_fe(
     W=None,
     gdf=None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate dynamic restricted SDM panel FE data.
 
@@ -150,7 +159,7 @@ def simulate_panel_sdmr_fe(
         y_prev = yt
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -165,6 +174,9 @@ def simulate_panel_sdmr_fe(
             "sigma_alpha": sigma_alpha,
         },
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out
 
 
 def simulate_panel_sdmu_fe(
@@ -181,6 +193,9 @@ def simulate_panel_sdmu_fe(
     W=None,
     gdf=None,
     contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
 ) -> dict:
     """Simulate dynamic unrestricted SDM panel FE data.
 
@@ -238,7 +253,7 @@ def simulate_panel_sdmu_fe(
         y_prev = yt
 
     y, X, idx = _panel_finalize(y_list, X_list, N, T)
-    return {
+    out = {
         "y": y,
         "X": X,
         "unit": idx["unit"],
@@ -254,3 +269,6 @@ def simulate_panel_sdmu_fe(
             "sigma_alpha": sigma_alpha,
         },
     }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out

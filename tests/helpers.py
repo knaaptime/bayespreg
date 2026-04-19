@@ -368,3 +368,117 @@ def make_spatial_probit_data(
         rng=rng,
     )
     return out["y"], out["X"], out["region_ids"]
+
+
+# ---------------------------------------------------------------------------
+# Tobit data generators
+# ---------------------------------------------------------------------------
+
+def make_sar_tobit_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    rho: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 0.8,
+    censoring: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate left-censored SAR Tobit data using the dgp module."""
+    out = dgp.simulate_sar_tobit(
+        W=W,
+        rho=rho,
+        beta=beta,
+        sigma=sigma,
+        censoring=censoring,
+        rng=rng,
+    )
+    return out["y"], out["X"]
+
+
+def make_sem_tobit_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    lam: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 0.8,
+    censoring: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate left-censored SEM Tobit data using the dgp module."""
+    out = dgp.simulate_sem_tobit(
+        W=W,
+        lam=lam,
+        beta=beta,
+        sigma=sigma,
+        censoring=censoring,
+        rng=rng,
+    )
+    return out["y"], out["X"]
+
+
+def make_sdm_tobit_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    rho: float = 0.4,
+    beta1: np.ndarray | None = None,
+    beta2: np.ndarray | None = None,
+    sigma: float = 0.8,
+    censoring: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate left-censored SDM Tobit data using the dgp module."""
+    out = dgp.simulate_sdm_tobit(
+        W=W,
+        rho=rho,
+        beta1=beta1,
+        beta2=beta2,
+        sigma=sigma,
+        censoring=censoring,
+        rng=rng,
+    )
+    return out["y"], out["X"]
+
+
+def make_panel_sar_tobit_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    rho: float = 0.35,
+    beta: np.ndarray | None = None,
+    sigma: float = 0.8,
+    censoring: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate left-censored panel SAR FE Tobit data using the dgp module."""
+    out = dgp.simulate_panel_sar_tobit_fe(
+        N=N,
+        T=T,
+        W=W,
+        rho=rho,
+        beta=beta,
+        sigma=sigma,
+        censoring=censoring,
+        rng=rng,
+    )
+    return out["y"], out["X"]
+
+
+def make_panel_sem_tobit_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    lam: float = 0.35,
+    beta: np.ndarray | None = None,
+    sigma: float = 0.8,
+    censoring: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate left-censored panel SEM FE Tobit data using the dgp module."""
+    out = dgp.simulate_panel_sem_tobit_fe(
+        N=N,
+        T=T,
+        W=W,
+        lam=lam,
+        beta=beta,
+        sigma=sigma,
+        censoring=censoring,
+        rng=rng,
+    )
+    return out["y"], out["X"]

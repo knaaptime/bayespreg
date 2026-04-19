@@ -16,6 +16,7 @@ Import MATLAB-style statistics helpers from the stats submodule::
 
 from . import dgp, stats
 from .diagnostics import (
+    DiagnosticResult,
     arch_test,
     bpagan_test,
     ljung_box_q,
@@ -25,6 +26,7 @@ from .diagnostics import (
 )
 from .models import (
     SAR,
+		OLS,
     SDEM,
     SDM,
     SEM,
@@ -50,6 +52,7 @@ from .models import (
 
 __all__ = [
 	"SLX",
+		"OLS",
 	"SAR",
 	"SEM",
 	"SDM",

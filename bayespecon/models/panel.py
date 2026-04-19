@@ -9,6 +9,7 @@ import xarray as xr
 
 from ..logdet import make_logdet_fn
 from .panel_base import SpatialPanelModel
+from ..diagnostics import DiagnosticResult
 
 
 class OLSPanelFE(SpatialPanelModel):
@@ -71,6 +72,125 @@ class OLSPanelFE(SpatialPanelModel):
             "indirect": np.zeros_like(beta),
             "total": beta.copy(),
             "feature_names": self._feature_names,
+        }
+
+    # ------------------------------------------------------------------
+    # Spatial specification tests
+    # ------------------------------------------------------------------
+
+    def lm_error_test(self) -> DiagnosticResult:
+        """LM test for spatial error dependence in a fixed-effects panel.
+
+        Tests whether the Lee-Yu FE-transformed residuals show spatial
+        error autocorrelation, suggesting a SEM panel model may be more
+        appropriate than OLS panel.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"lm_f_error"``
+
+            ``statistic`` : float — LM statistic.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(1)` null.
+
+        Notes
+        -----
+        H\\ :sub:`0`: no spatial error dependence in FE panel residuals.
+        The Lee-Yu within-transformation is applied internally.
+
+        References
+        ----------
+        .. [1] Lee, L., & Yu, J. (2010). Estimation of spatial autoregressive
+               panel data models with fixed effects. *Journal of Econometrics*,
+               154(2), 165–185.
+        """
+        from ..stats.panel import lm_f_err
+        W_cs = self._W_sparse[:self._N, :self._N].toarray()
+        raw = lm_f_err(self._y_raw, self._X_raw, W_cs, self._N)
+        return self._wrap_stats_result("lm_f_error", raw, "lm")
+
+    def lm_sar_test(self) -> DiagnosticResult:
+        """LM test for SAR dependence in a fixed-effects panel.
+
+        Tests whether a spatially lagged dependent variable :math:`\\rho Wy`
+        is missing from the OLS panel specification, suggesting SAR panel.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"lm_f_sar"``
+
+            ``statistic`` : float — LM statistic.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(1)` null.
+
+        Notes
+        -----
+        H\\ :sub:`0`: no omitted spatial lag in FE panel.
+
+        References
+        ----------
+        .. [1] Lee, L., & Yu, J. (2010). *Journal of Econometrics*, 154(2),
+               165–185.
+        """
+        from ..stats.panel import lm_f_sar
+        W_cs = self._W_sparse[:self._N, :self._N].toarray()
+        raw = lm_f_sar(self._y_raw, self._X_raw, W_cs, self._N)
+        return self._wrap_stats_result("lm_f_sar", raw, "lm")
+
+    def lm_joint_test(self) -> DiagnosticResult:
+        """Joint LM test for both SAR and SEM effects in an FE panel.
+
+        Tests whether either (or both) of a spatial lag on *y* and a
+        spatial error process are present in the OLS panel specification.
+        The statistic is asymptotically :math:`\\chi^2(2)` under H\\ :sub:`0`.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"lm_f_joint"``
+
+            ``statistic`` : float — joint LM statistic.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(2)` null.
+
+        Notes
+        -----
+        H\\ :sub:`0`: no SAR and no SEM dependence in the FE panel.
+
+        References
+        ----------
+        .. [1] Lee, L., & Yu, J. (2010). *Journal of Econometrics*, 154(2),
+               165–185.
+        """
+        from ..stats.panel import lm_f_joint
+        W_cs = self._W_sparse[:self._N, :self._N].toarray()
+        raw = lm_f_joint(self._y_raw, self._X_raw, W_cs, W_cs, self._N)
+        return self._wrap_stats_result("lm_f_joint", raw, "lm")
+
+    def spatial_specification_tests(self) -> dict:
+        """Run panel spatial specification tests on Lee-Yu FE residuals.
+
+        Combines the LM-error, LM-SAR, and joint LM tests.  Use the results
+        to decide whether to adopt a SAR panel, SEM panel, or remain with
+        OLS panel.
+
+        Returns
+        -------
+        dict[str, DiagnosticResult]
+            Keys: ``"lm_error"``, ``"lm_sar"``, ``"lm_joint"``.
+
+        See Also
+        --------
+        lm_error_test : LM test for spatial error in the panel.
+        lm_sar_test : LM test for spatial lag in the panel.
+        lm_joint_test : Joint LM test for both SAR and SEM effects.
+        """
+        return {
+            "lm_error": self.lm_error_test(),
+            "lm_sar": self.lm_sar_test(),
+            "lm_joint": self.lm_joint_test(),
         }
 
 
@@ -161,6 +281,51 @@ class SARPanelFE(SpatialPanelModel):
             "indirect": indirect,
             "total": total,
             "feature_names": self._feature_names,
+        }
+
+    # ------------------------------------------------------------------
+    # Spatial specification tests
+    # ------------------------------------------------------------------
+
+    def lm_error_conditional_test(self) -> DiagnosticResult:
+        """LM test for spatial error dependence, conditional on SAR.
+
+        Returns
+        -------
+        DiagnosticResult
+            Test result with LM statistic and p-value.
+        """
+        from ..stats.panel import lm_f_err_c
+
+        W_cs = self._W_sparse[:self._N, :self._N].toarray()
+        raw = lm_f_err_c(self._y_raw, self._X_raw, W_cs, W_cs, self._N)
+        return self._wrap_stats_result("lm_f_error_c", raw, "lm")
+
+    def lr_sar_test(self) -> DiagnosticResult:
+        """LR test for the spatial lag parameter :math:`\\rho` in the FE panel.
+
+        Returns
+        -------
+        DiagnosticResult
+            Test result with LR statistic and p-value.
+        """
+        from ..stats.panel import lr_f_sar
+
+        W_cs = self._W_sparse[:self._N, :self._N].toarray()
+        raw = lr_f_sar(self._y_raw, self._X_raw, W_cs, self._N)
+        return self._wrap_stats_result("lr_f_sar", raw, "lr")
+
+    def spatial_specification_tests(self) -> dict:
+        """Run panel spatial specification tests for the SAR panel model.
+
+        Returns
+        -------
+        dict[str, DiagnosticResult]
+            Keys: ``"lm_error_conditional"``, ``"lr_sar"``.
+        """
+        return {
+            "lm_error_conditional": self.lm_error_conditional_test(),
+            "lr_sar": self.lr_sar_test(),
         }
 
 
@@ -304,6 +469,51 @@ class SEMPanelFE(SpatialPanelModel):
             "indirect": np.zeros_like(beta),
             "total": beta.copy(),
             "feature_names": self._feature_names,
+        }
+
+    # ------------------------------------------------------------------
+    # Spatial specification tests
+    # ------------------------------------------------------------------
+
+    def lm_sar_conditional_test(self) -> DiagnosticResult:
+        """LM test for SAR dependence, conditional on SEM.
+
+        Returns
+        -------
+        DiagnosticResult
+            Test result with LM statistic and p-value.
+        """
+        from ..stats.panel import lm_f_sar_c
+
+        W_cs = self._W_sparse[:self._N, :self._N].toarray()
+        raw = lm_f_sar_c(self._y_raw, self._X_raw, W_cs, W_cs, self._N)
+        return self._wrap_stats_result("lm_f_sar_c", raw, "lm")
+
+    def lr_error_test(self) -> DiagnosticResult:
+        """LR test for the spatial error parameter :math:`\\lambda` in the FE panel.
+
+        Returns
+        -------
+        DiagnosticResult
+            Test result with LR statistic and p-value.
+        """
+        from ..stats.panel import lr_f_err
+
+        W_cs = self._W_sparse[:self._N, :self._N].toarray()
+        raw = lr_f_err(self._y_raw, self._X_raw, W_cs, self._N)
+        return self._wrap_stats_result("lr_f_error", raw, "lr")
+
+    def spatial_specification_tests(self) -> dict:
+        """Run panel spatial specification tests for the SEM panel model.
+
+        Returns
+        -------
+        dict[str, DiagnosticResult]
+            Keys: ``"lm_sar_conditional"``, ``"lr_error"``.
+        """
+        return {
+            "lm_sar_conditional": self.lm_sar_conditional_test(),
+            "lr_error": self.lr_error_test(),
         }
 
 

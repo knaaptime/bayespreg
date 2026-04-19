@@ -15,12 +15,14 @@ from formulaic import model_matrix
 from libpysal.graph import Graph
 
 from ..diagnostics import (
+    DiagnosticResult,
     arch_test,
     bpagan_test,
     ljung_box_q,
     outlier_candidates,
     rdiagnose_like,
 )
+from ..stats.core import moran as _moran_test
 
 
 def _parse_W(
@@ -153,9 +155,6 @@ class SpatialModel(ABC):
         logdet_method: str = "eigenvalue",
         w_vars: Optional[list] = None,
     ):
-        if W is None:
-            raise ValueError("W (spatial weights) is required.")
-
         self.priors = priors or {}
         self.logdet_method = logdet_method
         self._idata: Optional[az.InferenceData] = None
@@ -173,36 +172,46 @@ class SpatialModel(ABC):
                 "Provide either (formula, data) or (y, X)."
             )
 
-        # Validate W and store as CSR sparse matrix.
-        # Dense conversion is deferred to _W_dense (lazy property).
-        self._W_sparse, self._is_row_std = _parse_W(W, len(self._y))
-        # Pre-compute eigenvalues of the N×N matrix once (O(n³)) so that
-        # logdet and effect calculations can use O(n) eigenvalue formulas.
-        self._W_eigs: np.ndarray = np.linalg.eigvals(
-            self._W_sparse.toarray().astype(np.float64)
-        )
-
-        self._wx_column_indices = self._spatial_lag_column_indices(self._X, self._feature_names)
-        if w_vars is not None:
-            unknown = [v for v in w_vars if v not in self._feature_names]
-            if unknown:
-                raise ValueError(
-                    f"w_vars contains names not found in X columns: {unknown}. "
-                    f"Available: {self._feature_names}"
-                )
-            self._wx_column_indices = [
-                i for i in self._wx_column_indices if self._feature_names[i] in w_vars
-            ]
-        self._wx_feature_names = [self._feature_names[i] for i in self._wx_column_indices]
-
-        # Pre-compute spatial lags using sparse matmul (no dense materialisation).
-        self._Wy: np.ndarray = np.asarray(self._W_sparse @ self._y, dtype=np.float64)
-        if self._wx_column_indices:
-            self._WX = np.asarray(
-                self._W_sparse @ self._X[:, self._wx_column_indices], dtype=np.float64
+        if W is not None:
+            # Validate W and store as CSR sparse matrix.
+            # Dense conversion is deferred to _W_dense (lazy property).
+            self._W_sparse, self._is_row_std = _parse_W(W, len(self._y))
+            # Pre-compute eigenvalues of the N×N matrix once (O(n³)) so that
+            # logdet and effect calculations can use O(n) eigenvalue formulas.
+            self._W_eigs: np.ndarray = np.linalg.eigvals(
+                self._W_sparse.toarray().astype(np.float64)
             )
+            self._wx_column_indices = self._spatial_lag_column_indices(self._X, self._feature_names)
+            if w_vars is not None:
+                unknown = [v for v in w_vars if v not in self._feature_names]
+                if unknown:
+                    raise ValueError(
+                        f"w_vars contains names not found in X columns: {unknown}. "
+                        f"Available: {self._feature_names}"
+                    )
+                self._wx_column_indices = [
+                    i for i in self._wx_column_indices if self._feature_names[i] in w_vars
+                ]
+            self._wx_feature_names = [self._feature_names[i] for i in self._wx_column_indices]
+            # Pre-compute spatial lags using sparse matmul (no dense materialisation).
+            self._Wy: np.ndarray = np.asarray(self._W_sparse @ self._y, dtype=np.float64)
+            if self._wx_column_indices:
+                self._WX = np.asarray(
+                    self._W_sparse @ self._X[:, self._wx_column_indices], dtype=np.float64
+                )
+            else:
+                self._WX = np.empty((self._X.shape[0], 0), dtype=np.float64)
         else:
+            # W-free mode: no spatial structure; spec tests require W to be supplied.
+            self._W_sparse = None
+            self._is_row_std = False
+            self._W_eigs = None
+            self._wx_column_indices: list[int] = []
+            self._wx_feature_names: list[str] = []
+            self._Wy = np.zeros(len(self._y), dtype=np.float64)
             self._WX = np.empty((self._X.shape[0], 0), dtype=np.float64)
+            if w_vars is not None:
+                raise ValueError("w_vars requires a spatial weights matrix W.")
 
     @property
     def _W_dense(self) -> np.ndarray:
@@ -471,6 +480,84 @@ class SpatialModel(ABC):
     def _require_fit(self):
         if self._idata is None:
             raise RuntimeError("Model has not been fit yet. Call .fit() first.")
+
+    def _require_W(self):
+        """Raise if no spatial weights matrix was supplied."""
+        if self._W_sparse is None:
+            raise ValueError(
+                "This method requires a spatial weights matrix W. "
+                "Pass W when constructing the model."
+            )
+
+    @staticmethod
+    def _wrap_stats_result(
+        name: str,
+        raw: dict,
+        stat_key: str,
+        extra_keys: tuple[str, ...] = (),
+    ) -> DiagnosticResult:
+        """Convert a raw stats-function result dict to a DiagnosticResult.
+
+        Parameters
+        ----------
+        name : str
+            Short test identifier for the DiagnosticResult.
+        raw : dict
+            Raw result dictionary from a ``bayespecon.stats`` function.
+        stat_key : str
+            Key in *raw* that holds the test statistic value.
+        extra_keys : tuple of str, optional
+            Additional keys from *raw* to carry over into ``extra``.
+
+        Returns
+        -------
+        DiagnosticResult
+        """
+        extra = {k: raw[k] for k in extra_keys if k in raw}
+        return DiagnosticResult(
+            name=name,
+            statistic=raw[stat_key],
+            pvalue=raw["prob"],
+            extra=extra,
+        )
+
+    def moran_test(self) -> DiagnosticResult:
+        """Compute Moran's I test for spatial autocorrelation in OLS residuals.
+
+        Moran's I measures the degree of spatial clustering in the residuals
+        of an OLS regression.  A significantly positive value indicates that
+        nearby observations share similar unexplained variation, suggesting a
+        mis-specified model that omits spatial structure.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"moran"``
+
+            ``statistic`` : float — Moran's I value.
+
+            ``pvalue`` : float — two-tailed p-value under normality.
+
+            ``extra`` : dict with keys ``istat`` (standardised Moran's I),
+            ``imean`` (theoretical mean under H\\ :sub:`0`),
+            ``ivar`` (theoretical variance under H\\ :sub:`0`).
+
+        Notes
+        -----
+        H\\ :sub:`0`: no spatial autocorrelation in residuals.
+        The statistic is standardised to an asymptotically N(0, 1) variable
+        and a two-tailed p-value is reported.
+
+        References
+        ----------
+        .. [1] Moran, P. A. P. (1950). Notes on continuous stochastic phenomena.
+               *Biometrika*, 37(1/2), 17–23.
+        """
+        self._require_W()
+        raw = _moran_test(self._y, self._X, self._W_sparse.toarray())
+        return self._wrap_stats_result(
+            "moran", raw, "morani", extra_keys=("istat", "imean", "ivar")
+        )
 
     def _posterior_mean(self, var: str) -> np.ndarray:
         return self._idata.posterior[var].mean(("chain", "draw")).to_numpy()

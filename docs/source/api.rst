@@ -27,7 +27,7 @@ Base Classes
 
 
 Cross Sectional Spatial Models
---------------
+------------------------------
 
 .. currentmodule:: bayespecon.models
 
@@ -35,6 +35,7 @@ Cross Sectional Spatial Models
    :toctree: generated/
 
     SAR
+      OLS
     SEM
     SLX
     SDM
@@ -81,7 +82,7 @@ Dynamic Panel Spatial Models
 
 
 Non-Linear Spatial Models
----------
+-------------------------
 
 .. currentmodule:: bayespecon.models
 
@@ -114,6 +115,7 @@ Regression Diagnostics
 .. autosummary::
    :toctree: generated/
 
+   DiagnosticResult
    rdiagnose_like
    bpagan_test
    arch_test
@@ -180,6 +182,7 @@ Data Generating Processes
    :toctree: generated/
 
    simulate_sar
+      simulate_ols
    simulate_sem
    simulate_slx
    simulate_sdm

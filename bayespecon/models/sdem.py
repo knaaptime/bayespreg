@@ -117,3 +117,81 @@ class SDEM(SpatialModel):
         beta = self._posterior_mean("beta")
         Z = np.hstack([self._X, self._WX])
         return Z @ beta
+
+    # ------------------------------------------------------------------
+    # Spatial specification tests
+    # ------------------------------------------------------------------
+
+    def lm_lag_test(self) -> "DiagnosticResult":
+        """LM test for an omitted spatially lagged dependent variable.
+
+        From a SDEM perspective, tests whether an additional lag on *y*
+        (a full SARAR or SDM structure) is suggested by the data.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"lm_lag"``
+
+            ``statistic`` : float — LM statistic.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(1)` null.
+
+        Notes
+        -----
+        H\\ :sub:`0`: no omitted spatial lag of the dependent variable.
+
+        References
+        ----------
+        .. [1] Anselin, L. (1988). *Spatial Econometrics: Methods and Models*.
+               Kluwer Academic Publishers.
+        """
+        from ..stats.core import lmlag
+        raw = lmlag(self._y, self._X, self._W_sparse.toarray())
+        return self._wrap_stats_result("lm_lag", raw, "lm")
+
+    def wald_error_test(self) -> "DiagnosticResult":
+        """Wald test for spatial error autocorrelation (:math:`\\lambda`).
+
+        Tests H\\ :sub:`0`: :math:`\\lambda = 0` using the Wald statistic
+        from the SEM concentrated ML estimate applied to SDEM residuals.
+
+        Returns
+        -------
+        DiagnosticResult
+            ``name`` : ``"wald_error"``
+
+            ``statistic`` : float — Wald statistic.
+
+            ``pvalue`` : float — p-value under :math:`\\chi^2(1)` null.
+
+        References
+        ----------
+        .. [1] Anselin, L. (1988). *Spatial Econometrics: Methods and Models*.
+               Kluwer Academic Publishers.
+        """
+        from ..stats.core import walds
+        raw = walds(self._y, self._X, self._W_sparse.toarray())
+        return self._wrap_stats_result("wald_error", raw, "wald")
+
+    def spatial_specification_tests(self) -> dict:
+        """Run a battery of spatial specification tests on OLS residuals.
+
+        Combines Moran's I, LM-lag, and Wald-error tests.
+
+        Returns
+        -------
+        dict[str, DiagnosticResult]
+            Keys: ``"moran"``, ``"lm_lag"``, ``"wald_error"``.
+
+        See Also
+        --------
+        moran_test : Moran's I for residual spatial autocorrelation.
+        lm_lag_test : LM test for omitted spatial lag.
+        wald_error_test : Wald test for spatial error autocorrelation.
+        """
+        return {
+            "moran": self.moran_test(),
+            "lm_lag": self.lm_lag_test(),
+            "wald_error": self.wald_error_test(),
+        }

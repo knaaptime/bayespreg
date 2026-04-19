@@ -10,7 +10,12 @@ import numpy as np
 import pytest
 
 from bayespecon import SARTobit, SDMTobit, SEMTobit
-from tests.helpers import SAMPLE_KWARGS
+from tests.helpers import (
+    SAMPLE_KWARGS,
+    make_sar_tobit_data,
+    make_sdm_tobit_data,
+    make_sem_tobit_data,
+)
 
 pytestmark = pytest.mark.slow
 
@@ -26,37 +31,16 @@ ABS_TOL_BETA = 0.55
 ABS_TOL_WX = 0.70
 
 
-def _make_sar_tobit_data(rng: np.random.Generator, W: np.ndarray):
-    n = W.shape[0]
-    X = np.column_stack([np.ones(n), rng.standard_normal(n)])
-    eps = SIGMA_TRUE * rng.standard_normal(n)
-    y_lat = np.linalg.solve(np.eye(n) - RHO_TRUE * W, X @ BETA_TRUE + eps)
-    y_obs = np.maximum(CENSOR_TRUE, y_lat)
-    return y_obs, X
-
-
-def _make_sem_tobit_data(rng: np.random.Generator, W: np.ndarray):
-    n = W.shape[0]
-    X = np.column_stack([np.ones(n), rng.standard_normal(n)])
-    u = np.linalg.solve(np.eye(n) - LAM_TRUE * W, SIGMA_TRUE * rng.standard_normal(n))
-    y_lat = X @ BETA_TRUE + u
-    y_obs = np.maximum(CENSOR_TRUE, y_lat)
-    return y_obs, X
-
-
-def _make_sdm_tobit_data(rng: np.random.Generator, W: np.ndarray):
-    n = W.shape[0]
-    X = np.column_stack([np.ones(n), rng.standard_normal(n)])
-    Wx = W @ X[:, 1:]
-    eps = SIGMA_TRUE * rng.standard_normal(n)
-    y_lat = np.linalg.solve(np.eye(n) - RHO_TRUE * W, X @ BETA_TRUE + Wx @ BETA2_TRUE + eps)
-    y_obs = np.maximum(CENSOR_TRUE, y_lat)
-    return y_obs, X
-
-
 @pytest.mark.slow
 def test_sar_tobit_recovers_rho_and_beta(rng, W_dense, W_graph):
-    y, X = _make_sar_tobit_data(rng, W_dense)
+    y, X = make_sar_tobit_data(
+        rng,
+        W_dense,
+        rho=RHO_TRUE,
+        beta=BETA_TRUE,
+        sigma=SIGMA_TRUE,
+        censoring=CENSOR_TRUE,
+    )
     model = SARTobit(y=y, X=X, W=W_graph, censoring=CENSOR_TRUE)
     idata = model.fit(**SAMPLE_KWARGS)
 
@@ -70,7 +54,14 @@ def test_sar_tobit_recovers_rho_and_beta(rng, W_dense, W_graph):
 
 @pytest.mark.slow
 def test_sem_tobit_recovers_lam_and_beta(rng, W_dense, W_graph):
-    y, X = _make_sem_tobit_data(rng, W_dense)
+    y, X = make_sem_tobit_data(
+        rng,
+        W_dense,
+        lam=LAM_TRUE,
+        beta=BETA_TRUE,
+        sigma=SIGMA_TRUE,
+        censoring=CENSOR_TRUE,
+    )
     model = SEMTobit(y=y, X=X, W=W_graph, censoring=CENSOR_TRUE)
     idata = model.fit(**SAMPLE_KWARGS)
 
@@ -84,7 +75,15 @@ def test_sem_tobit_recovers_lam_and_beta(rng, W_dense, W_graph):
 
 @pytest.mark.slow
 def test_sdm_tobit_recovers_rho_and_beta(rng, W_dense, W_graph):
-    y, X = _make_sdm_tobit_data(rng, W_dense)
+    y, X = make_sdm_tobit_data(
+        rng,
+        W_dense,
+        rho=RHO_TRUE,
+        beta1=BETA_TRUE,
+        beta2=BETA2_TRUE,
+        sigma=SIGMA_TRUE,
+        censoring=CENSOR_TRUE,
+    )
     model = SDMTobit(y=y, X=X, W=W_graph, censoring=CENSOR_TRUE)
     idata = model.fit(**SAMPLE_KWARGS)
 

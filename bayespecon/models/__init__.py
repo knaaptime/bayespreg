@@ -5,6 +5,7 @@ single import surface.
 """
 
 from .slx import SLX
+from .ols import OLS
 from .sar import SAR
 from .sem import SEM
 from .sdm import SDM
@@ -17,6 +18,7 @@ from .panel_re import OLSPanelRE, SARPanelRE, SEMPanelRE
 from .panel_tobit import SARPanelTobit, SEMPanelTobit
 
 __all__ = [
+		"OLS",
 	"SLX",
 	"SAR",
 	"SEM",

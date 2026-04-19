@@ -91,6 +91,7 @@ def simulate_sdm_tobit(*, censoring: float = 0.0, **kwargs) -> dict:
 def simulate_spatial_probit(
     W=None,
     gdf=None,
+    n: int | None = None,
     rho: float = 0.35,
     beta: np.ndarray | None = None,
     sigma_a: float = 0.8,
@@ -132,7 +133,7 @@ def simulate_spatial_probit(
         ``params_true``.
     """
     rng = ensure_rng(rng, seed)
-    Wd, Wg = resolve_weights(W=W, gdf=gdf, contiguity=contiguity)
+    Wd, Wg = resolve_weights(W=W, gdf=gdf, n=n, contiguity=contiguity)
     m = Wd.shape[0]
 
     if beta is None:
