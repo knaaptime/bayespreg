@@ -1,6 +1,0 @@
-﻿bayespecon.stats.prt\_back
-==========================
-
-.. currentmodule:: bayespecon.stats
-
-.. autofunction:: prt_back

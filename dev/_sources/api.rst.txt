@@ -162,9 +162,6 @@ Spatial Stats Helpers
    lr_f_joint
    lr_f_err_c
    lr_f_sar_c
-   prt_fe
-   prt_back
-   prt_test_fe
 
 
 Data Generating Processes
