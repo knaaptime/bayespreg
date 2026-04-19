@@ -78,38 +78,35 @@
   {
    "cell_type": "code",
    "execution_count": null,
-   "id": "72277c2e",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "y = columbus.HOVAL.values\n",
-    "X = columbus[[\"INC\", \"CRIME\"]]"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
    "id": "d25d8261",
    "metadata": {
     "language": "python"
    },
    "outputs": [],
    "source": [
+    "y = columbus.HOVAL.values\n",
+    "X = columbus[[\"INC\", \"CRIME\"]]\n",
+    "\n",
     "spreg_results = {\n",
     "    \"SLX\": spreg.OLS(y, X, w=w, slx_lags=1, name_y=\"HOVAL\", name_x=[\"INC\", \"CRIME\"]),\n",
     "    \"SAR\": spreg.GM_Lag(y, X, w=w, name_y=\"HOVAL\", name_x=[\"INC\", \"CRIME\"]),\n",
     "    \"SEM\": spreg.GM_Error(y, X, w=w, name_y=\"HOVAL\", name_x=[\"INC\", \"CRIME\"]),\n",
-    "    \"SDM\": spreg.GM_Lag(y, X, w=w, slx_lags=1, w_lags=2, name_y=\"HOVAL\", name_x=[\"INC\", \"CRIME\"]),\n",
-    "    \"SDEM\": spreg.GM_Error(y, X, w=w, slx_lags=1, name_y=\"HOVAL\", name_x=[\"INC\", \"CRIME\"]),\n",
+    "    \"SDM\": spreg.GM_Lag(\n",
+    "        y, X, w=w, slx_lags=1, w_lags=2, name_y=\"HOVAL\", name_x=[\"INC\", \"CRIME\"]\n",
+    "    ),\n",
+    "    \"SDEM\": spreg.GM_Error(\n",
+    "        y, X, w=w, slx_lags=1, name_y=\"HOVAL\", name_x=[\"INC\", \"CRIME\"]\n",
+    "    ),\n",
     "}\n",
     "\n",
+    "spec = \"HOVAL ~  1 + INC + CRIME\"\n",
     "sample_kwargs = dict(draws=1000, tune=1000, chains=4, random_seed=42, progressbar=False)\n",
     "bayes_models = {\n",
-    "    \"SLX\": SLX(y=y, X=X, W=w),\n",
-    "    \"SAR\": SAR(y=y, X=X, W=w),\n",
-    "    \"SEM\": SEM(y=y, X=X, W=w),\n",
-    "    \"SDM\": SDM(y=y, X=X, W=w),\n",
-    "    \"SDEM\": SDEM(y=y, X=X, W=w),\n",
+    "    \"SLX\": SLX(spec, data=columbus, W=w),\n",
+    "    \"SAR\": SAR(spec, data=columbus, W=w),\n",
+    "    \"SEM\": SEM(spec, data=columbus, W=w),\n",
+    "    \"SDM\": SDM(spec, data=columbus, W=w),\n",
+    "    \"SDEM\": SDEM(spec, data=columbus, W=w),\n",
     "}\n",
     "bayes_idata = {name: model.fit(**sample_kwargs) for name, model in bayes_models.items()}\n",
     "print(\"Finished fitting all bayespecon models.\")"
@@ -118,11 +115,21 @@
   {
    "cell_type": "code",
    "execution_count": null,
-   "id": "2b52d577",
+   "id": "3626f22b",
    "metadata": {},
    "outputs": [],
    "source": [
-    "print(spreg_results[\"SLX\"].name_x)"
+    "bayes_models['SAR'].summary()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "17eb4276",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print(spreg_results[\"SAR\"].summary)"
    ]
   },
   {
@@ -400,9 +407,6 @@
    "nbconvert_exporter": "python",
    "pygments_lexer": "ipython3",
    "version": "3.14.4"
-  },
-  "mystnb": {
-   "execution_mode": "off"
   }
  },
  "nbformat": 4,

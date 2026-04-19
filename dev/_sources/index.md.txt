@@ -14,10 +14,10 @@ installation
 :maxdepth: 1
 
 Cross Sectional Models <user-guide/pedagogical_spatial_models>
-Comparing bayespecon vs spreg <user-guide/cross_sectional_spreg_comparison>
 Panel Models <user-guide/pedagogical_panel_models>
 Nonlinear Models <user-guide/nonlinear_models>
 Nonlinear Panel Models <user-guide/nonlinear_panel_models>
+Comparing bayespecon vs spreg <user-guide/cross_sectional_spreg_comparison>
 Recovering Parameters <user-guide/faithfulness_bayespecon>
 Replicating Elhorst et al 2024 <user-guide/jgsy2024_replication_bayespecon>
 Log-Determinant Methods <user-guide/logdet_profiling>
