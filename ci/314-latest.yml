@@ -21,8 +21,8 @@ dependencies:
   - pytest-mpl
   - pytest-xdist
   - openpyxl
-  - numpyro
-  - blackjax
+  - numpyro # [not win]
+  - blackjax # [not win]
   # docs
   - numpydoc
   - nbsphinx

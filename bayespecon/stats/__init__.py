@@ -37,9 +37,6 @@ Panel helpers
 - ``lr_f_joint``
 - ``lr_f_err_c``
 - ``lr_f_sar_c``
-- ``prt_fe``
-- ``prt_back``
-- ``prt_test_fe``
 """
 
 from .core import (
@@ -69,9 +66,6 @@ from .panel import (
     lr_f_joint,
     lr_f_sar,
     lr_f_sar_c,
-    prt_back,
-    prt_fe,
-    prt_test_fe,
     sar_panel_FE_LY,
     sarar_panel_FE_LY,
     sem_panel_FE_LY,
@@ -107,7 +101,4 @@ __all__ = [
     "lr_f_joint",
     "lr_f_err_c",
     "lr_f_sar_c",
-    "prt_fe",
-    "prt_back",
-    "prt_test_fe",
 ]
