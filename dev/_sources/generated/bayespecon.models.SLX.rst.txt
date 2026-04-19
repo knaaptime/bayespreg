@@ -19,10 +19,14 @@
       ~SLX.fit
       ~SLX.fitted_values
       ~SLX.heteroskedasticity_diagnostics
+      ~SLX.lm_error_test
+      ~SLX.lm_lag_test
+      ~SLX.moran_test
       ~SLX.outlier_diagnostics
       ~SLX.regression_diagnostics
       ~SLX.residuals
       ~SLX.spatial_effects
+      ~SLX.spatial_specification_tests
       ~SLX.summary
    
    

@@ -19,6 +19,7 @@
       ~SDMTobit.fit
       ~SDMTobit.fitted_values
       ~SDMTobit.heteroskedasticity_diagnostics
+      ~SDMTobit.moran_test
       ~SDMTobit.outlier_diagnostics
       ~SDMTobit.regression_diagnostics
       ~SDMTobit.residuals

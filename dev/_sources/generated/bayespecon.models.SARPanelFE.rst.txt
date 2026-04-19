@@ -19,11 +19,14 @@
       ~SARPanelFE.fit
       ~SARPanelFE.fitted_values
       ~SARPanelFE.heteroskedasticity_diagnostics
+      ~SARPanelFE.lm_error_conditional_test
+      ~SARPanelFE.lr_sar_test
       ~SARPanelFE.outlier_diagnostics
       ~SARPanelFE.panel_diagnostics
       ~SARPanelFE.regression_diagnostics
       ~SARPanelFE.residuals
       ~SARPanelFE.spatial_effects
+      ~SARPanelFE.spatial_specification_tests
       ~SARPanelFE.summary
    
    

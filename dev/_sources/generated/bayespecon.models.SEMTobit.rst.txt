@@ -19,6 +19,7 @@
       ~SEMTobit.fit
       ~SEMTobit.fitted_values
       ~SEMTobit.heteroskedasticity_diagnostics
+      ~SEMTobit.moran_test
       ~SEMTobit.outlier_diagnostics
       ~SEMTobit.regression_diagnostics
       ~SEMTobit.residuals

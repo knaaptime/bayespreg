@@ -19,6 +19,7 @@
       ~SARTobit.fit
       ~SARTobit.fitted_values
       ~SARTobit.heteroskedasticity_diagnostics
+      ~SARTobit.moran_test
       ~SARTobit.outlier_diagnostics
       ~SARTobit.regression_diagnostics
       ~SARTobit.residuals

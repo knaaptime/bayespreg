@@ -909,22 +909,10 @@
 
 <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
 
-<span class="c1"># Panel dimensions: 3x3 rook grid, 10 time periods</span>
-<span class="n">N</span> <span class="o">=</span> <span class="mi">9</span>
-<span class="n">T</span> <span class="o">=</span> <span class="mi">10</span>
-<span class="n">side</span> <span class="o">=</span> <span class="mi">3</span>
-
-<span class="c1"># Build row-standardised rook-contiguity weights</span>
-<span class="n">W_dense</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">))</span>
-<span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">side</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">side</span><span class="p">):</span>
-        <span class="n">i</span> <span class="o">=</span> <span class="n">r</span> <span class="o">*</span> <span class="n">side</span> <span class="o">+</span> <span class="n">c</span>
-        <span class="k">for</span> <span class="n">dr</span><span class="p">,</span> <span class="n">dc</span> <span class="ow">in</span> <span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]:</span>
-            <span class="n">nr</span><span class="p">,</span> <span class="n">nc</span> <span class="o">=</span> <span class="n">r</span> <span class="o">+</span> <span class="n">dr</span><span class="p">,</span> <span class="n">c</span> <span class="o">+</span> <span class="n">dc</span>
-            <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">nr</span> <span class="o">&lt;</span> <span class="n">side</span> <span class="ow">and</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">nc</span> <span class="o">&lt;</span> <span class="n">side</span><span class="p">:</span>
-                <span class="n">W_dense</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">nr</span> <span class="o">*</span> <span class="n">side</span> <span class="o">+</span> <span class="n">nc</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
-<span class="n">row_sums</span> <span class="o">=</span> <span class="n">W_dense</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">W_dense</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">row_sums</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">row_sums</span><span class="p">)</span>
+<span class="c1"># Panel dimensions: 20x20 rook grid, 5 time periods</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="n">T</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">side</span> <span class="o">=</span> <span class="mi">10</span>
 </code></pre></div>
 </div>
 </div>
@@ -940,7 +928,8 @@
 <span class="n">sar_data</span> <span class="o">=</span> <span class="n">dgp</span><span class="o">.</span><span class="n">simulate_panel_sar_tobit_fe</span><span class="p">(</span>
     <span class="n">N</span><span class="o">=</span><span class="n">N</span><span class="p">,</span>
     <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-    <span class="n">W</span><span class="o">=</span><span class="n">W_dense</span><span class="p">,</span>
+    <span class="n">n</span><span class="o">=</span><span class="n">side</span><span class="p">,</span>
+    <span class="n">contiguity</span><span class="o">=</span><span class="s2">&quot;rook&quot;</span><span class="p">,</span>
     <span class="n">rho</span><span class="o">=</span><span class="n">rho_true</span><span class="p">,</span>
     <span class="n">beta</span><span class="o">=</span><span class="n">beta_true</span><span class="p">,</span>
     <span class="n">sigma</span><span class="o">=</span><span class="n">sigma_true</span><span class="p">,</span>
@@ -966,15 +955,15 @@
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Censored fraction: 0.21
-rho:   true=0.35  estimated=0.251
-beta[0]: true=1.00  estimated=0.839
-beta[1]: true=1.40  estimated=1.495
+rho:   true=0.35  estimated=0.307
+beta[0]: true=1.00  estimated=0.985
+beta[1]: true=1.40  estimated=1.434
 </code></pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [rho, beta, sigma, y_cens_gap]
-Sampling 2 chains for 500 tune and 500 draw iterations (1_000 + 1_000 draws total) took 7 seconds.
+Sampling 2 chains for 500 tune and 500 draw iterations (1_000 + 1_000 draws total) took 13 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 </code></pre></div>
 </div>
@@ -989,7 +978,8 @@ We recommend running at least 4 chains for robust computation of convergence dia
 <span class="n">sem_data</span> <span class="o">=</span> <span class="n">dgp</span><span class="o">.</span><span class="n">simulate_panel_sem_tobit_fe</span><span class="p">(</span>
     <span class="n">N</span><span class="o">=</span><span class="n">N</span><span class="p">,</span>
     <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-    <span class="n">W</span><span class="o">=</span><span class="n">W_dense</span><span class="p">,</span>
+    <span class="n">n</span><span class="o">=</span><span class="n">side</span><span class="p">,</span>
+    <span class="n">contiguity</span><span class="o">=</span><span class="s2">&quot;rook&quot;</span><span class="p">,</span>
     <span class="n">lam</span><span class="o">=</span><span class="n">lam_true</span><span class="p">,</span>
     <span class="n">beta</span><span class="o">=</span><span class="n">beta_true</span><span class="p">,</span>
     <span class="n">sigma</span><span class="o">=</span><span class="n">sigma_true</span><span class="p">,</span>
@@ -1008,7 +998,7 @@ We recommend running at least 4 chains for robust computation of convergence dia
     <span class="n">N</span><span class="o">=</span><span class="n">N</span><span class="p">,</span>
     <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
     <span class="n">censoring</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
- <span class="p">)</span>
+<span class="p">)</span>
 <span class="n">sem_idata</span> <span class="o">=</span> <span class="n">sem_model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">tune</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">draws</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">chains</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">progressbar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
 <span class="n">lam_hat</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">sem_idata</span><span class="o">.</span><span class="n">posterior</span><span class="p">[</span><span class="s2">&quot;lam&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span>
@@ -1020,17 +1010,18 @@ We recommend running at least 4 chains for robust computation of convergence dia
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Censored fraction: 0.21
-lam:   true=0.35  estimated=0.387
-beta[0]: true=1.00  estimated=1.200
-beta[1]: true=1.40  estimated=1.433
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Censored fraction: 0.32
+lam:   true=0.35  estimated=0.324
+beta[0]: true=1.00  estimated=0.849
+beta[1]: true=1.40  estimated=1.351
 </code></pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [lam, beta, sigma, y_cens_gap]
-Sampling 2 chains for 500 tune and 500 draw iterations (1_000 + 1_000 draws total) took 7 seconds.
+Sampling 2 chains for 500 tune and 500 draw iterations (1_000 + 1_000 draws total) took 13 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
+The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 </code></pre></div>
 </div>
 </div>

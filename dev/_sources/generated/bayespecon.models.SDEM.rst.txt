@@ -19,11 +19,15 @@
       ~SDEM.fit
       ~SDEM.fitted_values
       ~SDEM.heteroskedasticity_diagnostics
+      ~SDEM.lm_lag_test
+      ~SDEM.moran_test
       ~SDEM.outlier_diagnostics
       ~SDEM.regression_diagnostics
       ~SDEM.residuals
       ~SDEM.spatial_effects
+      ~SDEM.spatial_specification_tests
       ~SDEM.summary
+      ~SDEM.wald_error_test
    
    
 
