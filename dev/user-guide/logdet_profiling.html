@@ -933,7 +933,7 @@
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_grid_w</span><span class="p">(</span><span class="n">n_side</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a row-standardized rook-contiguity matrix from an n_side × n_side polygon grid.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a row-standardized rook-contiguity matrix from an n_side x n_side polygon grid.</span>
 
 <span class="sd">    Uses ``dgp.simulate_sar`` with ``create_gdf=True`` to generate the polygon</span>
 <span class="sd">    geometry, then builds a contiguity graph from the returned GeoDataFrame.</span>
@@ -943,11 +943,11 @@
     <span class="k">return</span> <span class="n">W</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">compile_logdet_callable</span><span class="p">(</span><span class="n">W</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compile_logdet_callable</span><span class="p">(</span><span class="n">W</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rho_min</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">rho_max</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a compiled callable f(rho) and its setup time in seconds.&quot;&quot;&quot;</span>
     <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
     <span class="n">rho</span> <span class="o">=</span> <span class="n">pt</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="s1">&#39;rho&#39;</span><span class="p">)</span>
-    <span class="n">expr</span> <span class="o">=</span> <span class="n">make_logdet_fn</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span> <span class="n">rho_min</span><span class="o">=-</span><span class="mf">0.95</span><span class="p">,</span> <span class="n">rho_max</span><span class="o">=</span><span class="mf">0.95</span><span class="p">)(</span><span class="n">rho</span><span class="p">)</span>
+    <span class="n">expr</span> <span class="o">=</span> <span class="n">make_logdet_fn</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span> <span class="n">rho_min</span><span class="o">=</span><span class="n">rho_min</span><span class="p">,</span> <span class="n">rho_max</span><span class="o">=</span><span class="n">rho_max</span><span class="p">)(</span><span class="n">rho</span><span class="p">)</span>
     <span class="n">fn</span> <span class="o">=</span> <span class="n">pytensor</span><span class="o">.</span><span class="n">function</span><span class="p">([</span><span class="n">rho</span><span class="p">],</span> <span class="n">expr</span><span class="p">)</span>
     <span class="n">setup_s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
     <span class="k">return</span> <span class="n">fn</span><span class="p">,</span> <span class="n">setup_s</span>
@@ -993,7 +993,18 @@
 
 
 <span class="n">cfg</span> <span class="o">=</span> <span class="n">ProfileConfig</span><span class="p">()</span>
-<span class="n">rho_grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">eval_points</span><span class="p">)</span>
+
+<span class="c1"># int/mc are defined on nonnegative rho ranges; others can use symmetric ranges.</span>
+<span class="n">method_rho_bounds</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;exact&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s1">&#39;eigenvalue&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s1">&#39;grid&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s1">&#39;full&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s1">&#39;ichol&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s1">&#39;int&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s1">&#39;mc&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+<span class="p">}</span>
+
 <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
 <span class="n">skipped</span> <span class="o">=</span> <span class="p">[]</span>
 
@@ -1004,13 +1015,19 @@
         <span class="k">if</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="n">cfg</span><span class="o">.</span><span class="n">method_max_n</span><span class="p">[</span><span class="n">method</span><span class="p">]:</span>
             <span class="n">skipped</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;n_side&#39;</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span> <span class="s1">&#39;n_obs&#39;</span><span class="p">:</span> <span class="n">n</span><span class="o">*</span><span class="n">n</span><span class="p">,</span> <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="n">method</span><span class="p">,</span> <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;above method_max_n cap&#39;</span><span class="p">})</span>
             <span class="k">continue</span>
+
+        <span class="n">rho_min</span><span class="p">,</span> <span class="n">rho_max</span> <span class="o">=</span> <span class="n">method_rho_bounds</span><span class="p">[</span><span class="n">method</span><span class="p">]</span>
+        <span class="n">rho_grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">rho_min</span><span class="p">,</span> <span class="n">rho_max</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">eval_points</span><span class="p">)</span>
+
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">fn</span><span class="p">,</span> <span class="n">setup_s</span> <span class="o">=</span> <span class="n">compile_logdet_callable</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span>
+            <span class="n">fn</span><span class="p">,</span> <span class="n">setup_s</span> <span class="o">=</span> <span class="n">compile_logdet_callable</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">rho_min</span><span class="o">=</span><span class="n">rho_min</span><span class="p">,</span> <span class="n">rho_max</span><span class="o">=</span><span class="n">rho_max</span><span class="p">)</span>
             <span class="n">eval_s</span> <span class="o">=</span> <span class="n">bench_eval_seconds</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">rho_grid</span><span class="p">,</span> <span class="n">repeats</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">eval_repeats</span><span class="p">)</span>
             <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
                 <span class="s1">&#39;n_side&#39;</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span>
                 <span class="s1">&#39;n_obs&#39;</span><span class="p">:</span> <span class="n">n</span> <span class="o">*</span> <span class="n">n</span><span class="p">,</span>
                 <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="n">method</span><span class="p">,</span>
+                <span class="s1">&#39;rho_min&#39;</span><span class="p">:</span> <span class="n">rho_min</span><span class="p">,</span>
+                <span class="s1">&#39;rho_max&#39;</span><span class="p">:</span> <span class="n">rho_max</span><span class="p">,</span>
                 <span class="s1">&#39;setup_ms&#39;</span><span class="p">:</span> <span class="mf">1e3</span> <span class="o">*</span> <span class="n">setup_s</span><span class="p">,</span>
                 <span class="s1">&#39;eval_us&#39;</span><span class="p">:</span> <span class="mf">1e6</span> <span class="o">*</span> <span class="n">eval_s</span><span class="p">,</span>
             <span class="p">})</span>
@@ -1054,6 +1071,8 @@ Profiling n_side=75 (5625 obs)...
       <th>n_side</th>
       <th>n_obs</th>
       <th>method</th>
+      <th>rho_min</th>
+      <th>rho_max</th>
       <th>setup_ms</th>
       <th>eval_us</th>
       <th>total_ms</th>
@@ -1065,171 +1084,341 @@ Profiling n_side=75 (5625 obs)...
       <td>10</td>
       <td>100</td>
       <td>eigenvalue</td>
-      <td>566.962453</td>
-      <td>5.088025</td>
-      <td>567.369495</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>608.135438</td>
+      <td>6.495575</td>
+      <td>608.655084</td>
     </tr>
     <tr>
       <th>1</th>
       <td>20</td>
       <td>400</td>
       <td>eigenvalue</td>
-      <td>54.696644</td>
-      <td>7.310000</td>
-      <td>55.281444</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>54.665971</td>
+      <td>7.548175</td>
+      <td>55.269825</td>
     </tr>
     <tr>
       <th>2</th>
       <td>25</td>
       <td>625</td>
       <td>eigenvalue</td>
-      <td>140.346824</td>
-      <td>8.689662</td>
-      <td>141.041997</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>142.220211</td>
+      <td>9.224338</td>
+      <td>142.958158</td>
     </tr>
     <tr>
       <th>3</th>
       <td>40</td>
       <td>1600</td>
       <td>eigenvalue</td>
-      <td>976.446992</td>
-      <td>15.100575</td>
-      <td>977.655038</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>961.281882</td>
+      <td>15.154213</td>
+      <td>962.494219</td>
     </tr>
     <tr>
       <th>4</th>
       <td>10</td>
       <td>100</td>
       <td>exact</td>
-      <td>1395.390649</td>
-      <td>75.780375</td>
-      <td>1401.453079</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>1416.825057</td>
+      <td>86.448787</td>
+      <td>1423.740960</td>
     </tr>
     <tr>
       <th>5</th>
       <td>10</td>
       <td>100</td>
       <td>full</td>
-      <td>653.625395</td>
-      <td>5.323050</td>
-      <td>654.051239</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>685.690444</td>
+      <td>5.789750</td>
+      <td>686.153624</td>
     </tr>
     <tr>
       <th>6</th>
       <td>20</td>
       <td>400</td>
       <td>full</td>
-      <td>236.189495</td>
-      <td>5.356000</td>
-      <td>236.617975</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>207.051098</td>
+      <td>5.958825</td>
+      <td>207.527804</td>
     </tr>
     <tr>
       <th>7</th>
       <td>25</td>
       <td>625</td>
       <td>full</td>
-      <td>343.518387</td>
-      <td>5.218150</td>
-      <td>343.935839</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>357.588195</td>
+      <td>5.801150</td>
+      <td>358.052287</td>
     </tr>
     <tr>
       <th>8</th>
       <td>40</td>
       <td>1600</td>
       <td>full</td>
-      <td>708.236375</td>
-      <td>5.322487</td>
-      <td>708.662174</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>664.252044</td>
+      <td>5.833213</td>
+      <td>664.718701</td>
     </tr>
     <tr>
       <th>9</th>
       <td>10</td>
       <td>100</td>
       <td>grid</td>
-      <td>2546.258593</td>
-      <td>5.294600</td>
-      <td>2546.682161</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>2784.304896</td>
+      <td>5.976237</td>
+      <td>2784.782995</td>
     </tr>
     <tr>
       <th>10</th>
       <td>20</td>
       <td>400</td>
       <td>grid</td>
-      <td>352.460026</td>
-      <td>5.215213</td>
-      <td>352.877243</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>316.138382</td>
+      <td>5.722250</td>
+      <td>316.596162</td>
     </tr>
     <tr>
       <th>11</th>
       <td>25</td>
       <td>625</td>
       <td>grid</td>
-      <td>973.862289</td>
-      <td>5.301063</td>
-      <td>974.286374</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>831.693058</td>
+      <td>5.894825</td>
+      <td>832.164644</td>
     </tr>
     <tr>
       <th>12</th>
       <td>40</td>
       <td>1600</td>
       <td>grid</td>
-      <td>9381.944391</td>
-      <td>5.344250</td>
-      <td>9382.371931</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>11147.076264</td>
+      <td>5.694575</td>
+      <td>11147.531830</td>
     </tr>
     <tr>
       <th>13</th>
       <td>10</td>
       <td>100</td>
       <td>ichol</td>
-      <td>114.288324</td>
-      <td>5.109875</td>
-      <td>114.697114</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>109.208461</td>
+      <td>5.958688</td>
+      <td>109.685156</td>
     </tr>
     <tr>
       <th>14</th>
       <td>20</td>
       <td>400</td>
       <td>ichol</td>
-      <td>263.345649</td>
-      <td>5.327300</td>
-      <td>263.771833</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>229.280552</td>
+      <td>5.752188</td>
+      <td>229.740727</td>
     </tr>
     <tr>
       <th>15</th>
       <td>25</td>
       <td>625</td>
       <td>ichol</td>
-      <td>377.035866</td>
-      <td>5.387862</td>
-      <td>377.466895</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>323.486708</td>
+      <td>5.955937</td>
+      <td>323.963183</td>
     </tr>
     <tr>
       <th>16</th>
       <td>40</td>
       <td>1600</td>
       <td>ichol</td>
-      <td>772.337496</td>
-      <td>5.183663</td>
-      <td>772.752189</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>724.894296</td>
+      <td>5.681563</td>
+      <td>725.348821</td>
     </tr>
     <tr>
       <th>17</th>
       <td>50</td>
       <td>2500</td>
       <td>ichol</td>
-      <td>1192.063052</td>
-      <td>5.204300</td>
-      <td>1192.479396</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>1124.162492</td>
+      <td>5.791250</td>
+      <td>1124.625792</td>
     </tr>
     <tr>
       <th>18</th>
       <td>75</td>
       <td>5625</td>
       <td>ichol</td>
-      <td>2725.863117</td>
-      <td>5.195087</td>
-      <td>2726.278724</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>2624.685118</td>
+      <td>5.720125</td>
+      <td>2625.142728</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>10</td>
+      <td>100</td>
+      <td>int</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>600.201045</td>
+      <td>5.775850</td>
+      <td>600.663113</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>20</td>
+      <td>400</td>
+      <td>int</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>56.048930</td>
+      <td>5.654000</td>
+      <td>56.501250</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td>25</td>
+      <td>625</td>
+      <td>int</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>65.105274</td>
+      <td>5.804150</td>
+      <td>65.569606</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td>40</td>
+      <td>1600</td>
+      <td>int</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>106.811147</td>
+      <td>6.105350</td>
+      <td>107.299575</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td>50</td>
+      <td>2500</td>
+      <td>int</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>153.002415</td>
+      <td>5.690575</td>
+      <td>153.457661</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td>75</td>
+      <td>5625</td>
+      <td>int</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>381.204911</td>
+      <td>5.468775</td>
+      <td>381.642413</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td>10</td>
+      <td>100</td>
+      <td>mc</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>600.473458</td>
+      <td>5.827188</td>
+      <td>600.939633</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>20</td>
+      <td>400</td>
+      <td>mc</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>66.097438</td>
+      <td>5.982113</td>
+      <td>66.576007</td>
+    </tr>
+    <tr>
+      <th>27</th>
+      <td>25</td>
+      <td>625</td>
+      <td>mc</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>56.109213</td>
+      <td>5.967087</td>
+      <td>56.586580</td>
+    </tr>
+    <tr>
+      <th>28</th>
+      <td>40</td>
+      <td>1600</td>
+      <td>mc</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>73.499231</td>
+      <td>6.334912</td>
+      <td>74.006024</td>
+    </tr>
+    <tr>
+      <th>29</th>
+      <td>50</td>
+      <td>2500</td>
+      <td>mc</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>101.378461</td>
+      <td>5.725137</td>
+      <td>101.836472</td>
+    </tr>
+    <tr>
+      <th>30</th>
+      <td>75</td>
+      <td>5625</td>
+      <td>mc</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>234.943648</td>
+      <td>5.749800</td>
+      <td>235.403632</td>
     </tr>
   </tbody>
 </table>
@@ -1274,7 +1463,7 @@ Profiling n_side=75 (5625 obs)...
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/137838f9f2707deea55e26ad68800f7a1e84396007ce49b059770743b5447566.png" src="../_images/137838f9f2707deea55e26ad68800f7a1e84396007ce49b059770743b5447566.png" />
+<img alt="../_images/f10b08e76e413a91550a5120b99736a3fc497a45f6ef7b9b8efcb27567332c56.png" src="../_images/f10b08e76e413a91550a5120b99736a3fc497a45f6ef7b9b8efcb27567332c56.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -1315,9 +1504,9 @@ Profiling n_side=75 (5625 obs)...
   <thead>
     <tr>
       <th></th>
-      <th colspan="5" halign="left">eval_us</th>
-      <th colspan="5" halign="left">setup_ms</th>
-      <th colspan="5" halign="left">total_ms</th>
+      <th colspan="7" halign="left">eval_us</th>
+      <th colspan="7" halign="left">setup_ms</th>
+      <th colspan="7" halign="left">total_ms</th>
     </tr>
     <tr>
       <th>method</th>
@@ -1326,19 +1515,31 @@ Profiling n_side=75 (5625 obs)...
       <th>full</th>
       <th>grid</th>
       <th>ichol</th>
+      <th>int</th>
+      <th>mc</th>
+      <th>eigenvalue</th>
+      <th>exact</th>
+      <th>full</th>
+      <th>...</th>
+      <th>ichol</th>
+      <th>int</th>
+      <th>mc</th>
       <th>eigenvalue</th>
       <th>exact</th>
       <th>full</th>
       <th>grid</th>
       <th>ichol</th>
-      <th>eigenvalue</th>
-      <th>exact</th>
-      <th>full</th>
-      <th>grid</th>
-      <th>ichol</th>
+      <th>int</th>
+      <th>mc</th>
     </tr>
     <tr>
       <th>n_obs</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
       <th></th>
       <th></th>
       <th></th>
@@ -1359,75 +1560,99 @@ Profiling n_side=75 (5625 obs)...
   <tbody>
     <tr>
       <th>100</th>
-      <td>5.088025</td>
-      <td>75.780375</td>
-      <td>5.323050</td>
-      <td>5.294600</td>
-      <td>5.109875</td>
-      <td>566.962453</td>
-      <td>1395.390649</td>
-      <td>653.625395</td>
-      <td>2546.258593</td>
-      <td>114.288324</td>
-      <td>567.369495</td>
-      <td>1401.453079</td>
-      <td>654.051239</td>
-      <td>2546.682161</td>
-      <td>114.697114</td>
+      <td>6.495575</td>
+      <td>86.448787</td>
+      <td>5.789750</td>
+      <td>5.976237</td>
+      <td>5.958688</td>
+      <td>5.775850</td>
+      <td>5.827188</td>
+      <td>608.135438</td>
+      <td>1416.825057</td>
+      <td>685.690444</td>
+      <td>...</td>
+      <td>109.208461</td>
+      <td>600.201045</td>
+      <td>600.473458</td>
+      <td>608.655084</td>
+      <td>1423.74096</td>
+      <td>686.153624</td>
+      <td>2784.782995</td>
+      <td>109.685156</td>
+      <td>600.663113</td>
+      <td>600.939633</td>
     </tr>
     <tr>
       <th>400</th>
-      <td>7.310000</td>
+      <td>7.548175</td>
       <td>NaN</td>
-      <td>5.356000</td>
-      <td>5.215213</td>
-      <td>5.327300</td>
-      <td>54.696644</td>
+      <td>5.958825</td>
+      <td>5.722250</td>
+      <td>5.752188</td>
+      <td>5.654000</td>
+      <td>5.982113</td>
+      <td>54.665971</td>
       <td>NaN</td>
-      <td>236.189495</td>
-      <td>352.460026</td>
-      <td>263.345649</td>
-      <td>55.281444</td>
+      <td>207.051098</td>
+      <td>...</td>
+      <td>229.280552</td>
+      <td>56.048930</td>
+      <td>66.097438</td>
+      <td>55.269825</td>
       <td>NaN</td>
-      <td>236.617975</td>
-      <td>352.877243</td>
-      <td>263.771833</td>
+      <td>207.527804</td>
+      <td>316.596162</td>
+      <td>229.740727</td>
+      <td>56.501250</td>
+      <td>66.576007</td>
     </tr>
     <tr>
       <th>625</th>
-      <td>8.689662</td>
+      <td>9.224338</td>
       <td>NaN</td>
-      <td>5.218150</td>
-      <td>5.301063</td>
-      <td>5.387862</td>
-      <td>140.346824</td>
+      <td>5.801150</td>
+      <td>5.894825</td>
+      <td>5.955937</td>
+      <td>5.804150</td>
+      <td>5.967087</td>
+      <td>142.220211</td>
       <td>NaN</td>
-      <td>343.518387</td>
-      <td>973.862289</td>
-      <td>377.035866</td>
-      <td>141.041997</td>
+      <td>357.588195</td>
+      <td>...</td>
+      <td>323.486708</td>
+      <td>65.105274</td>
+      <td>56.109213</td>
+      <td>142.958158</td>
       <td>NaN</td>
-      <td>343.935839</td>
-      <td>974.286374</td>
-      <td>377.466895</td>
+      <td>358.052287</td>
+      <td>832.164644</td>
+      <td>323.963183</td>
+      <td>65.569606</td>
+      <td>56.586580</td>
     </tr>
     <tr>
       <th>1600</th>
-      <td>15.100575</td>
+      <td>15.154213</td>
       <td>NaN</td>
-      <td>5.322487</td>
-      <td>5.344250</td>
-      <td>5.183663</td>
-      <td>976.446992</td>
+      <td>5.833213</td>
+      <td>5.694575</td>
+      <td>5.681563</td>
+      <td>6.105350</td>
+      <td>6.334912</td>
+      <td>961.281882</td>
       <td>NaN</td>
-      <td>708.236375</td>
-      <td>9381.944391</td>
-      <td>772.337496</td>
-      <td>977.655038</td>
+      <td>664.252044</td>
+      <td>...</td>
+      <td>724.894296</td>
+      <td>106.811147</td>
+      <td>73.499231</td>
+      <td>962.494219</td>
       <td>NaN</td>
-      <td>708.662174</td>
-      <td>9382.371931</td>
-      <td>772.752189</td>
+      <td>664.718701</td>
+      <td>11147.531830</td>
+      <td>725.348821</td>
+      <td>107.299575</td>
+      <td>74.006024</td>
     </tr>
     <tr>
       <th>2500</th>
@@ -1435,17 +1660,23 @@ Profiling n_side=75 (5625 obs)...
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
-      <td>5.204300</td>
+      <td>5.791250</td>
+      <td>5.690575</td>
+      <td>5.725137</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>1124.162492</td>
+      <td>153.002415</td>
+      <td>101.378461</td>
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
-      <td>1192.063052</td>
-      <td>NaN</td>
-      <td>NaN</td>
-      <td>NaN</td>
-      <td>NaN</td>
-      <td>1192.479396</td>
+      <td>1124.625792</td>
+      <td>153.457661</td>
+      <td>101.836472</td>
     </tr>
     <tr>
       <th>5625</th>
@@ -1453,20 +1684,27 @@ Profiling n_side=75 (5625 obs)...
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
-      <td>5.195087</td>
+      <td>5.720125</td>
+      <td>5.468775</td>
+      <td>5.749800</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>...</td>
+      <td>2624.685118</td>
+      <td>381.204911</td>
+      <td>234.943648</td>
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
-      <td>2725.863117</td>
-      <td>NaN</td>
-      <td>NaN</td>
-      <td>NaN</td>
-      <td>NaN</td>
-      <td>2726.278724</td>
+      <td>2625.142728</td>
+      <td>381.642413</td>
+      <td>235.403632</td>
     </tr>
   </tbody>
 </table>
+<p>6 rows × 21 columns</p>
 </div></div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Skipped combinations (due to safety caps or failures):
 </code></pre></div>
 </div>
@@ -1497,164 +1735,80 @@ Profiling n_side=75 (5625 obs)...
   <tbody>
     <tr>
       <th>0</th>
-      <td>10</td>
-      <td>100</td>
-      <td>int</td>
-      <td>failed: ValueError: method='int' is defined fo...</td>
+      <td>20</td>
+      <td>400</td>
+      <td>exact</td>
+      <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>1</th>
-      <td>10</td>
-      <td>100</td>
-      <td>mc</td>
-      <td>failed: ValueError: method='mc' is defined for...</td>
+      <td>25</td>
+      <td>625</td>
+      <td>exact</td>
+      <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>2</th>
-      <td>20</td>
-      <td>400</td>
+      <td>40</td>
+      <td>1600</td>
       <td>exact</td>
       <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>3</th>
-      <td>20</td>
-      <td>400</td>
-      <td>int</td>
-      <td>failed: ValueError: method='int' is defined fo...</td>
+      <td>50</td>
+      <td>2500</td>
+      <td>eigenvalue</td>
+      <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>4</th>
-      <td>20</td>
-      <td>400</td>
-      <td>mc</td>
-      <td>failed: ValueError: method='mc' is defined for...</td>
-    </tr>
-    <tr>
-      <th>5</th>
-      <td>25</td>
-      <td>625</td>
+      <td>50</td>
+      <td>2500</td>
       <td>exact</td>
       <td>above method_max_n cap</td>
     </tr>
     <tr>
+      <th>5</th>
+      <td>50</td>
+      <td>2500</td>
+      <td>full</td>
+      <td>above method_max_n cap</td>
+    </tr>
+    <tr>
       <th>6</th>
-      <td>25</td>
-      <td>625</td>
-      <td>int</td>
-      <td>failed: ValueError: method='int' is defined fo...</td>
+      <td>50</td>
+      <td>2500</td>
+      <td>grid</td>
+      <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>7</th>
-      <td>25</td>
-      <td>625</td>
-      <td>mc</td>
-      <td>failed: ValueError: method='mc' is defined for...</td>
+      <td>75</td>
+      <td>5625</td>
+      <td>eigenvalue</td>
+      <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>8</th>
-      <td>40</td>
-      <td>1600</td>
+      <td>75</td>
+      <td>5625</td>
       <td>exact</td>
       <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>9</th>
-      <td>40</td>
-      <td>1600</td>
-      <td>int</td>
-      <td>failed: ValueError: method='int' is defined fo...</td>
+      <td>75</td>
+      <td>5625</td>
+      <td>full</td>
+      <td>above method_max_n cap</td>
     </tr>
     <tr>
       <th>10</th>
-      <td>40</td>
-      <td>1600</td>
-      <td>mc</td>
-      <td>failed: ValueError: method='mc' is defined for...</td>
-    </tr>
-    <tr>
-      <th>11</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>eigenvalue</td>
-      <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>12</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>exact</td>
-      <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>13</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>full</td>
-      <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>14</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>grid</td>
-      <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>15</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>int</td>
-      <td>failed: ValueError: method='int' is defined fo...</td>
-    </tr>
-    <tr>
-      <th>16</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>mc</td>
-      <td>failed: ValueError: method='mc' is defined for...</td>
-    </tr>
-    <tr>
-      <th>17</th>
-      <td>75</td>
-      <td>5625</td>
-      <td>eigenvalue</td>
-      <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>18</th>
-      <td>75</td>
-      <td>5625</td>
-      <td>exact</td>
-      <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>19</th>
-      <td>75</td>
-      <td>5625</td>
-      <td>full</td>
-      <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>20</th>
       <td>75</td>
       <td>5625</td>
       <td>grid</td>
       <td>above method_max_n cap</td>
-    </tr>
-    <tr>
-      <th>21</th>
-      <td>75</td>
-      <td>5625</td>
-      <td>int</td>
-      <td>failed: ValueError: method='int' is defined fo...</td>
-    </tr>
-    <tr>
-      <th>22</th>
-      <td>75</td>
-      <td>5625</td>
-      <td>mc</td>
-      <td>failed: ValueError: method='mc' is defined for...</td>
     </tr>
   </tbody>
 </table>
@@ -1803,31 +1957,31 @@ Estimating SAR with method=ichol...
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><div>
@@ -1871,8 +2025,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
   <tbody>
     <tr>
       <th>0</th>
-      <td>mc</td>
-      <td>2.137102</td>
+      <td>ichol</td>
+      <td>2.521152</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -1892,8 +2046,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>1</th>
-      <td>grid</td>
-      <td>2.143683</td>
+      <td>mc</td>
+      <td>2.545185</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -1913,8 +2067,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>2</th>
-      <td>full</td>
-      <td>2.145529</td>
+      <td>eigenvalue</td>
+      <td>2.566767</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -1934,8 +2088,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>3</th>
-      <td>int</td>
-      <td>2.303243</td>
+      <td>full</td>
+      <td>2.590099</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -1955,8 +2109,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>4</th>
-      <td>eigenvalue</td>
-      <td>2.310774</td>
+      <td>int</td>
+      <td>2.649443</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -1976,8 +2130,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>5</th>
-      <td>ichol</td>
-      <td>2.340378</td>
+      <td>grid</td>
+      <td>2.708672</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -1998,7 +2152,7 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     <tr>
       <th>6</th>
       <td>exact</td>
-      <td>5.731307</td>
+      <td>6.386126</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2028,6 +2182,7 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
 <li><p><code class="docutils literal notranslate"><span class="pre">full</span></code> and <code class="docutils literal notranslate"><span class="pre">int</span></code> are sparse-LU variants inspired by the MATLAB toolbox routines.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">mc</span></code> is stochastic and may vary slightly run-to-run unless random seeds are fixed.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">ichol</span></code> uses an ILU approximation that can trade precision for speed depending on sparsity.</p></li>
+<li><p><strong>Parameter ranges:</strong> <code class="docutils literal notranslate"><span class="pre">int</span></code> and <code class="docutils literal notranslate"><span class="pre">mc</span></code> are profiled on a nonnegative range (<code class="docutils literal notranslate"><span class="pre">rho</span> <span class="pre">in</span> <span class="pre">[1e-5,</span> <span class="pre">0.95]</span></code>), while <code class="docutils literal notranslate"><span class="pre">exact</span></code>, <code class="docutils literal notranslate"><span class="pre">eigenvalue</span></code>, <code class="docutils literal notranslate"><span class="pre">grid</span></code>, <code class="docutils literal notranslate"><span class="pre">full</span></code>, and <code class="docutils literal notranslate"><span class="pre">ichol</span></code> are profiled on a symmetric range (<code class="docutils literal notranslate"><span class="pre">rho</span> <span class="pre">in</span> <span class="pre">[-0.95,</span> <span class="pre">0.95]</span></code>).</p></li>
 <li><p>Adjust <code class="docutils literal notranslate"><span class="pre">ProfileConfig.sizes</span></code> and <code class="docutils literal notranslate"><span class="pre">method_max_n</span></code> for deeper stress tests.</p></li>
 </ul>
 
