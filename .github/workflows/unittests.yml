@@ -82,7 +82,7 @@ jobs:
           -r a \
           -n auto \
           --color yes \
-          --cov tests \
+          --cov bayespecon \
           --cov-append \
           --cov-report term-missing \
           --cov-report=xml .
