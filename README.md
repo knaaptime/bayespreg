@@ -6,9 +6,25 @@
 
 **Bayesian Spatial Econometric Models**
 
-Bayesians are cool but MATLAB is not
+Because Bayesians are cool but MATLAB is not
 
-This package is a Python port of (the Bayesian parts of) Jim LeSage's [spatial econometrics toolbox](https://www.spatial-econometrics.com/) with a few minor enhancements. Models are specified using the familiar Wilkinson format via [`formulaic`](https://matthew.wardrop.casa/formulaic/latest/) (but you can pass design matrices if you prefer), and spatial weights matrices $W$ are represented by PySAL [`graph`](https://pysal.org/libpysal/stable/generated/libpysal.graph.Graph.html#libpysal.graph.Graph) objects (or sparse matrices if you prefer). Estimation is handled by [`pymc`](https://www.pymc.io/welcome.html)
+Bayesian spatial models have excellent reference implementations in proprietary languages (e.g. MATLAB), but considerably less exposure in open-source languages. Python has a robust ecosystem for Bayesian inference, but fitting regression models with spatial effects traditionally requires a thorough knowledge of *both* probabilistic programming languages and spatial econometrics
+
+Thus, `bayespecon` provides a simple interface for generating `pymc.Model` objects that fit commonly-used spatial econometric models. This design makes relatively sophisticated models available to applied researchers in short order, giving the benefit of fully Bayesian estimation without learning a new syntax.
+
+Models are specified using the familiar Wilkinson format via [`formulaic`](https://matthew.wardrop.casa/formulaic/latest/) (but you can pass design matrices if you prefer), and spatial weights matrices $W$ are represented by PySAL [`graph`](https://pysal.org/libpysal/stable/generated/libpysal.graph.Graph.html#libpysal.graph.Graph) objects (or sparse matrices if you prefer). Estimation is handled by [`pymc`](https://www.pymc.io/welcome.html)
+
+To ensure correctness, the vast majority of functionality is ported from and validated against Jim LeSage's [spatial econometrics toolbox](https://www.spatial-econometrics.com/).
+
+**Main Features**:
+
+- Fit models using Wilkinson formulas and PySAL `Graph` objects
+- Classes for a wide variety of spatial econometric model specifications
+- Models compile to PyMC for full customizability and [performant sampling options]()
+- Fast [log-determinant functions]() for evaluating spatial terms
+- Compute marginal (direct and indirect) effects for models with spatial terms
+- Full suite of spatial diagnostics
+- Functions to generate synthetic datasets using a known DGP for each model
 
 ## Supported Models
 
@@ -55,6 +71,34 @@ $$y_{it} = \rho Wy_{it} + x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + \eps
 #### SDEM panel
 
 $$y_{it} = x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}$$
+
+#### OLS panel (Random Effects)
+
+$$y_{it} = x_{it}' \beta + \alpha_i + \tau_t + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)$$
+
+#### SAR panel (Random Effects)
+
+$$y_{it} = \rho W y_{it} + x_{it}' \beta + \alpha_i + \tau_t + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)$$
+
+#### SEM panel (Random Effects)
+
+$$y_{it} = x_{it}' \beta + \alpha_i + \tau_t + u_{it}, \quad u_{it} = \lambda W u_{it} + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)$$
+
+
+### Dynamic Panel Models
+
+#### DLMPanelFE (Dynamic Linear Model, FE)
+
+$$y_{it} = \phi y_{i, t-1} + x_{it}' \beta + a_i + \tau_t + \epsilon_{it}$$
+
+#### SDMRPanelFE (Dynamic Restricted Spatial Durbin, FE)
+
+$$y_{it} = \phi y_{i, t-1} + \rho W y_{it} - \rho \phi W y_{i, t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + \epsilon_{it}$$
+
+#### SDMUPanelFE (Dynamic Unrestricted Spatial Durbin, FE)
+
+$$y_{it} = \phi y_{i, t-1} + \rho W y_{it} + \theta W y_{i, t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + \epsilon_{it}$$
+
 
 ### Non-Linear Models
 
