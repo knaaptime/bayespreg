@@ -8,12 +8,17 @@ Likelihood: epsilon ~ N(0, sigma^2 I), plus Jacobian log|I - lambda*W|.
 
 from __future__ import annotations
 
+from typing import Optional
+
+import arviz as az
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+import xarray as xr
 
-from .base import SpatialModel
+from ..diagnostics import DiagnosticResult
 from ..logdet import make_logdet_fn
+from .base import SpatialModel
 
 
 class SEM(SpatialModel):
@@ -36,24 +41,82 @@ class SEM(SpatialModel):
     sigma_sigma : float, default 10
     """
 
-    def _build_pymc_model(self) -> pm.Model:
+    def fit(
+        self,
+        draws: int = 2000,
+        tune: int = 1000,
+        chains: int = 4,
+        target_accept: float = 0.9,
+        random_seed: Optional[int] = None,
+        idata_kwargs: Optional[dict] = None,
+        **sample_kwargs,
+    ) -> "az.InferenceData":
+        """Draw samples from the posterior. Accepts idata_kwargs for ArviZ compatibility.
+
+        Parameters
+        ----------
+        idata_kwargs : dict, optional
+            Passed to pm.sample for InferenceData creation. If contains 'log_likelihood': True, enables pointwise log likelihood.
+        Other parameters as in base SpatialModel.
+        """
+
+        idata_kwargs = idata_kwargs or {}
+        compute_log_likelihood = bool(idata_kwargs.get("log_likelihood", False))
+        model = self._build_pymc_model(compute_log_likelihood=compute_log_likelihood)
+        self._pymc_model = model
+        with model:
+            self._idata = pm.sample(
+                draws=draws,
+                tune=tune,
+                chains=chains,
+                target_accept=target_accept,
+                random_seed=random_seed,
+                idata_kwargs=idata_kwargs,
+                **sample_kwargs,
+            )
+        # --- Manual log_likelihood registration for ArviZ ---
+        if compute_log_likelihood:
+            idata = self._idata
+            # Try to extract log_likelihood from posterior if present
+            if hasattr(idata, "posterior") and "log_likelihood" in idata.posterior:
+                log_lik = idata.posterior["log_likelihood"]
+                # ArviZ expects dims (chain, draw, obs_dim)
+                # If log_lik is (chain, draw, obs), rename obs->obs_dim for consistency
+                obs_dim = log_lik.dims[-1]
+                ll_da = log_lik.rename({obs_dim: "obs_dim"})
+                if "log_likelihood" in idata.groups():
+                    idata.log_likelihood["obs"] = ll_da
+                else:
+                    idata.add_groups({"log_likelihood": xr.Dataset({"obs": ll_da})})
+            # else: fallback to nothing (should not happen if model is built correctly)
+        return self._idata
+
+    def _build_pymc_model(self, compute_log_likelihood: bool = False) -> pm.Model:
         """Construct the PyMC model for SEM regression.
+
+        Parameters
+        ----------
+        compute_log_likelihood : bool, default False
+            If True, compute and store pointwise log likelihood for each observation.
 
         Returns
         -------
         pymc.Model
             Compiled probabilistic model object.
-        """
-        k = self._X.shape[1]
 
+        """
         lam_lower = self.priors.get("lam_lower", -1.0)
         lam_upper = self.priors.get("lam_upper", 1.0)
         beta_mu = self.priors.get("beta_mu", 0.0)
         beta_sigma = self.priors.get("beta_sigma", 1e6)
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
-        logdet_fn = make_logdet_fn(self._W_eigs.real, method=self.logdet_method,
-                       rho_min=lam_lower, rho_max=lam_upper)
+        logdet_fn = make_logdet_fn(
+            self._W_eigs.real,
+            method=self.logdet_method,
+            rho_min=lam_lower,
+            rho_max=lam_upper,
+        )
         W_pt = pt.as_tensor_variable(self._W_dense)
 
         with pm.Model(coords=self._model_coords()) as model:
@@ -61,17 +124,15 @@ class SEM(SpatialModel):
             beta = pm.Normal("beta", mu=beta_mu, sigma=beta_sigma, dims="coefficient")
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
-            # epsilon = (I - lambda*W)(y - X@beta) = resid - lambda*(W @ resid)
-            # Avoid forming the dense (I - lam*W) matrix each step.
             resid = self._y - pt.dot(self._X, beta)
             eps = resid - lam * pt.dot(W_pt, resid)
-            # PyMC does not allow symbolic expressions as `observed`; encode
-            # the transformed-error likelihood directly as a Potential.
-            logp_eps = pm.logp(pm.Normal.dist(mu=0.0, sigma=sigma), eps).sum()
-            pm.Potential("eps_loglik", logp_eps)
-
-            # Jacobian
+            logp_eps = pm.logp(pm.Normal.dist(mu=0.0, sigma=sigma), eps)
+            pm.Potential("eps_loglik", logp_eps.sum())
             pm.Potential("jacobian", logdet_fn(lam))
+
+            if compute_log_likelihood:
+                # Store pointwise log likelihood for each observation
+                pm.Deterministic("log_likelihood", logp_eps)
 
         return model
 
@@ -133,6 +194,7 @@ class SEM(SpatialModel):
                Kluwer Academic Publishers.
         """
         from ..stats.core import lmlag
+
         raw = lmlag(self._y, self._X, self._W_sparse.toarray())
         return self._wrap_stats_result("lm_lag", raw, "lm")
 
@@ -158,6 +220,7 @@ class SEM(SpatialModel):
                Kluwer Academic Publishers.
         """
         from ..stats.core import walds
+
         raw = walds(self._y, self._X, self._W_sparse.toarray())
         return self._wrap_stats_result("wald_error", raw, "wald")
 
@@ -183,6 +246,7 @@ class SEM(SpatialModel):
                Kluwer Academic Publishers.
         """
         from ..stats.core import lratios
+
         raw = lratios(self._y, self._X, self._W_sparse.toarray())
         return self._wrap_stats_result("lr_ratio", raw, "lratio")
 
