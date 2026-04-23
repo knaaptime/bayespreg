@@ -842,6 +842,16 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#ols" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLS</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#slx" class="md-nav__link">
     
     <span class="md-ellipsis">
@@ -958,6 +968,16 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#slx-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLX panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ols-panel-random-effects" class="md-nav__link">
     
     <span class="md-ellipsis">
@@ -1028,6 +1048,46 @@
     
     <span class="md-ellipsis">
       <span>SDMUPanel<wbr>FE <wbr>(Dynamic Unrestricted Spatial Durbin, FE)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarpaneldedynamic-dynamic-sar-de-transformation" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARPanel<wbr>DEDynamic <wbr>(Dynamic SAR, DE transformation)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sempaneldedynamic-dynamic-sem-de-transformation" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMPanel<wbr>DEDynamic <wbr>(Dynamic SEM, DE transformation)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdempaneldedynamic-dynamic-sdem-de-transformation" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEMPanel<wbr>DEDynamic <wbr>(Dynamic SDEM, DE transformation)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slxpaneldedynamic-dynamic-slx-de-transformation" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLXPanel<wbr>DEDynamic <wbr>(Dynamic SLX, DE transformation)</span>
     </span>
   </a>
   
@@ -1169,6 +1229,9 @@
 </ul>
 <h2 id="supported-models">Supported Models<a class="headerlink" href="#supported-models" title="Link to this heading">¶</a></h2>
 <h3 id="cross-sectional-models">Cross Sectional Models<a class="headerlink" href="#cross-sectional-models" title="Link to this heading">¶</a></h3>
+<h4 id="ols">OLS<a class="headerlink" href="#ols" title="Link to this heading">¶</a></h4>
+<div class="math notranslate nohighlight">
+\[y = X\beta + \epsilon\]</div>
 <h4 id="slx">SLX<a class="headerlink" href="#slx" title="Link to this heading">¶</a></h4>
 <div class="math notranslate nohighlight">
 \[y = X\beta + WX\theta + \epsilon\]</div>
@@ -1200,6 +1263,9 @@
 <h4 id="sdem-panel">SDEM panel<a class="headerlink" href="#sdem-panel" title="Link to this heading">¶</a></h4>
 <div class="math notranslate nohighlight">
 \[y_{it} = x_{it} ' \beta + Wx_{it}' \theta + a_i + \tau_t + u_{it}, u_{it}=\lambda Wu_{it} + \epsilon_{it}\]</div>
+<h4 id="slx-panel">SLX panel<a class="headerlink" href="#slx-panel" title="Link to this heading">¶</a></h4>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}'\beta + Wx_{it}'\theta + a_i + \tau_t + \epsilon_{it}\]</div>
 <h4 id="ols-panel-random-effects">OLS panel (Random Effects)<a class="headerlink" href="#ols-panel-random-effects" title="Link to this heading">¶</a></h4>
 <div class="math notranslate nohighlight">
 \[y_{it} = x_{it}' \beta + \alpha_i + \tau_t + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)\]</div>
@@ -1219,6 +1285,18 @@
 <h4 id="sdmupanelfe-dynamic-unrestricted-spatial-durbin-fe">SDMUPanelFE (Dynamic Unrestricted Spatial Durbin, FE)<a class="headerlink" href="#sdmupanelfe-dynamic-unrestricted-spatial-durbin-fe" title="Link to this heading">¶</a></h4>
 <div class="math notranslate nohighlight">
 \[y_{it} = \phi y_{i, t-1} + \rho W y_{it} + \theta W y_{i, t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h4 id="sarpaneldedynamic-dynamic-sar-de-transformation">SARPanelDEDynamic (Dynamic SAR, DE transformation)<a class="headerlink" href="#sarpaneldedynamic-dynamic-sar-de-transformation" title="Link to this heading">¶</a></h4>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i, t-1} + \rho W y_{it} + x_{it}' \beta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h4 id="sempaneldedynamic-dynamic-sem-de-transformation">SEMPanelDEDynamic (Dynamic SEM, DE transformation)<a class="headerlink" href="#sempaneldedynamic-dynamic-sem-de-transformation" title="Link to this heading">¶</a></h4>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i, t-1} + x_{it}' \beta + a_i + \tau_t + u_{it}, \quad u_{it} = \lambda W u_{it} + \epsilon_{it}\]</div>
+<h4 id="sdempaneldedynamic-dynamic-sdem-de-transformation">SDEMPanelDEDynamic (Dynamic SDEM, DE transformation)<a class="headerlink" href="#sdempaneldedynamic-dynamic-sdem-de-transformation" title="Link to this heading">¶</a></h4>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i, t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + u_{it}, \quad u_{it} = \lambda W u_{it} + \epsilon_{it}\]</div>
+<h4 id="slxpaneldedynamic-dynamic-slx-de-transformation">SLXPanelDEDynamic (Dynamic SLX, DE transformation)<a class="headerlink" href="#slxpaneldedynamic-dynamic-slx-de-transformation" title="Link to this heading">¶</a></h4>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i, t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + \epsilon_{it}\]</div>
 <h3 id="non-linear-models">Non-Linear Models<a class="headerlink" href="#non-linear-models" title="Link to this heading">¶</a></h3>
 <h4 id="spatial-probit">Spatial Probit<a class="headerlink" href="#spatial-probit" title="Link to this heading">¶</a></h4>
 <p>For binary outcomes <span class="math notranslate nohighlight">\(y_i \in \{0,1\}\)</span>, latent utilities <span class="math notranslate nohighlight">\(y^*\)</span> follow a spatial lag:</p>
