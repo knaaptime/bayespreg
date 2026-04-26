@@ -3,9 +3,6 @@
 Provides log|I - rho*W| as a pytensor expression or a pre-computed
 grid interpolation for large n, used as pm.Potential in spatial likelihoods.
 
-The fastest approach for any n is the eigenvalue method: pre-computing
-W's eigenvalues once (O(n³)) and evaluating sum(log(1 - rho*eigs)) per
-step (O(n)), which is both exact and differentiable.
 """
 
 import numpy as np

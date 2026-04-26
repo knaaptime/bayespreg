@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import arviz as az
 import pytest
 from unittest.mock import MagicMock
@@ -763,3 +764,198 @@ class TestBayesianPanelRobustLMErrorSDEMTest:
         result = bayesian_panel_robust_lm_error_sdem_test(model)
 
         assert result.df == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests for spatial_diagnostics() method on model classes
+# ---------------------------------------------------------------------------
+
+
+class TestSpatialDiagnosticsMethod:
+    """Test the spatial_diagnostics() and spatial_diagnostics_decision()
+    methods on model classes."""
+
+    def _make_model_with_class(self, y, X, W_sparse, cls, WX=None,
+                                beta_noise=0.1, draws=100, rho_noise=None):
+        """Build a mock model that has the right class for spatial_diagnostics."""
+        n, k = X.shape
+        beta_ols = np.linalg.lstsq(X, y, rcond=None)[0]
+        beta_samples = np.tile(beta_ols, (draws, 1))
+        rng = np.random.default_rng(42)
+        beta_samples += rng.normal(scale=beta_noise, size=beta_samples.shape)
+
+        Wy = np.asarray(W_sparse @ y, dtype=np.float64)
+
+        posterior = {"beta": beta_samples[:, None, :], "sigma": np.ones(draws)[:, None]}
+        if rho_noise is not None:
+            rho_samples = rng.normal(scale=rho_noise, size=draws)
+            posterior["rho"] = rho_samples[:, None]
+
+        idata = az.from_dict(
+            posterior=posterior,
+            observed_data={"y": y},
+        )
+
+        if WX is None:
+            WX = np.empty((n, 0), dtype=float)
+
+        # Create a real instance of the class but override __init__
+        # We use a simple object trick: create a bare object and set
+        # its class and attributes manually
+        obj = object.__new__(cls)
+        obj._y = y
+        obj._X = X
+        obj._WX = WX
+        obj._Wy = Wy
+        obj._W_sparse = W_sparse
+        obj._idata = idata
+        return obj
+
+    def test_ols_spatial_diagnostics_returns_dataframe(self):
+        """OLS.spatial_diagnostics() should return a DataFrame with 4 tests."""
+        from bayespecon.models import OLS
+
+        y, X, W_dense, W_sparse = make_sar_sem_data(n=16)
+        model = self._make_model_with_class(y, X, W_sparse, OLS)
+
+        df = model.spatial_diagnostics()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 4
+        assert set(df.index) == {"LM-Lag", "LM-Error", "LM-SDM-Joint", "LM-SLX-Error-Joint"}
+        assert "statistic" in df.columns
+        assert "p_value" in df.columns
+        assert "df" in df.columns
+        assert "median" in df.columns
+        assert "ci_lower" in df.columns
+        assert "ci_upper" in df.columns
+        # No 'significant' column
+        assert "significant" not in df.columns
+        assert df.attrs["model_type"] == "OLS"
+        assert df.attrs["n_draws"] > 0
+
+    def test_sar_spatial_diagnostics_returns_dataframe(self):
+        """SAR.spatial_diagnostics() should return a DataFrame with 3 tests."""
+        from bayespecon.models import SAR
+
+        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
+        model = self._make_model_with_class(y, X, W_sparse, SAR, WX=WX, rho_noise=0.05)
+
+        df = model.spatial_diagnostics()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 3
+        assert set(df.index) == {"LM-Error", "LM-WX", "Robust-LM-WX"}
+
+    def test_slx_spatial_diagnostics_returns_dataframe(self):
+        """SLX.spatial_diagnostics() should return a DataFrame with 4 tests."""
+        from bayespecon.models import SLX
+
+        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
+        model = self._make_model_with_class(y, X, W_sparse, SLX, WX=WX)
+
+        df = model.spatial_diagnostics()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 4
+        assert set(df.index) == {
+            "LM-Lag", "LM-Error",
+            "Robust-LM-Lag-SDM", "Robust-LM-Error-SDEM",
+        }
+
+    def test_sdm_spatial_diagnostics_returns_dataframe(self):
+        """SDM.spatial_diagnostics() should return a DataFrame with 1 test."""
+        from bayespecon.models import SDM
+
+        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
+        model = self._make_model_with_class(y, X, W_sparse, SDM, WX=WX)
+
+        df = model.spatial_diagnostics()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 1
+        assert df.index[0] == "LM-Error"
+
+    def test_sdem_spatial_diagnostics_returns_dataframe(self):
+        """SDEM.spatial_diagnostics() should return a DataFrame with 1 test."""
+        from bayespecon.models import SDEM
+
+        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
+        model = self._make_model_with_class(y, X, W_sparse, SDEM, WX=WX)
+
+        df = model.spatial_diagnostics()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 1
+        assert df.index[0] == "LM-Lag"
+
+    def test_sem_spatial_diagnostics_returns_dataframe(self):
+        """SEM.spatial_diagnostics() should return a DataFrame with 1 test."""
+        from bayespecon.models import SEM
+
+        y, X, W_dense, W_sparse = make_sar_sem_data(n=16)
+        model = self._make_model_with_class(y, X, W_sparse, SEM)
+
+        df = model.spatial_diagnostics()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 1
+        assert df.index[0] == "LM-Lag"
+
+    def test_spatial_diagnostics_decision_returns_string(self):
+        """spatial_diagnostics_decision() should return a model name string."""
+        from bayespecon.models import OLS
+
+        y, X, W_dense, W_sparse = make_sar_sem_data(n=16)
+        model = self._make_model_with_class(y, X, W_sparse, OLS)
+
+        decision = model.spatial_diagnostics_decision()
+        assert isinstance(decision, str)
+        assert len(decision) > 0
+
+    def test_spatial_diagnostics_decision_ols_no_significance(self):
+        """When no tests are significant, OLS decision should return 'OLS'."""
+        from bayespecon.models import OLS
+
+        y, X, W_dense, W_sparse = make_sar_sem_data(n=16)
+        model = self._make_model_with_class(y, X, W_sparse, OLS)
+
+        # With very small n and random data, p-values are often > 0.05
+        decision = model.spatial_diagnostics_decision(alpha=0.001)
+        assert decision == "OLS"
+
+    def test_spatial_diagnostics_requires_fit(self):
+        """spatial_diagnostics() should raise if model not fit."""
+        from bayespecon.models import OLS
+
+        # Create a bare OLS object without fitting
+        obj = object.__new__(OLS)
+        obj._idata = None
+        obj._W_sparse = None
+
+        with pytest.raises(RuntimeError, match="not been fit"):
+            obj.spatial_diagnostics()
+
+    def test_spatial_diagnostics_pvalue_range(self):
+        """All p-values should be in [0, 1]."""
+        from bayespecon.models import OLS
+
+        y, X, W_dense, W_sparse = make_sar_sem_data(n=16)
+        model = self._make_model_with_class(y, X, W_sparse, OLS)
+
+        df = model.spatial_diagnostics()
+        assert (df["p_value"] >= 0).all()
+        assert (df["p_value"] <= 1).all()
+
+    def test_spatial_diagnostics_raw_results_in_attrs(self):
+        """The raw BayesianLMTestResult objects should be in attrs."""
+        from bayespecon.models import OLS
+
+        y, X, W_dense, W_sparse = make_sar_sem_data(n=16)
+        model = self._make_model_with_class(y, X, W_sparse, OLS)
+
+        df = model.spatial_diagnostics()
+        raw = df.attrs.get("_raw_results", {})
+        assert len(raw) == 4
+        for label, result in raw.items():
+            assert isinstance(result, BayesianLMTestResult)

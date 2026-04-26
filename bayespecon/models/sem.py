@@ -59,6 +59,13 @@ class SEM(SpatialModel):
     variance exists.
     """
 
+    _spatial_diagnostics_tests = [
+        (lambda m: __import__(
+            "bayespecon.diagnostics.bayesian_lmtests",
+            fromlist=["bayesian_lm_lag_test"],
+        ).bayesian_lm_lag_test(m), "LM-Lag"),
+    ]
+
     def fit(
         self,
         draws: int = 2000,

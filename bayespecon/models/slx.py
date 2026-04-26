@@ -52,6 +52,25 @@ class SLX(SpatialModel):
     variance exists.
     """
 
+    _spatial_diagnostics_tests = [
+        (lambda m: __import__(
+            "bayespecon.diagnostics.bayesian_lmtests",
+            fromlist=["bayesian_lm_lag_test"],
+        ).bayesian_lm_lag_test(m), "LM-Lag"),
+        (lambda m: __import__(
+            "bayespecon.diagnostics.bayesian_lmtests",
+            fromlist=["bayesian_lm_error_test"],
+        ).bayesian_lm_error_test(m), "LM-Error"),
+        (lambda m: __import__(
+            "bayespecon.diagnostics.bayesian_lmtests",
+            fromlist=["bayesian_robust_lm_lag_sdm_test"],
+        ).bayesian_robust_lm_lag_sdm_test(m), "Robust-LM-Lag-SDM"),
+        (lambda m: __import__(
+            "bayespecon.diagnostics.bayesian_lmtests",
+            fromlist=["bayesian_robust_lm_error_sdem_test"],
+        ).bayesian_robust_lm_error_sdem_test(m), "Robust-LM-Error-SDEM"),
+    ]
+
     def _beta_names(self) -> list[str]:
         return self._feature_names + [f"W*{name}" for name in self._wx_feature_names]
 
