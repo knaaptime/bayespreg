@@ -582,24 +582,6 @@ def bayesian_lm_slx_error_joint_test(
     )
 
 
-def summarize_bayesian_lm_test(result: BayesianLMTestResult) -> None:
-    """Print a summary of the Bayesian LM test result.
-
-    Parameters
-    ----------
-    result : BayesianLMTestResult
-        Result object from a Bayesian LM test function.
-    """
-    print(f"Bayesian LM Test ({result.test_type}):")
-    print(f"  Degrees of freedom: {result.df}")
-    print(f"  Mean: {result.mean:.3f}")
-    print(f"  Median: {result.median:.3f}")
-    print(
-        f"  95% Credible Interval: [{result.credible_interval[0]:.3f}, {result.credible_interval[1]:.3f}]"
-    )
-    print(f"  Bayesian p-value: {result.bayes_pvalue:.3f}")
-
-
 # ---------------------------------------------------------------------------
 # Information matrix blocks for Neyman orthogonal score adjustment
 # ---------------------------------------------------------------------------

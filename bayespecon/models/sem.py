@@ -30,7 +30,7 @@ class SEM(SpatialModel):
     Parameters
     ----------
     formula, data, y, X, W, priors, logdet_method
-        See :class:`SpatialModel`.
+        See :class:`~bayespecon.models.base.SpatialModel`.
 
     Notes
     -----
@@ -77,7 +77,7 @@ class SEM(SpatialModel):
             Passed to ``pm.sample`` for InferenceData creation. If contains
             ``log_likelihood: True``, the complete pointwise log-likelihood
             (including the Jacobian correction) is attached to the output.
-        Other parameters as in :class:`SpatialModel`.
+        Other parameters as in :class:`~bayespecon.models.base.SpatialModel`.
 
         Notes
         -----

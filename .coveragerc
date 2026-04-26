@@ -2,3 +2,6 @@
 [run]
 concurrency = multiprocessing
 parallel = true
+omit = 
+    bayespecon/tests/*
+    */tests/*

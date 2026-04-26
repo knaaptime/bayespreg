@@ -24,7 +24,7 @@ class SLX(SpatialModel):
     Parameters
     ----------
     formula, data, y, X, W, priors, logdet_method, w_vars
-        See :class:`SpatialModel`. Use ``w_vars`` to restrict which X columns
+        See :class:`~bayespecon.models.base.SpatialModel`. Use ``w_vars`` to restrict which X columns
         are spatially lagged.
 
     Notes

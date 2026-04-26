@@ -13,7 +13,6 @@ from bayespecon.diagnostics.bayesian_lmtests import (
     bayesian_robust_lm_lag_sdm_test,
     bayesian_robust_lm_wx_test,
     bayesian_robust_lm_error_sdem_test,
-    summarize_bayesian_lm_test,
     # Panel LM tests
     bayesian_panel_lm_lag_test,
     bayesian_panel_lm_error_test,
@@ -78,14 +77,12 @@ def test_bayesian_lm_lag_and_error_basic():
     assert isinstance(result_lag.mean, float)
     assert result_lag.lm_samples.shape[0] == 200
     assert 0.0 <= result_lag.bayes_pvalue <= 1.0
-    summarize_bayesian_lm_test(result_lag)
 
     # LM-error (SEM)
     result_err = bayesian_lm_error_test(model)
     assert isinstance(result_err.mean, float)
     assert result_err.lm_samples.shape[0] == 200
     assert 0.0 <= result_err.bayes_pvalue <= 1.0
-    summarize_bayesian_lm_test(result_err)
 
 
 def test_bayesian_lm_lag_and_error_extreme():
@@ -395,47 +392,6 @@ class TestBayesianRobustLMErrorSDEMTest:
 # ---------------------------------------------------------------------------
 # Cross-cutting tests
 # ---------------------------------------------------------------------------
-
-
-class TestSummarizeAllNewTests:
-    """Ensure summarize_bayesian_lm_test works for all new test types."""
-
-    def test_summarize_wx(self):
-        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
-        model = _make_mock_sar_model(y, X, WX, W_sparse, draws=50)
-        result = bayesian_lm_wx_test(model)
-        # Should not raise
-        summarize_bayesian_lm_test(result)
-
-    def test_summarize_sdm_joint(self):
-        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
-        model = _make_mock_ols_model_with_wx(y, X, WX, W_sparse, draws=50)
-        result = bayesian_lm_sdm_joint_test(model)
-        summarize_bayesian_lm_test(result)
-
-    def test_summarize_slx_error_joint(self):
-        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
-        model = _make_mock_ols_model_with_wx(y, X, WX, W_sparse, draws=50)
-        result = bayesian_lm_slx_error_joint_test(model)
-        summarize_bayesian_lm_test(result)
-
-    def test_summarize_robust_lag_sdm(self):
-        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
-        model = _make_mock_slx_model(y, X, WX, W_sparse, draws=50)
-        result = bayesian_robust_lm_lag_sdm_test(model)
-        summarize_bayesian_lm_test(result)
-
-    def test_summarize_robust_wx(self):
-        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
-        model = _make_mock_sar_model(y, X, WX, W_sparse, draws=50)
-        result = bayesian_robust_lm_wx_test(model)
-        summarize_bayesian_lm_test(result)
-
-    def test_summarize_robust_error_sdem(self):
-        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
-        model = _make_mock_slx_model(y, X, WX, W_sparse, draws=50)
-        result = bayesian_robust_lm_error_sdem_test(model)
-        summarize_bayesian_lm_test(result)
 
 
 # ---------------------------------------------------------------------------
