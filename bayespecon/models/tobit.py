@@ -372,8 +372,8 @@ class SEMTobit(_SpatialTobitBase):
         ).bayesian_lm_lag_test(m), "LM-Lag"),
         (lambda m: __import__(
             "bayespecon.diagnostics.bayesian_lmtests",
-            fromlist=["bayesian_lm_wx_test"],
-        ).bayesian_lm_wx_test(m), "LM-WX"),
+            fromlist=["bayesian_lm_wx_sem_test"],
+        ).bayesian_lm_wx_sem_test(m), "LM-WX"),
     ]
     def _build_pymc_model(self) -> pm.Model:
         lam_lower = self.priors.get("lam_lower", -1.0)

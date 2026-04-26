@@ -890,17 +890,17 @@ class TestSpatialDiagnosticsMethod:
         assert df.index[0] == "LM-Lag"
 
     def test_sem_spatial_diagnostics_returns_dataframe(self):
-        """SEM.spatial_diagnostics() should return a DataFrame with 1 test."""
+        """SEM.spatial_diagnostics() should return a DataFrame with 2 tests."""
         from bayespecon.models import SEM
 
-        y, X, W_dense, W_sparse = make_sar_sem_data(n=16)
-        model = self._make_model_with_class(y, X, W_sparse, SEM)
+        y, X, WX, W_dense, W_sparse = _make_data_with_wx(n=20, k_wx=2)
+        model = self._make_model_with_class(y, X, W_sparse, SEM, WX=WX)
 
         df = model.spatial_diagnostics()
 
         assert isinstance(df, pd.DataFrame)
-        assert len(df) == 1
-        assert df.index[0] == "LM-Lag"
+        assert len(df) == 2
+        assert set(df.index) == {"LM-Lag", "LM-WX"}
 
     def test_spatial_diagnostics_decision_returns_string(self):
         """spatial_diagnostics_decision() should return a model name string."""

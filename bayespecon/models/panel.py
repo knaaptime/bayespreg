@@ -342,8 +342,8 @@ class SEMPanelFE(SpatialPanelModel):
         ).bayesian_panel_lm_lag_test(m), "Panel-LM-Lag"),
         (lambda m: __import__(
             "bayespecon.diagnostics.bayesian_lmtests",
-            fromlist=["bayesian_panel_lm_wx_test"],
-        ).bayesian_panel_lm_wx_test(m), "Panel-LM-WX"),
+            fromlist=["bayesian_panel_lm_wx_sem_test"],
+        ).bayesian_panel_lm_wx_sem_test(m), "Panel-LM-WX"),
     ]
     panel transformation framework.
 

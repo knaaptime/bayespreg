@@ -64,6 +64,10 @@ class SEM(SpatialModel):
             "bayespecon.diagnostics.bayesian_lmtests",
             fromlist=["bayesian_lm_lag_test"],
         ).bayesian_lm_lag_test(m), "LM-Lag"),
+        (lambda m: __import__(
+            "bayespecon.diagnostics.bayesian_lmtests",
+            fromlist=["bayesian_lm_wx_sem_test"],
+        ).bayesian_lm_wx_sem_test(m), "LM-WX"),
     ]
 
     def fit(
