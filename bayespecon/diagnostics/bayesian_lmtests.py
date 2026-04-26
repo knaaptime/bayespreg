@@ -248,6 +248,26 @@ class BayesianLMTestResult:
         if self.details is None:
             self.details = {}
 
+    def to_dict(self):
+        """Convert the test result to a dictionary."""
+        d =  {
+            "lm_samples": self.lm_samples,
+            "mean": self.mean,
+            "median": self.median,
+            "credible_interval": self.credible_interval,
+            "bayes_pvalue": self.bayes_pvalue,
+            "test_type": self.test_type,
+            "df": self.df,
+        }
+        if self.details:
+            for k in self.details:
+                d[k] = self.details[k]
+        return d
+
+    def to_series(self):
+        """Convert the test result to a pandas Series."""
+        import pandas as pd
+        return pd.Series(self.to_dict())
 
 def _get_posterior_draws(idata: az.InferenceData, param: str) -> np.ndarray:
     """Extract posterior draws for a parameter from an ArviZ InferenceData object.
