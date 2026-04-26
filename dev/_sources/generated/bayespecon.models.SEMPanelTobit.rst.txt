@@ -17,6 +17,8 @@
       ~SEMPanelTobit.fit
       ~SEMPanelTobit.fitted_values
       ~SEMPanelTobit.residuals
+      ~SEMPanelTobit.spatial_diagnostics
+      ~SEMPanelTobit.spatial_diagnostics_decision
       ~SEMPanelTobit.spatial_effects
       ~SEMPanelTobit.summary
    

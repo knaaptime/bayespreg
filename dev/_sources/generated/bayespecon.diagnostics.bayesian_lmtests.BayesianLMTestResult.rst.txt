@@ -14,6 +14,8 @@
    .. autosummary::
    
       ~BayesianLMTestResult.__init__
+      ~BayesianLMTestResult.to_dict
+      ~BayesianLMTestResult.to_series
    
    
 

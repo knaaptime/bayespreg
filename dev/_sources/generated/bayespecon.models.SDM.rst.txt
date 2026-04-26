@@ -17,6 +17,8 @@
       ~SDM.fit
       ~SDM.fitted_values
       ~SDM.residuals
+      ~SDM.spatial_diagnostics
+      ~SDM.spatial_diagnostics_decision
       ~SDM.spatial_effects
       ~SDM.summary
    

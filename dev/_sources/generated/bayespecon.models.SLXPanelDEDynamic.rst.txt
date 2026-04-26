@@ -17,6 +17,8 @@
       ~SLXPanelDEDynamic.fit
       ~SLXPanelDEDynamic.fitted_values
       ~SLXPanelDEDynamic.residuals
+      ~SLXPanelDEDynamic.spatial_diagnostics
+      ~SLXPanelDEDynamic.spatial_diagnostics_decision
       ~SLXPanelDEDynamic.spatial_effects
       ~SLXPanelDEDynamic.summary
    

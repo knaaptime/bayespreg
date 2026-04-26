@@ -17,6 +17,8 @@
       ~SDMPanelFE.fit
       ~SDMPanelFE.fitted_values
       ~SDMPanelFE.residuals
+      ~SDMPanelFE.spatial_diagnostics
+      ~SDMPanelFE.spatial_diagnostics_decision
       ~SDMPanelFE.spatial_effects
       ~SDMPanelFE.summary
    

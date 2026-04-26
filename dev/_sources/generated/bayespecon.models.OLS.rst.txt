@@ -17,6 +17,8 @@
       ~OLS.fit
       ~OLS.fitted_values
       ~OLS.residuals
+      ~OLS.spatial_diagnostics
+      ~OLS.spatial_diagnostics_decision
       ~OLS.spatial_effects
       ~OLS.summary
    

@@ -17,6 +17,8 @@
       ~SEMPanelFE.fit
       ~SEMPanelFE.fitted_values
       ~SEMPanelFE.residuals
+      ~SEMPanelFE.spatial_diagnostics
+      ~SEMPanelFE.spatial_diagnostics_decision
       ~SEMPanelFE.spatial_effects
       ~SEMPanelFE.summary
    

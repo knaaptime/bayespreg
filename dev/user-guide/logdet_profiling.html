@@ -683,7 +683,7 @@
   
   
   <span class="md-ellipsis">
-    <span>References</span>
+    <span>API</span>
     
   </span>
   
@@ -694,7 +694,7 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
-            <span>References</span>
+            <span>API</span>
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -706,12 +706,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../references.html" class="md-nav__link">
+      <a href="../api.html" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    <span>References</span>
+    <span>API reference</span>
     
   </span>
   
@@ -756,7 +756,7 @@
   
   
   <span class="md-ellipsis">
-    <span>API</span>
+    <span>References</span>
     
   </span>
   
@@ -767,7 +767,7 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
-            <span>API</span>
+            <span>References</span>
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -779,12 +779,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../api.html" class="md-nav__link">
+      <a href="../references.html" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    <span>API reference</span>
+    <span>References</span>
     
   </span>
   
@@ -979,6 +979,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">spline</span></code>: sparse-LU + spline interpolation (MATLAB-style <code class="docutils literal notranslate"><span class="pre">lndetint</span></code>, was <code class="docutils literal notranslate"><span class="pre">int</span></code>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">mc</span></code>: Monte Carlo trace approximation (MATLAB-style <code class="docutils literal notranslate"><span class="pre">lndetmc</span></code>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">ilu</span></code>: ILU-based approximation (MATLAB-style <code class="docutils literal notranslate"><span class="pre">lndetichol</span></code> analog, was <code class="docutils literal notranslate"><span class="pre">ichol</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">chebyshev</span></code>: Chebyshev polynomial approximation via Clenshaw’s algorithm (Pace &amp; LeSage 2004)</p></li>
 </ul>
 <p>For each matrix size, we report:</p>
 <ul class="simple">
@@ -1046,7 +1047,7 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">ProfileConfig</span><span class="p">:</span>
     <span class="c1"># Grid side lengths; obs count = n_side². e.g. 6→36, 9→81, 11→121, 13→169, 16→256.</span>
     <span class="n">sizes</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">75</span><span class="p">)</span>
-    <span class="n">methods</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;exact&#39;</span><span class="p">,</span> <span class="s1">&#39;eigenvalue&#39;</span><span class="p">,</span> <span class="s1">&#39;dense_grid&#39;</span><span class="p">,</span> <span class="s1">&#39;sparse_grid&#39;</span><span class="p">,</span> <span class="s1">&#39;spline&#39;</span><span class="p">,</span> <span class="s1">&#39;mc&#39;</span><span class="p">,</span> <span class="s1">&#39;ilu&#39;</span><span class="p">)</span>
+    <span class="n">methods</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;exact&#39;</span><span class="p">,</span> <span class="s1">&#39;eigenvalue&#39;</span><span class="p">,</span> <span class="s1">&#39;dense_grid&#39;</span><span class="p">,</span> <span class="s1">&#39;sparse_grid&#39;</span><span class="p">,</span> <span class="s1">&#39;spline&#39;</span><span class="p">,</span> <span class="s1">&#39;mc&#39;</span><span class="p">,</span> <span class="s1">&#39;ilu&#39;</span><span class="p">,</span> <span class="s1">&#39;chebyshev&#39;</span><span class="p">)</span>
     <span class="n">method_max_n</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">eval_points</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">80</span>
     <span class="n">eval_repeats</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
@@ -1055,27 +1056,27 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">method_max_n</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">method_max_n</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s1">&#39;exact&#39;</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
-                <span class="s1">&#39;eigenvalue&#39;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
-                <span class="s1">&#39;dense_grid&#39;</span><span class="p">:</span> <span class="mi">40</span><span class="p">,</span>
-                <span class="s1">&#39;sparse_grid&#39;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
-                <span class="s1">&#39;spline&#39;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
-                <span class="s1">&#39;mc&#39;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
-                <span class="s1">&#39;ilu&#39;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
-            <span class="p">}</span>
+                <span class="s2">&quot;exact&quot;</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
+                <span class="s2">&quot;eigenvalue&quot;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
+                <span class="s2">&quot;dense_grid&quot;</span><span class="p">:</span> <span class="mi">40</span><span class="p">,</span>
+                <span class="s2">&quot;sparse_grid&quot;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
+                <span class="s2">&quot;spline&quot;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
+                <span class="s2">&quot;mc&quot;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
+                <span class="s2">&quot;ilu&quot;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
+                <span class="s2">&quot;chebyshev&quot;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,}</span>
 
 <span class="n">cfg</span> <span class="o">=</span> <span class="n">ProfileConfig</span><span class="p">()</span>
 
 <span class="c1"># spline/mc are defined on nonnegative rho ranges; others can use symmetric ranges.</span>
 <span class="n">method_rho_bounds</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;exact&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
-    <span class="s1">&#39;eigenvalue&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
-    <span class="s1">&#39;dense_grid&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
-    <span class="s1">&#39;sparse_grid&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
-    <span class="s1">&#39;ilu&#39;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
-    <span class="s1">&#39;spline&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
-    <span class="s1">&#39;mc&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
-<span class="p">}</span>
+    <span class="s2">&quot;exact&quot;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s2">&quot;eigenvalue&quot;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s2">&quot;dense_grid&quot;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s2">&quot;sparse_grid&quot;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s2">&quot;ilu&quot;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s2">&quot;spline&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s2">&quot;mc&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+    <span class="s2">&quot;chebyshev&quot;</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),}</span>
 
 <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
 <span class="n">skipped</span> <span class="o">=</span> <span class="p">[]</span>
@@ -1155,397 +1156,463 @@ Profiling n_side=75 (5625 obs)...
       <th>0</th>
       <td>10</td>
       <td>100</td>
-      <td>dense_grid</td>
+      <td>chebyshev</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>2795.728463</td>
-      <td>5.532062</td>
-      <td>2796.171028</td>
+      <td>768.545189</td>
+      <td>4.378200</td>
+      <td>768.895445</td>
     </tr>
     <tr>
       <th>1</th>
       <td>20</td>
       <td>400</td>
-      <td>dense_grid</td>
+      <td>chebyshev</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>323.425094</td>
-      <td>5.458825</td>
-      <td>323.861800</td>
+      <td>762.066373</td>
+      <td>4.501788</td>
+      <td>762.426516</td>
     </tr>
     <tr>
       <th>2</th>
       <td>25</td>
       <td>625</td>
-      <td>dense_grid</td>
+      <td>chebyshev</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>881.673203</td>
-      <td>5.603550</td>
-      <td>882.121487</td>
+      <td>862.132292</td>
+      <td>4.379937</td>
+      <td>862.482687</td>
     </tr>
     <tr>
       <th>3</th>
       <td>40</td>
       <td>1600</td>
-      <td>dense_grid</td>
+      <td>chebyshev</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>11944.479673</td>
-      <td>5.464200</td>
-      <td>11944.916809</td>
+      <td>1701.860564</td>
+      <td>3.880525</td>
+      <td>1702.171006</td>
     </tr>
     <tr>
       <th>4</th>
-      <td>10</td>
-      <td>100</td>
-      <td>eigenvalue</td>
+      <td>50</td>
+      <td>2500</td>
+      <td>chebyshev</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>609.363361</td>
-      <td>5.494250</td>
-      <td>609.802901</td>
+      <td>771.345836</td>
+      <td>4.386075</td>
+      <td>771.696722</td>
     </tr>
     <tr>
       <th>5</th>
-      <td>20</td>
-      <td>400</td>
-      <td>eigenvalue</td>
+      <td>75</td>
+      <td>5625</td>
+      <td>chebyshev</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>56.752086</td>
-      <td>7.542825</td>
-      <td>57.355512</td>
+      <td>896.749864</td>
+      <td>4.485650</td>
+      <td>897.108716</td>
     </tr>
     <tr>
       <th>6</th>
-      <td>25</td>
-      <td>625</td>
-      <td>eigenvalue</td>
+      <td>10</td>
+      <td>100</td>
+      <td>dense_grid</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>146.044268</td>
-      <td>8.690175</td>
-      <td>146.739482</td>
+      <td>2909.204014</td>
+      <td>5.909950</td>
+      <td>2909.676810</td>
     </tr>
     <tr>
       <th>7</th>
-      <td>40</td>
-      <td>1600</td>
-      <td>eigenvalue</td>
+      <td>20</td>
+      <td>400</td>
+      <td>dense_grid</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>944.768343</td>
-      <td>15.165275</td>
-      <td>945.981565</td>
+      <td>317.979157</td>
+      <td>5.878513</td>
+      <td>318.449438</td>
     </tr>
     <tr>
       <th>8</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>eigenvalue</td>
+      <td>25</td>
+      <td>625</td>
+      <td>dense_grid</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>3013.669269</td>
-      <td>21.527588</td>
-      <td>3015.391476</td>
+      <td>909.472004</td>
+      <td>6.266463</td>
+      <td>909.973321</td>
     </tr>
     <tr>
       <th>9</th>
-      <td>75</td>
-      <td>5625</td>
-      <td>eigenvalue</td>
+      <td>40</td>
+      <td>1600</td>
+      <td>dense_grid</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>31104.663781</td>
-      <td>41.379900</td>
-      <td>31107.974173</td>
+      <td>12152.239962</td>
+      <td>5.741875</td>
+      <td>12152.699312</td>
     </tr>
     <tr>
       <th>10</th>
       <td>10</td>
       <td>100</td>
-      <td>exact</td>
+      <td>eigenvalue</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>1070.826836</td>
-      <td>80.454600</td>
-      <td>1077.263204</td>
+      <td>636.240193</td>
+      <td>5.945863</td>
+      <td>636.715862</td>
     </tr>
     <tr>
       <th>11</th>
       <td>20</td>
       <td>400</td>
-      <td>exact</td>
+      <td>eigenvalue</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>17.285755</td>
-      <td>1263.063200</td>
-      <td>118.330811</td>
+      <td>55.708029</td>
+      <td>7.695912</td>
+      <td>56.323702</td>
     </tr>
     <tr>
       <th>12</th>
-      <td>10</td>
-      <td>100</td>
-      <td>ilu</td>
+      <td>25</td>
+      <td>625</td>
+      <td>eigenvalue</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>134.829622</td>
-      <td>5.458075</td>
-      <td>135.266268</td>
+      <td>144.186165</td>
+      <td>9.357125</td>
+      <td>144.934735</td>
     </tr>
     <tr>
       <th>13</th>
-      <td>20</td>
-      <td>400</td>
-      <td>ilu</td>
+      <td>40</td>
+      <td>1600</td>
+      <td>eigenvalue</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>227.899680</td>
-      <td>5.527550</td>
-      <td>228.341884</td>
+      <td>955.630479</td>
+      <td>15.494638</td>
+      <td>956.870050</td>
     </tr>
     <tr>
       <th>14</th>
-      <td>25</td>
-      <td>625</td>
-      <td>ilu</td>
+      <td>50</td>
+      <td>2500</td>
+      <td>eigenvalue</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>400.795205</td>
-      <td>5.575875</td>
-      <td>401.241275</td>
+      <td>2959.853972</td>
+      <td>21.288100</td>
+      <td>2961.557020</td>
     </tr>
     <tr>
       <th>15</th>
-      <td>40</td>
-      <td>1600</td>
-      <td>ilu</td>
+      <td>75</td>
+      <td>5625</td>
+      <td>eigenvalue</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>751.896750</td>
-      <td>5.402362</td>
-      <td>752.328939</td>
+      <td>32144.580513</td>
+      <td>41.409512</td>
+      <td>32147.893274</td>
     </tr>
     <tr>
       <th>16</th>
-      <td>50</td>
-      <td>2500</td>
-      <td>ilu</td>
+      <td>10</td>
+      <td>100</td>
+      <td>exact</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>1172.028337</td>
-      <td>5.379588</td>
-      <td>1172.458704</td>
+      <td>1123.293323</td>
+      <td>89.391888</td>
+      <td>1130.444674</td>
     </tr>
     <tr>
       <th>17</th>
-      <td>75</td>
-      <td>5625</td>
-      <td>ilu</td>
+      <td>20</td>
+      <td>400</td>
+      <td>exact</td>
       <td>-0.95000</td>
       <td>0.95</td>
-      <td>2824.559717</td>
-      <td>5.494638</td>
-      <td>2824.999288</td>
+      <td>19.567579</td>
+      <td>1207.285812</td>
+      <td>116.150444</td>
     </tr>
     <tr>
       <th>18</th>
       <td>10</td>
       <td>100</td>
-      <td>mc</td>
-      <td>0.00001</td>
+      <td>ilu</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>596.121461</td>
-      <td>5.633713</td>
-      <td>596.572158</td>
+      <td>111.866680</td>
+      <td>5.848962</td>
+      <td>112.334597</td>
     </tr>
     <tr>
       <th>19</th>
       <td>20</td>
       <td>400</td>
-      <td>mc</td>
-      <td>0.00001</td>
+      <td>ilu</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>50.418342</td>
-      <td>5.564225</td>
-      <td>50.863480</td>
+      <td>247.860208</td>
+      <td>6.092900</td>
+      <td>248.347640</td>
     </tr>
     <tr>
       <th>20</th>
       <td>25</td>
       <td>625</td>
-      <td>mc</td>
-      <td>0.00001</td>
+      <td>ilu</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>59.013394</td>
-      <td>5.725725</td>
-      <td>59.471452</td>
+      <td>329.979203</td>
+      <td>5.959512</td>
+      <td>330.455964</td>
     </tr>
     <tr>
       <th>21</th>
       <td>40</td>
       <td>1600</td>
-      <td>mc</td>
-      <td>0.00001</td>
+      <td>ilu</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>68.997632</td>
-      <td>5.739250</td>
-      <td>69.456772</td>
+      <td>735.459314</td>
+      <td>6.185713</td>
+      <td>735.954171</td>
     </tr>
     <tr>
       <th>22</th>
       <td>50</td>
       <td>2500</td>
-      <td>mc</td>
-      <td>0.00001</td>
+      <td>ilu</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>92.637399</td>
-      <td>5.630463</td>
-      <td>93.087836</td>
+      <td>1139.355039</td>
+      <td>5.911313</td>
+      <td>1139.827944</td>
     </tr>
     <tr>
       <th>23</th>
       <td>75</td>
       <td>5625</td>
-      <td>mc</td>
-      <td>0.00001</td>
+      <td>ilu</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>264.963524</td>
-      <td>5.468587</td>
-      <td>265.401011</td>
+      <td>2698.095539</td>
+      <td>5.904175</td>
+      <td>2698.567873</td>
     </tr>
     <tr>
       <th>24</th>
       <td>10</td>
       <td>100</td>
-      <td>sparse_grid</td>
-      <td>-0.95000</td>
+      <td>mc</td>
+      <td>0.00001</td>
       <td>0.95</td>
-      <td>631.458699</td>
-      <td>5.458700</td>
-      <td>631.895395</td>
+      <td>631.352808</td>
+      <td>5.873625</td>
+      <td>631.822698</td>
     </tr>
     <tr>
       <th>25</th>
       <td>20</td>
       <td>400</td>
-      <td>sparse_grid</td>
-      <td>-0.95000</td>
+      <td>mc</td>
+      <td>0.00001</td>
       <td>0.95</td>
-      <td>202.004352</td>
-      <td>5.870312</td>
-      <td>202.473977</td>
+      <td>55.062749</td>
+      <td>6.049588</td>
+      <td>55.546716</td>
     </tr>
     <tr>
       <th>26</th>
       <td>25</td>
       <td>625</td>
-      <td>sparse_grid</td>
-      <td>-0.95000</td>
+      <td>mc</td>
+      <td>0.00001</td>
       <td>0.95</td>
-      <td>297.698851</td>
-      <td>5.698063</td>
-      <td>298.154696</td>
+      <td>59.036631</td>
+      <td>6.017125</td>
+      <td>59.518001</td>
     </tr>
     <tr>
       <th>27</th>
       <td>40</td>
       <td>1600</td>
-      <td>sparse_grid</td>
-      <td>-0.95000</td>
+      <td>mc</td>
+      <td>0.00001</td>
       <td>0.95</td>
-      <td>677.091895</td>
-      <td>5.704313</td>
-      <td>677.548240</td>
+      <td>77.419728</td>
+      <td>5.928350</td>
+      <td>77.893996</td>
     </tr>
     <tr>
       <th>28</th>
       <td>50</td>
       <td>2500</td>
-      <td>sparse_grid</td>
-      <td>-0.95000</td>
+      <td>mc</td>
+      <td>0.00001</td>
       <td>0.95</td>
-      <td>1065.184079</td>
-      <td>5.572113</td>
-      <td>1065.629848</td>
+      <td>100.568288</td>
+      <td>5.876638</td>
+      <td>101.038419</td>
     </tr>
     <tr>
       <th>29</th>
       <td>75</td>
       <td>5625</td>
-      <td>sparse_grid</td>
-      <td>-0.95000</td>
+      <td>mc</td>
+      <td>0.00001</td>
       <td>0.95</td>
-      <td>2629.451941</td>
-      <td>5.314988</td>
-      <td>2629.877140</td>
+      <td>319.343048</td>
+      <td>6.268475</td>
+      <td>319.844526</td>
     </tr>
     <tr>
       <th>30</th>
       <td>10</td>
       <td>100</td>
-      <td>spline</td>
-      <td>0.00001</td>
+      <td>sparse_grid</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>589.362007</td>
-      <td>5.414013</td>
-      <td>589.795128</td>
+      <td>681.104139</td>
+      <td>6.242938</td>
+      <td>681.603574</td>
     </tr>
     <tr>
       <th>31</th>
       <td>20</td>
       <td>400</td>
-      <td>spline</td>
-      <td>0.00001</td>
+      <td>sparse_grid</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>53.319169</td>
-      <td>5.748888</td>
-      <td>53.779080</td>
+      <td>212.782920</td>
+      <td>6.086400</td>
+      <td>213.269832</td>
     </tr>
     <tr>
       <th>32</th>
       <td>25</td>
       <td>625</td>
-      <td>spline</td>
-      <td>0.00001</td>
+      <td>sparse_grid</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>67.769855</td>
-      <td>5.516162</td>
-      <td>68.211148</td>
+      <td>301.445584</td>
+      <td>5.568288</td>
+      <td>301.891047</td>
     </tr>
     <tr>
       <th>33</th>
       <td>40</td>
       <td>1600</td>
-      <td>spline</td>
-      <td>0.00001</td>
+      <td>sparse_grid</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>103.206779</td>
-      <td>5.545075</td>
-      <td>103.650385</td>
+      <td>671.703700</td>
+      <td>6.117325</td>
+      <td>672.193086</td>
     </tr>
     <tr>
       <th>34</th>
       <td>50</td>
       <td>2500</td>
-      <td>spline</td>
-      <td>0.00001</td>
+      <td>sparse_grid</td>
+      <td>-0.95000</td>
       <td>0.95</td>
-      <td>151.434130</td>
-      <td>5.640600</td>
-      <td>151.885378</td>
+      <td>1062.665941</td>
+      <td>5.860337</td>
+      <td>1063.134768</td>
     </tr>
     <tr>
       <th>35</th>
       <td>75</td>
       <td>5625</td>
+      <td>sparse_grid</td>
+      <td>-0.95000</td>
+      <td>0.95</td>
+      <td>2601.126977</td>
+      <td>5.896788</td>
+      <td>2601.598720</td>
+    </tr>
+    <tr>
+      <th>36</th>
+      <td>10</td>
+      <td>100</td>
       <td>spline</td>
       <td>0.00001</td>
       <td>0.95</td>
-      <td>411.265977</td>
-      <td>5.446550</td>
-      <td>411.701701</td>
+      <td>616.535536</td>
+      <td>5.994362</td>
+      <td>617.015085</td>
+    </tr>
+    <tr>
+      <th>37</th>
+      <td>20</td>
+      <td>400</td>
+      <td>spline</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>57.735426</td>
+      <td>5.480513</td>
+      <td>58.173867</td>
+    </tr>
+    <tr>
+      <th>38</th>
+      <td>25</td>
+      <td>625</td>
+      <td>spline</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>68.217797</td>
+      <td>5.987687</td>
+      <td>68.696812</td>
+    </tr>
+    <tr>
+      <th>39</th>
+      <td>40</td>
+      <td>1600</td>
+      <td>spline</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>108.682139</td>
+      <td>5.914575</td>
+      <td>109.155305</td>
+    </tr>
+    <tr>
+      <th>40</th>
+      <td>50</td>
+      <td>2500</td>
+      <td>spline</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>155.039185</td>
+      <td>5.896288</td>
+      <td>155.510888</td>
+    </tr>
+    <tr>
+      <th>41</th>
+      <td>75</td>
+      <td>5625</td>
+      <td>spline</td>
+      <td>0.00001</td>
+      <td>0.95</td>
+      <td>404.107095</td>
+      <td>6.044062</td>
+      <td>404.590620</td>
     </tr>
   </tbody>
 </table>
@@ -1590,7 +1657,7 @@ Profiling n_side=75 (5625 obs)...
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/655ada1529bef8664ade6c5eec610c101ddae5bdf875d56b26d8b3d4fddf2e56.png" src="../_images/655ada1529bef8664ade6c5eec610c101ddae5bdf875d56b26d8b3d4fddf2e56.png" />
+<img alt="../_images/5c0402f1b8d8d212f454006599d5b5eb4cdcb5dec4bab3bd38214888aeef34bf.png" src="../_images/5c0402f1b8d8d212f454006599d5b5eb4cdcb5dec4bab3bd38214888aeef34bf.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -1631,12 +1698,13 @@ Profiling n_side=75 (5625 obs)...
   <thead>
     <tr>
       <th></th>
-      <th colspan="7" halign="left">eval_us</th>
-      <th colspan="7" halign="left">setup_ms</th>
-      <th colspan="7" halign="left">total_ms</th>
+      <th colspan="8" halign="left">eval_us</th>
+      <th colspan="5" halign="left">setup_ms</th>
+      <th colspan="8" halign="left">total_ms</th>
     </tr>
     <tr>
       <th>method</th>
+      <th>chebyshev</th>
       <th>dense_grid</th>
       <th>eigenvalue</th>
       <th>exact</th>
@@ -1644,13 +1712,12 @@ Profiling n_side=75 (5625 obs)...
       <th>mc</th>
       <th>sparse_grid</th>
       <th>spline</th>
+      <th>chebyshev</th>
       <th>dense_grid</th>
-      <th>eigenvalue</th>
-      <th>exact</th>
       <th>...</th>
-      <th>mc</th>
       <th>sparse_grid</th>
       <th>spline</th>
+      <th>chebyshev</th>
       <th>dense_grid</th>
       <th>eigenvalue</th>
       <th>exact</th>
@@ -1687,151 +1754,151 @@ Profiling n_side=75 (5625 obs)...
   <tbody>
     <tr>
       <th>100</th>
-      <td>5.532062</td>
-      <td>5.494250</td>
-      <td>80.4546</td>
-      <td>5.458075</td>
-      <td>5.633713</td>
-      <td>5.458700</td>
-      <td>5.414013</td>
-      <td>2795.728463</td>
-      <td>609.363361</td>
-      <td>1070.826836</td>
+      <td>4.378200</td>
+      <td>5.909950</td>
+      <td>5.945863</td>
+      <td>89.391888</td>
+      <td>5.848962</td>
+      <td>5.873625</td>
+      <td>6.242938</td>
+      <td>5.994362</td>
+      <td>768.545189</td>
+      <td>2909.204014</td>
       <td>...</td>
-      <td>596.121461</td>
-      <td>631.458699</td>
-      <td>589.362007</td>
-      <td>2796.171028</td>
-      <td>609.802901</td>
-      <td>1077.263204</td>
-      <td>135.266268</td>
-      <td>596.572158</td>
-      <td>631.895395</td>
-      <td>589.795128</td>
+      <td>681.104139</td>
+      <td>616.535536</td>
+      <td>768.895445</td>
+      <td>2909.676810</td>
+      <td>636.715862</td>
+      <td>1130.444674</td>
+      <td>112.334597</td>
+      <td>631.822698</td>
+      <td>681.603574</td>
+      <td>617.015085</td>
     </tr>
     <tr>
       <th>400</th>
-      <td>5.458825</td>
-      <td>7.542825</td>
-      <td>1263.0632</td>
-      <td>5.527550</td>
-      <td>5.564225</td>
-      <td>5.870312</td>
-      <td>5.748888</td>
-      <td>323.425094</td>
-      <td>56.752086</td>
-      <td>17.285755</td>
+      <td>4.501788</td>
+      <td>5.878513</td>
+      <td>7.695912</td>
+      <td>1207.285812</td>
+      <td>6.092900</td>
+      <td>6.049588</td>
+      <td>6.086400</td>
+      <td>5.480513</td>
+      <td>762.066373</td>
+      <td>317.979157</td>
       <td>...</td>
-      <td>50.418342</td>
-      <td>202.004352</td>
-      <td>53.319169</td>
-      <td>323.861800</td>
-      <td>57.355512</td>
-      <td>118.330811</td>
-      <td>228.341884</td>
-      <td>50.863480</td>
-      <td>202.473977</td>
-      <td>53.779080</td>
+      <td>212.782920</td>
+      <td>57.735426</td>
+      <td>762.426516</td>
+      <td>318.449438</td>
+      <td>56.323702</td>
+      <td>116.150444</td>
+      <td>248.347640</td>
+      <td>55.546716</td>
+      <td>213.269832</td>
+      <td>58.173867</td>
     </tr>
     <tr>
       <th>625</th>
-      <td>5.603550</td>
-      <td>8.690175</td>
+      <td>4.379937</td>
+      <td>6.266463</td>
+      <td>9.357125</td>
       <td>NaN</td>
-      <td>5.575875</td>
-      <td>5.725725</td>
-      <td>5.698063</td>
-      <td>5.516162</td>
-      <td>881.673203</td>
-      <td>146.044268</td>
-      <td>NaN</td>
+      <td>5.959512</td>
+      <td>6.017125</td>
+      <td>5.568288</td>
+      <td>5.987687</td>
+      <td>862.132292</td>
+      <td>909.472004</td>
       <td>...</td>
-      <td>59.013394</td>
-      <td>297.698851</td>
-      <td>67.769855</td>
-      <td>882.121487</td>
-      <td>146.739482</td>
+      <td>301.445584</td>
+      <td>68.217797</td>
+      <td>862.482687</td>
+      <td>909.973321</td>
+      <td>144.934735</td>
       <td>NaN</td>
-      <td>401.241275</td>
-      <td>59.471452</td>
-      <td>298.154696</td>
-      <td>68.211148</td>
+      <td>330.455964</td>
+      <td>59.518001</td>
+      <td>301.891047</td>
+      <td>68.696812</td>
     </tr>
     <tr>
       <th>1600</th>
-      <td>5.464200</td>
-      <td>15.165275</td>
+      <td>3.880525</td>
+      <td>5.741875</td>
+      <td>15.494638</td>
       <td>NaN</td>
-      <td>5.402362</td>
-      <td>5.739250</td>
-      <td>5.704313</td>
-      <td>5.545075</td>
-      <td>11944.479673</td>
-      <td>944.768343</td>
-      <td>NaN</td>
+      <td>6.185713</td>
+      <td>5.928350</td>
+      <td>6.117325</td>
+      <td>5.914575</td>
+      <td>1701.860564</td>
+      <td>12152.239962</td>
       <td>...</td>
-      <td>68.997632</td>
-      <td>677.091895</td>
-      <td>103.206779</td>
-      <td>11944.916809</td>
-      <td>945.981565</td>
+      <td>671.703700</td>
+      <td>108.682139</td>
+      <td>1702.171006</td>
+      <td>12152.699312</td>
+      <td>956.870050</td>
       <td>NaN</td>
-      <td>752.328939</td>
-      <td>69.456772</td>
-      <td>677.548240</td>
-      <td>103.650385</td>
+      <td>735.954171</td>
+      <td>77.893996</td>
+      <td>672.193086</td>
+      <td>109.155305</td>
     </tr>
     <tr>
       <th>2500</th>
+      <td>4.386075</td>
       <td>NaN</td>
-      <td>21.527588</td>
+      <td>21.288100</td>
       <td>NaN</td>
-      <td>5.379588</td>
-      <td>5.630463</td>
-      <td>5.572113</td>
-      <td>5.640600</td>
-      <td>NaN</td>
-      <td>3013.669269</td>
+      <td>5.911313</td>
+      <td>5.876638</td>
+      <td>5.860337</td>
+      <td>5.896288</td>
+      <td>771.345836</td>
       <td>NaN</td>
       <td>...</td>
-      <td>92.637399</td>
-      <td>1065.184079</td>
-      <td>151.434130</td>
+      <td>1062.665941</td>
+      <td>155.039185</td>
+      <td>771.696722</td>
       <td>NaN</td>
-      <td>3015.391476</td>
+      <td>2961.557020</td>
       <td>NaN</td>
-      <td>1172.458704</td>
-      <td>93.087836</td>
-      <td>1065.629848</td>
-      <td>151.885378</td>
+      <td>1139.827944</td>
+      <td>101.038419</td>
+      <td>1063.134768</td>
+      <td>155.510888</td>
     </tr>
     <tr>
       <th>5625</th>
+      <td>4.485650</td>
       <td>NaN</td>
-      <td>41.379900</td>
+      <td>41.409512</td>
       <td>NaN</td>
-      <td>5.494638</td>
-      <td>5.468587</td>
-      <td>5.314988</td>
-      <td>5.446550</td>
-      <td>NaN</td>
-      <td>31104.663781</td>
+      <td>5.904175</td>
+      <td>6.268475</td>
+      <td>5.896788</td>
+      <td>6.044062</td>
+      <td>896.749864</td>
       <td>NaN</td>
       <td>...</td>
-      <td>264.963524</td>
-      <td>2629.451941</td>
-      <td>411.265977</td>
+      <td>2601.126977</td>
+      <td>404.107095</td>
+      <td>897.108716</td>
       <td>NaN</td>
-      <td>31107.974173</td>
+      <td>32147.893274</td>
       <td>NaN</td>
-      <td>2824.999288</td>
-      <td>265.401011</td>
-      <td>2629.877140</td>
-      <td>411.701701</td>
+      <td>2698.567873</td>
+      <td>319.844526</td>
+      <td>2601.598720</td>
+      <td>404.590620</td>
     </tr>
   </tbody>
 </table>
-<p>6 rows × 21 columns</p>
+<p>6 rows × 24 columns</p>
 </div></div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Skipped combinations (due to safety caps or failures):
 </code></pre></div>
 </div>
@@ -1988,7 +2055,7 @@ Profiling n_side=75 (5625 obs)...
     <span class="p">}</span>
 
 
-<span class="n">methods_for_model</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;exact&quot;</span><span class="p">,</span> <span class="s2">&quot;eigenvalue&quot;</span><span class="p">,</span> <span class="s2">&quot;dense_grid&quot;</span><span class="p">,</span> <span class="s2">&quot;sparse_grid&quot;</span><span class="p">,</span> <span class="s2">&quot;spline&quot;</span><span class="p">,</span> <span class="s2">&quot;mc&quot;</span><span class="p">,</span> <span class="s2">&quot;ilu&quot;</span><span class="p">]</span>
+<span class="n">methods_for_model</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;exact&quot;</span><span class="p">,</span> <span class="s2">&quot;eigenvalue&quot;</span><span class="p">,</span> <span class="s2">&quot;dense_grid&quot;</span><span class="p">,</span> <span class="s2">&quot;sparse_grid&quot;</span><span class="p">,</span> <span class="s2">&quot;spline&quot;</span><span class="p">,</span> <span class="s2">&quot;mc&quot;</span><span class="p">,</span> <span class="s2">&quot;ilu&quot;</span><span class="p">,</span> <span class="s2">&quot;chebyshev&quot;</span><span class="p">]</span>
 <span class="n">gdf_model</span><span class="p">,</span> <span class="n">y_model</span><span class="p">,</span> <span class="n">X_model</span><span class="p">,</span> <span class="n">W_model</span><span class="p">,</span> <span class="n">rho_true</span><span class="p">,</span> <span class="n">beta_true</span> <span class="o">=</span> <span class="n">simulate_sar_data</span><span class="p">(</span><span class="n">n_side</span><span class="o">=</span><span class="mi">25</span><span class="p">)</span>
 
 <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
@@ -2044,36 +2111,41 @@ Estimating SAR with method=sparse_grid...
 Estimating SAR with method=spline...
 Estimating SAR with method=mc...
 Estimating SAR with method=ilu...
+Estimating SAR with method=chebyshev...
 </code></pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
+Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (2 chains in 1 job)
+NUTS: [rho, beta, sigma]
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><div>
@@ -2117,8 +2189,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
   <tbody>
     <tr>
       <th>0</th>
-      <td>ilu</td>
-      <td>1.934690</td>
+      <td>mc</td>
+      <td>2.550651</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2138,8 +2210,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>1</th>
-      <td>mc</td>
-      <td>1.951399</td>
+      <td>spline</td>
+      <td>2.560354</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2159,8 +2231,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>2</th>
-      <td>eigenvalue</td>
-      <td>1.954895</td>
+      <td>chebyshev</td>
+      <td>2.641671</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2180,8 +2252,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>3</th>
-      <td>sparse_grid</td>
-      <td>1.984194</td>
+      <td>dense_grid</td>
+      <td>2.673291</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2201,8 +2273,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>4</th>
-      <td>spline</td>
-      <td>2.050887</td>
+      <td>sparse_grid</td>
+      <td>2.673623</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2222,8 +2294,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>5</th>
-      <td>dense_grid</td>
-      <td>2.137234</td>
+      <td>eigenvalue</td>
+      <td>2.787316</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2243,8 +2315,29 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
     </tr>
     <tr>
       <th>6</th>
+      <td>ilu</td>
+      <td>2.856108</td>
+      <td>0.381457</td>
+      <td>0.884519</td>
+      <td>0.808531</td>
+      <td>-0.518253</td>
+      <td>0.35</td>
+      <td>0.031457</td>
+      <td>1.0</td>
+      <td>0.115481</td>
+      <td>0.8</td>
+      <td>0.008531</td>
+      <td>-0.5</td>
+      <td>0.018253</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>7</th>
       <td>exact</td>
-      <td>5.553363</td>
+      <td>6.388347</td>
       <td>0.381457</td>
       <td>0.884519</td>
       <td>0.808531</td>
@@ -2274,7 +2367,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
 <li><p><code class="docutils literal notranslate"><span class="pre">sparse_grid</span></code> and <code class="docutils literal notranslate"><span class="pre">spline</span></code> are sparse-LU variants inspired by the MATLAB toolbox routines (were <code class="docutils literal notranslate"><span class="pre">full</span></code> and <code class="docutils literal notranslate"><span class="pre">int</span></code>).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">mc</span></code> is stochastic and may vary slightly run-to-run unless random seeds are fixed.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">ilu</span></code> uses an ILU approximation that can trade precision for speed depending on sparsity (was <code class="docutils literal notranslate"><span class="pre">ichol</span></code>).</p></li>
-<li><p><strong>Parameter ranges:</strong> <code class="docutils literal notranslate"><span class="pre">spline</span></code> and <code class="docutils literal notranslate"><span class="pre">mc</span></code> are profiled on a nonnegative range (<code class="docutils literal notranslate"><span class="pre">rho</span> <span class="pre">in</span> <span class="pre">[1e-5,</span> <span class="pre">0.95]</span></code>), while <code class="docutils literal notranslate"><span class="pre">exact</span></code>, <code class="docutils literal notranslate"><span class="pre">eigenvalue</span></code>, <code class="docutils literal notranslate"><span class="pre">dense_grid</span></code>, <code class="docutils literal notranslate"><span class="pre">sparse_grid</span></code>, and <code class="docutils literal notranslate"><span class="pre">ilu</span></code> are profiled on a symmetric range (<code class="docutils literal notranslate"><span class="pre">rho</span> <span class="pre">in</span> <span class="pre">[-0.95,</span> <span class="pre">0.95]</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">chebyshev</span></code> uses Chebyshev polynomial approximation via Clenshaw’s algorithm (Pace &amp; LeSage 2004). It pre-computes coefficients at Chebyshev nodes (O(n³) for eigenvalue path, O(R·n·m) for MC path) and then evaluates in O(m) per call. It supports negative rho ranges, unlike <code class="docutils literal notranslate"><span class="pre">spline</span></code> and <code class="docutils literal notranslate"><span class="pre">mc</span></code>.</p></li>
+<li><p><strong>Parameter ranges:</strong> <code class="docutils literal notranslate"><span class="pre">spline</span></code> and <code class="docutils literal notranslate"><span class="pre">mc</span></code> are profiled on a nonnegative range (<code class="docutils literal notranslate"><span class="pre">rho</span> <span class="pre">in</span> <span class="pre">[1e-5,</span> <span class="pre">0.95]</span></code>), while <code class="docutils literal notranslate"><span class="pre">exact</span></code>, <code class="docutils literal notranslate"><span class="pre">eigenvalue</span></code>, <code class="docutils literal notranslate"><span class="pre">dense_grid</span></code>, <code class="docutils literal notranslate"><span class="pre">sparse_grid</span></code>, <code class="docutils literal notranslate"><span class="pre">ilu</span></code>, and <code class="docutils literal notranslate"><span class="pre">chebyshev</span></code> are profiled on a symmetric range (<code class="docutils literal notranslate"><span class="pre">rho</span> <span class="pre">in</span> <span class="pre">[-0.95,</span> <span class="pre">0.95]</span></code>).</p></li>
 <li><p>Adjust <code class="docutils literal notranslate"><span class="pre">ProfileConfig.sizes</span></code> and <code class="docutils literal notranslate"><span class="pre">method_max_n</span></code> for deeper stress tests.</p></li>
 </ul>
 <div class="cell docutils container">
@@ -2325,31 +2419,35 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (2 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 1 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
+Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (2 chains in 1 job)
+NUTS: [rho, beta, sigma]
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 2 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><div>
@@ -2410,6 +2508,11 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
       <td>ilu</td>
       <td>585.0</td>
     </tr>
+    <tr>
+      <th>7</th>
+      <td>chebyshev</td>
+      <td>585.0</td>
+    </tr>
   </tbody>
 </table>
 </div></div><div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>&lt;Axes: title={&#39;center&#39;: &#39;Effective Sample Size for rho by Logdet Method&#39;}, xlabel=&#39;method&#39;, ylabel=&#39;ESS (rho)&#39;&gt;
@@ -2421,7 +2524,8 @@ Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) t
 <img alt="../_images/3cfaf763a3864c894c4b3fc7881112b4c7a36889e6903de77219cb88a6eecf7c.png" src="../_images/3cfaf763a3864c894c4b3fc7881112b4c7a36889e6903de77219cb88a6eecf7c.png" />
 <img alt="../_images/6b954883e8b0bb63ebd8fd6a2f9b9cd9afe7f6517effef50a71062592fc27fa1.png" src="../_images/6b954883e8b0bb63ebd8fd6a2f9b9cd9afe7f6517effef50a71062592fc27fa1.png" />
 <img alt="../_images/81d5911ef9183a7edf7fd9f895dbed800397e1630f80de81a7b099d97fc0cecf.png" src="../_images/81d5911ef9183a7edf7fd9f895dbed800397e1630f80de81a7b099d97fc0cecf.png" />
-<img alt="../_images/475e36fde7e25ecfb12d36853689e379df10596fb7957a84a8a964c43563f7bc.png" src="../_images/475e36fde7e25ecfb12d36853689e379df10596fb7957a84a8a964c43563f7bc.png" />
+<img alt="../_images/582ef117d19a982fb53878bc2cbeeb385af493d17be0030088d085140d9f9350.png" src="../_images/582ef117d19a982fb53878bc2cbeeb385af493d17be0030088d085140d9f9350.png" />
+<img alt="../_images/e4983860744f27db1dd9526bbd84810faae6989c7e91ca6c400ba7543f3f8fef.png" src="../_images/e4983860744f27db1dd9526bbd84810faae6989c7e91ca6c400ba7543f3f8fef.png" />
 </div>
 </div>
 

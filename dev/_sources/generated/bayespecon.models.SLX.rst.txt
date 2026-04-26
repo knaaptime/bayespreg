@@ -17,6 +17,8 @@
       ~SLX.fit
       ~SLX.fitted_values
       ~SLX.residuals
+      ~SLX.spatial_diagnostics
+      ~SLX.spatial_diagnostics_decision
       ~SLX.spatial_effects
       ~SLX.summary
    

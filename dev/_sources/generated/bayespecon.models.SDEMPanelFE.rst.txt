@@ -17,6 +17,8 @@
       ~SDEMPanelFE.fit
       ~SDEMPanelFE.fitted_values
       ~SDEMPanelFE.residuals
+      ~SDEMPanelFE.spatial_diagnostics
+      ~SDEMPanelFE.spatial_diagnostics_decision
       ~SDEMPanelFE.spatial_effects
       ~SDEMPanelFE.summary
    

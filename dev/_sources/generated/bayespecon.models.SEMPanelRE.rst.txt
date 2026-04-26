@@ -17,6 +17,8 @@
       ~SEMPanelRE.fit
       ~SEMPanelRE.fitted_values
       ~SEMPanelRE.residuals
+      ~SEMPanelRE.spatial_diagnostics
+      ~SEMPanelRE.spatial_diagnostics_decision
       ~SEMPanelRE.spatial_effects
       ~SEMPanelRE.summary
    

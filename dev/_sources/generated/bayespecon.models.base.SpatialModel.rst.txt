@@ -17,6 +17,8 @@
       ~SpatialModel.fit
       ~SpatialModel.fitted_values
       ~SpatialModel.residuals
+      ~SpatialModel.spatial_diagnostics
+      ~SpatialModel.spatial_diagnostics_decision
       ~SpatialModel.spatial_effects
       ~SpatialModel.summary
    

@@ -17,6 +17,8 @@
       ~SEMPanelDEDynamic.fit
       ~SEMPanelDEDynamic.fitted_values
       ~SEMPanelDEDynamic.residuals
+      ~SEMPanelDEDynamic.spatial_diagnostics
+      ~SEMPanelDEDynamic.spatial_diagnostics_decision
       ~SEMPanelDEDynamic.spatial_effects
       ~SEMPanelDEDynamic.summary
    

@@ -17,6 +17,8 @@
       ~DLMPanelFE.fit
       ~DLMPanelFE.fitted_values
       ~DLMPanelFE.residuals
+      ~DLMPanelFE.spatial_diagnostics
+      ~DLMPanelFE.spatial_diagnostics_decision
       ~DLMPanelFE.spatial_effects
       ~DLMPanelFE.summary
    

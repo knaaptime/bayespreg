@@ -17,6 +17,8 @@
       ~SLXPanelFE.fit
       ~SLXPanelFE.fitted_values
       ~SLXPanelFE.residuals
+      ~SLXPanelFE.spatial_diagnostics
+      ~SLXPanelFE.spatial_diagnostics_decision
       ~SLXPanelFE.spatial_effects
       ~SLXPanelFE.summary
    

@@ -17,6 +17,8 @@
       ~SARPanelRE.fit
       ~SARPanelRE.fitted_values
       ~SARPanelRE.residuals
+      ~SARPanelRE.spatial_diagnostics
+      ~SARPanelRE.spatial_diagnostics_decision
       ~SARPanelRE.spatial_effects
       ~SARPanelRE.summary
    

@@ -1,0 +1,6 @@
+﻿bayespecon.logdet.sparse\_grid
+==============================
+
+.. currentmodule:: bayespecon.logdet
+
+.. autofunction:: sparse_grid

@@ -17,6 +17,8 @@
       ~SARPanelDEDynamic.fit
       ~SARPanelDEDynamic.fitted_values
       ~SARPanelDEDynamic.residuals
+      ~SARPanelDEDynamic.spatial_diagnostics
+      ~SARPanelDEDynamic.spatial_diagnostics_decision
       ~SARPanelDEDynamic.spatial_effects
       ~SARPanelDEDynamic.summary
    

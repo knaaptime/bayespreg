@@ -17,6 +17,8 @@
       ~SEM.fit
       ~SEM.fitted_values
       ~SEM.residuals
+      ~SEM.spatial_diagnostics
+      ~SEM.spatial_diagnostics_decision
       ~SEM.spatial_effects
       ~SEM.summary
    

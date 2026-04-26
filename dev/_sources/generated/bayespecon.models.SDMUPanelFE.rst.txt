@@ -17,6 +17,8 @@
       ~SDMUPanelFE.fit
       ~SDMUPanelFE.fitted_values
       ~SDMUPanelFE.residuals
+      ~SDMUPanelFE.spatial_diagnostics
+      ~SDMUPanelFE.spatial_diagnostics_decision
       ~SDMUPanelFE.spatial_effects
       ~SDMUPanelFE.summary
    

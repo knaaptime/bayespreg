@@ -17,6 +17,8 @@
       ~SDEMPanelDEDynamic.fit
       ~SDEMPanelDEDynamic.fitted_values
       ~SDEMPanelDEDynamic.residuals
+      ~SDEMPanelDEDynamic.spatial_diagnostics
+      ~SDEMPanelDEDynamic.spatial_diagnostics_decision
       ~SDEMPanelDEDynamic.spatial_effects
       ~SDEMPanelDEDynamic.summary
    

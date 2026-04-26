@@ -17,6 +17,8 @@
       ~SAR.fit
       ~SAR.fitted_values
       ~SAR.residuals
+      ~SAR.spatial_diagnostics
+      ~SAR.spatial_diagnostics_decision
       ~SAR.spatial_effects
       ~SAR.summary
    

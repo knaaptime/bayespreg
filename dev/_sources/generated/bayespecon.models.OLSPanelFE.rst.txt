@@ -17,6 +17,8 @@
       ~OLSPanelFE.fit
       ~OLSPanelFE.fitted_values
       ~OLSPanelFE.residuals
+      ~OLSPanelFE.spatial_diagnostics
+      ~OLSPanelFE.spatial_diagnostics_decision
       ~OLSPanelFE.spatial_effects
       ~OLSPanelFE.summary
    

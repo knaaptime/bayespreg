@@ -17,6 +17,8 @@
       ~SARPanelTobit.fit
       ~SARPanelTobit.fitted_values
       ~SARPanelTobit.residuals
+      ~SARPanelTobit.spatial_diagnostics
+      ~SARPanelTobit.spatial_diagnostics_decision
       ~SARPanelTobit.spatial_effects
       ~SARPanelTobit.summary
    

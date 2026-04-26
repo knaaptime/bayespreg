@@ -1,0 +1,6 @@
+﻿bayespecon.logdet.logdet\_eigenvalue
+====================================
+
+.. currentmodule:: bayespecon.logdet
+
+.. autofunction:: logdet_eigenvalue
