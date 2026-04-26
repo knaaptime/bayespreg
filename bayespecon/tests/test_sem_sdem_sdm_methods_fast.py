@@ -66,11 +66,15 @@ def test_sem_sdem_sdm_fitted_values_and_effects_with_mock_posteriors():
         effects = model.spatial_effects()
         assert fitted.shape == y.shape
         assert np.all(np.isfinite(fitted))
-        assert set(effects.keys()) == {"direct", "indirect", "total", "feature_names"}
-        assert np.all(np.isfinite(effects["direct"]))
+        assert set(effects.columns) == {
+            "direct", "direct_ci_lower", "direct_ci_upper", "direct_pvalue",
+            "indirect", "indirect_ci_lower", "indirect_ci_upper", "indirect_pvalue",
+            "total", "total_ci_lower", "total_ci_upper", "total_pvalue",
+        }
+        assert np.all(np.isfinite(effects["direct"].values))
 
     sem_eff = sem.spatial_effects()
-    assert np.allclose(sem_eff["indirect"], 0.0)
+    assert np.allclose(sem_eff["indirect"].values, 0.0)
 
 
 def test_sdem_and_sdm_beta_names_include_spatially_lagged_labels():

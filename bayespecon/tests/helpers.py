@@ -21,8 +21,8 @@ SAMPLE_KWARGS: dict = dict(
 )
 
 # Panel dimensions
-PANEL_N = 5   # cross-sectional units
-PANEL_T = 8   # time periods
+PANEL_N = 10   # cross-sectional units (larger N for reliable recovery)
+PANEL_T = 10   # time periods
 
 
 # ---------------------------------------------------------------------------
@@ -482,3 +482,142 @@ def make_panel_sem_tobit_data(
         rng=rng,
     )
     return out["y"], out["X"]
+
+
+# ---------------------------------------------------------------------------
+# Dynamic DE (direct-estimation) panel data generators
+# ---------------------------------------------------------------------------
+
+def make_panel_sar_dynamic_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    rho: float = 0.3,
+    phi: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate dynamic SAR panel FE data."""
+    out = dgp.simulate_panel_sar_dynamic_fe(
+        N=N, T=T, W=W, rho=rho, phi=phi, beta=beta,
+        sigma=sigma, sigma_alpha=sigma_alpha, rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units, times = out["unit"], out["time"]
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
+def make_panel_sem_dynamic_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    lam: float = 0.3,
+    phi: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate dynamic SEM panel FE data."""
+    out = dgp.simulate_panel_sem_dynamic_fe(
+        N=N, T=T, W=W, lam=lam, phi=phi, beta=beta,
+        sigma=sigma, sigma_alpha=sigma_alpha, rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units, times = out["unit"], out["time"]
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
+def make_panel_sdem_dynamic_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    lam: float = 0.3,
+    phi: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate dynamic SDEM panel FE data."""
+    out = dgp.simulate_panel_sdem_dynamic_fe(
+        N=N, T=T, W=W, lam=lam, phi=phi, beta=beta,
+        sigma=sigma, sigma_alpha=sigma_alpha, rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units, times = out["unit"], out["time"]
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
+def make_panel_slx_dynamic_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    phi: float = 0.4,
+    beta: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate dynamic SLX panel FE data."""
+    out = dgp.simulate_panel_slx_dynamic_fe(
+        N=N, T=T, W=W, phi=phi, beta=beta,
+        sigma=sigma, sigma_alpha=sigma_alpha, rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units, times = out["unit"], out["time"]
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
+# ---------------------------------------------------------------------------
+# Static SDM / SDEM panel data generators (for FE recovery tests)
+# ---------------------------------------------------------------------------
+
+def make_panel_sdm_fe_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    rho: float = 0.4,
+    beta1: np.ndarray | None = None,
+    beta2: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate SDM panel FE data with WX terms."""
+    out = dgp.simulate_panel_sdm_fe(
+        N=N, T=T, W=W, rho=rho, beta1=beta1, beta2=beta2,
+        sigma=sigma, sigma_alpha=sigma_alpha, rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units, times = out["unit"], out["time"]
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df
+
+
+def make_panel_sdem_fe_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    N: int,
+    T: int,
+    lam: float = 0.4,
+    beta1: np.ndarray | None = None,
+    beta2: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Generate SDEM panel FE data with WX terms."""
+    out = dgp.simulate_panel_sdem_fe(
+        N=N, T=T, W=W, lam=lam, beta1=beta1, beta2=beta2,
+        sigma=sigma, sigma_alpha=sigma_alpha, rng=rng,
+    )
+    y, X = out["y"], out["X"]
+    units, times = out["unit"], out["time"]
+    df = pd.DataFrame({"y": y, "x1": X[:, 1], "unit": units, "time": times})
+    return y, X, df

@@ -116,6 +116,20 @@ class OLS(SpatialModel):
             "is appropriate, then refit with SAR, SEM, SLX, SDM, or SDEM."
         )
 
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Not applicable — OLS has no spatial lag structure.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised; use Bayesian LM diagnostics instead.
+        """
+        raise NotImplementedError(
+            "OLS has no spatial lag structure and therefore no spatial effects. "
+            "Use Bayesian LM diagnostics to assess which spatial model "
+            "is appropriate, then refit with SAR, SEM, SLX, SDM, or SDEM."
+        )
+
     def _fitted_mean_from_posterior(self) -> np.ndarray:
         """Compute fitted values at posterior mean coefficients.
 

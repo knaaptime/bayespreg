@@ -274,6 +274,82 @@ class SDM(SpatialModel):
             "feature_names": self._wx_feature_names,
         }
 
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute direct, indirect, and total effects for each posterior draw.
+
+        For the SDM model, the impact measures for covariate :math:`k` are:
+
+        .. math::
+            S_k^{(g)} = (I - \\rho^{(g)} W)^{-1}
+            (\\beta_{1j}^{(g)} I + \\beta_{2k}^{(g)} W)
+
+            \\text{Direct}_k^{(g)} = \\overline{\\text{diag}}(S_k^{(g)})
+
+            \\text{Total}_k^{(g)} = \\overline{\\text{rowsum}}(S_k^{(g)})
+
+            \\text{Indirect}_k^{(g)} = \\text{Total}_k^{(g)} - \\text{Direct}_k^{(g)}
+
+        where :math:`j` is the index of covariate :math:`k` in :math:`X`,
+        and :math:`\\beta_1, \\beta_2` are the coefficients on :math:`X` and
+        :math:`WX` respectively.
+
+        Returns
+        -------
+        tuple of np.ndarray
+            ``(direct_samples, indirect_samples, total_samples)``, each
+            of shape ``(G, k_wx)`` where *G* is the total number of posterior
+            draws and *k_wx* is the number of spatially lagged covariates.
+        """
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+
+        idata = self.inference_data
+        rho_draws = _get_posterior_draws(idata, "rho")  # (G,)
+        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k+k_wx)
+        G = rho_draws.shape[0]
+        k = self._X.shape[1]
+        kw = self._WX.shape[1]
+
+        beta1_draws = beta_draws[:, :k]  # (G, k)
+        beta2_draws = beta_draws[:, k:k + kw]  # (G, kw)
+
+        eigs = self._W_eigs.real.astype(np.float64)  # (n,)
+
+        # Vectorised eigenvalue computation over draws
+        inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])  # (G, n)
+        mean_diag_M = np.mean(inv_eigs, axis=1)  # (G,)
+        mean_diag_MW = np.mean(eigs[None, :] * inv_eigs, axis=1)  # (G,)
+
+        if self._is_row_std:
+            mean_row_sum_M = 1.0 / (1.0 - rho_draws)  # (G,)
+            mean_row_sum_MW = mean_row_sum_M  # row sums of M*W = row sums of M for row-std W
+        else:
+            n = self._W_sparse.shape[0]
+            W_dense = self._W_dense
+            ones = np.ones(n)
+            mean_row_sum_M = np.empty(G)
+            mean_row_sum_MW = np.empty(G)
+            for g in range(G):
+                A = np.eye(n) - rho_draws[g] * W_dense
+                M_ones = np.linalg.solve(A, ones)
+                mean_row_sum_M[g] = M_ones.mean()
+                mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+
+        # For each lagged covariate k (with index j in X):
+        # Direct_k = beta1_j * mean_diag_M + beta2_k * mean_diag_MW
+        # Total_k  = beta1_j * mean_row_sum_M + beta2_k * mean_row_sum_MW
+        wx_idx = self._wx_column_indices
+        direct_samples = np.column_stack([
+            beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+            for idx, j in enumerate(wx_idx)
+        ])  # (G, kw)
+        total_samples = np.column_stack([
+            beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+            for idx, j in enumerate(wx_idx)
+        ])  # (G, kw)
+        indirect_samples = total_samples - direct_samples  # (G, kw)
+
+        return direct_samples, indirect_samples, total_samples
+
     def _fitted_mean_from_posterior(self) -> np.ndarray:
         """Compute fitted values at posterior mean parameters.
 

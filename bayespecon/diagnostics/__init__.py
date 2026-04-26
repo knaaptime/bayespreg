@@ -39,6 +39,7 @@ from .bayesfactor import (
     compile_log_posterior,
     post_prob,
 )
+from .spatial_effects import summarize_spatial_effects
 
 __all__ = [
     # Bayesian LM tests (cross-sectional)
@@ -68,4 +69,6 @@ __all__ = [
     "bic_to_bf",
     "compile_log_posterior",
     "post_prob",
+    # Spatial effects inference
+    "summarize_spatial_effects",
 ]

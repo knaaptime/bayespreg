@@ -41,13 +41,14 @@ def test_sar_spatial_effects_match_matrix_formula() -> None:
     effects = model.spatial_effects()
 
     S = np.linalg.inv(np.eye(W.shape[0]) - rho * W)
-    expected_direct = np.diag(S).mean() * beta
-    expected_total = S.sum(axis=1).mean() * beta
+    # Intercept excluded from effects, so use only non-intercept beta
+    expected_direct = np.diag(S).mean() * beta[1:]
+    expected_total = S.sum(axis=1).mean() * beta[1:]
     expected_indirect = expected_total - expected_direct
 
-    assert np.allclose(effects["direct"], expected_direct)
-    assert np.allclose(effects["total"], expected_total)
-    assert np.allclose(effects["indirect"], expected_indirect)
+    assert np.allclose(effects["direct"].values, expected_direct)
+    assert np.allclose(effects["total"].values, expected_total)
+    assert np.allclose(effects["indirect"].values, expected_indirect)
 
 
 def test_sdm_spatial_effects_match_matrix_formula() -> None:
@@ -71,9 +72,9 @@ def test_sdm_spatial_effects_match_matrix_formula() -> None:
     expected_total = np.array([Sx.sum(axis=1).mean()])
     expected_indirect = expected_total - expected_direct
 
-    assert np.allclose(effects["direct"], expected_direct)
-    assert np.allclose(effects["total"], expected_total)
-    assert np.allclose(effects["indirect"], expected_indirect)
+    assert np.allclose(effects["direct"].values, expected_direct)
+    assert np.allclose(effects["total"].values, expected_total)
+    assert np.allclose(effects["indirect"].values, expected_indirect)
 
 
 def test_slx_spatial_effects_match_matrix_formula() -> None:
@@ -94,9 +95,9 @@ def test_slx_spatial_effects_match_matrix_formula() -> None:
     expected_total = np.array([Sx.sum(axis=1).mean()])
     expected_indirect = expected_total - expected_direct
 
-    assert np.allclose(effects["direct"], expected_direct)
-    assert np.allclose(effects["total"], expected_total)
-    assert np.allclose(effects["indirect"], expected_indirect)
+    assert np.allclose(effects["direct"].values, expected_direct)
+    assert np.allclose(effects["total"].values, expected_total)
+    assert np.allclose(effects["indirect"].values, expected_indirect)
 
 
 def test_sdem_spatial_effects_match_matrix_formula() -> None:
@@ -117,6 +118,6 @@ def test_sdem_spatial_effects_match_matrix_formula() -> None:
     expected_total = np.array([Sx.sum(axis=1).mean()])
     expected_indirect = expected_total - expected_direct
 
-    assert np.allclose(effects["direct"], expected_direct)
-    assert np.allclose(effects["total"], expected_total)
-    assert np.allclose(effects["indirect"], expected_indirect)
+    assert np.allclose(effects["direct"].values, expected_direct)
+    assert np.allclose(effects["total"].values, expected_total)
+    assert np.allclose(effects["indirect"].values, expected_indirect)

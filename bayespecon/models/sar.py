@@ -256,16 +256,83 @@ class SAR(SpatialModel):
                     np.ones(self._W_sparse.shape[0]),
                 ).mean()
             )
-        direct = mean_diag * beta
-        total = mean_row_sum * beta
+        ni = self._nonintercept_indices
+        direct = mean_diag * beta[ni]
+        total = mean_row_sum * beta[ni]
         indirect = total - direct
 
         return {
             "direct": direct,
             "indirect": indirect,
             "total": total,
-            "feature_names": self._feature_names,
+            "feature_names": self._nonintercept_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute direct, indirect, and total effects for each posterior draw.
+
+        For the SAR model, the impact measures for covariate :math:`k` are:
+
+        .. math::
+            \\text{Direct}_k^{(g)} = \\overline{\\text{diag}}(S^{(g)}) \\times \\beta_k^{(g)}
+
+            \\text{Total}_k^{(g)} = \\overline{\\text{rowsum}}(S^{(g)}) \\times \\beta_k^{(g)}
+
+            \\text{Indirect}_k^{(g)} = \\text{Total}_k^{(g)} - \\text{Direct}_k^{(g)}
+
+        where :math:`S^{(g)} = (I - \\rho^{(g)} W)^{-1}` and the overline
+        denotes the average over diagonal elements or row sums.
+
+        The eigenvalue decomposition is used for efficiency:
+        :math:`\\overline{\\text{diag}}(S) = \\frac{1}{n} \\sum_i \\frac{1}{1 - \\rho \\omega_i}`
+        where :math:`\\omega_i` are eigenvalues of :math:`W`.
+
+        Returns
+        -------
+        tuple of np.ndarray
+            ``(direct_samples, indirect_samples, total_samples)``, each
+            of shape ``(G, k)`` where *G* is the total number of posterior
+            draws and *k* is the number of covariates.
+        """
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+
+        idata = self.inference_data
+        rho_draws = _get_posterior_draws(idata, "rho")  # (G,)
+        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k)
+        G = rho_draws.shape[0]
+        k = beta_draws.shape[1]
+
+        eigs = self._W_eigs.real.astype(np.float64)  # (n,)
+
+        # For each draw g, compute mean_diag and mean_rowsum of S = (I - rho*W)^{-1}
+        # Using eigenvalues: diag(S) has entries 1/(1 - rho*omega_i)
+        # mean_diag = (1/n) * sum_i 1/(1 - rho*omega_i)
+        # mean_rowsum: if W is row-standardized, mean_rowsum = 1/(1-rho)
+        #              otherwise, solve (I - rho*W) @ ones = v, then mean_rowsum = mean(v)
+        # Vectorised over draws:
+        inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])  # (G, n)
+        mean_diag = np.mean(inv_eigs, axis=1)  # (G,)
+
+        if self._is_row_std:
+            mean_row_sum = 1.0 / (1.0 - rho_draws)  # (G,)
+        else:
+            # Fallback: solve (I - rho*W) @ ones for each draw
+            n = self._W_sparse.shape[0]
+            W_dense = self._W_dense
+            mean_row_sum = np.empty(G)
+            ones = np.ones(n)
+            for g in range(G):
+                A = np.eye(n) - rho_draws[g] * W_dense
+                mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+
+        # Direct = mean_diag * beta_k, Total = mean_row_sum * beta_k
+        # Exclude intercept from effects (it has no meaningful spatial interpretation)
+        ni = self._nonintercept_indices
+        direct_samples = mean_diag[:, None] * beta_draws[:, ni]  # (G, k-1)
+        total_samples = mean_row_sum[:, None] * beta_draws[:, ni]  # (G, k-1)
+        indirect_samples = total_samples - direct_samples  # (G, k-1)
+
+        return direct_samples, indirect_samples, total_samples
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
         """Compute fitted values at posterior mean parameters.

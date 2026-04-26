@@ -129,15 +129,89 @@ class SARTobit(_SpatialTobitBase):
                     np.ones(self._W_sparse.shape[0]),
                 ).mean()
             )
-        direct = mean_diag * beta
-        total = mean_row_sum * beta
+        ni = self._nonintercept_indices
+        direct = mean_diag * beta[ni]
+        total = mean_row_sum * beta[ni]
         indirect = total - direct
         return {
             "direct": direct,
             "indirect": indirect,
             "total": total,
-            "feature_names": self._feature_names,
+            "feature_names": self._nonintercept_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_dense
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMTobit):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, SDMTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X.shape[1]
+            kw = self._WX.shape[1]
+            beta1_draws = beta_draws[:, :k]
+            beta2_draws = beta_draws[:, k:k + kw]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_dense
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
         rho = float(self._posterior_mean("rho"))
@@ -315,12 +389,86 @@ class SEMTobit(_SpatialTobitBase):
 
     def _compute_spatial_effects(self) -> dict[str, np.ndarray]:
         beta = self._posterior_mean("beta")
+        ni = self._nonintercept_indices
         return {
-            "direct": beta.copy(),
-            "indirect": np.zeros_like(beta),
-            "total": beta.copy(),
-            "feature_names": self._feature_names,
+            "direct": beta[ni].copy(),
+            "indirect": np.zeros(len(ni)),
+            "total": beta[ni].copy(),
+            "feature_names": self._nonintercept_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_dense
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMTobit):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, SDMTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X.shape[1]
+            kw = self._WX.shape[1]
+            beta1_draws = beta_draws[:, :k]
+            beta2_draws = beta_draws[:, k:k + kw]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_dense
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
         beta = self._posterior_mean("beta")
@@ -532,6 +680,79 @@ class SDMTobit(_SpatialTobitBase):
             "total": total,
             "feature_names": self._wx_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_dense
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMTobit):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, SDMTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X.shape[1]
+            kw = self._WX.shape[1]
+            beta1_draws = beta_draws[:, :k]
+            beta2_draws = beta_draws[:, k:k + kw]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_dense
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
         rho = float(self._posterior_mean("rho"))

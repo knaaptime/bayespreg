@@ -11,7 +11,18 @@ from .panel_base import SpatialPanelModel
 
 
 class _DynamicPanelMixin:
-    """Shared helpers for dynamic panel classes based on lagged stacked arrays."""
+    """Shared helpers for dynamic panel classes based on lagged stacked arrays.
+
+    Dynamic panel models include a lagged dependent variable (φ·y_{t-1}).
+    When unit fixed effects are applied (model=1), the within-transformation
+    creates correlation between the demeaned lagged dependent variable and
+    the demeaned error term, biasing the estimator toward zero (Nickell, 1981).
+    This is known as the **Nickell bias** or **dynamic panel bias**.
+
+    To avoid this, dynamic panel models in this package require model=0
+    (pooled), model=2 (time FE), or model=3 (two-way FE).  Setting model=1
+    (unit FE) raises a ValueError at construction time.
+    """
 
     _y_dyn: np.ndarray
     _y_lag: np.ndarray
@@ -22,6 +33,26 @@ class _DynamicPanelMixin:
     _Z_dyn: np.ndarray
     _n_time_eff: int
     _W_dense_dyn_cache: np.ndarray | None
+
+    def __init__(self, *args, model: int = 0, **kwargs):
+        if model == 1:
+            raise ValueError(
+                "model=1 (unit fixed effects) is not supported for dynamic "
+                "panel models due to the Nickell bias (Nickell, 1981).  "
+                "When unit fixed effects are removed via within-demeaning, "
+                "the demeaned lagged dependent variable (y_{i,t-1} - ȳ_{i}) "
+                "becomes mechanically correlated with the demeaned error "
+                "(ε_{i,t} - ε̄_{i}), because ȳ_{i} contains ε_{i,t-1}.  "
+                "This correlation biases the autoregressive coefficient φ "
+                "toward zero, and the bias only vanishes as T → ∞.  "
+                "For short panels (small T), the bias is severe and renders "
+                "the estimator inconsistent.  Use model=0 (pooled), "
+                "model=2 (time FE), or model=3 (two-way FE) instead.  "
+                "For unit-specific heterogeneity with a lagged dependent "
+                "variable, consider the Arellano-Bond GMM estimator or "
+                "a random-effects specification (model=0 with unit priors)."
+            )
+        super().__init__(*args, model=model, **kwargs)
 
     def _prepare_dynamic_design(self) -> None:
         if hasattr(self, "_Z_dyn"):
@@ -147,6 +178,106 @@ class DLMPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             "total": total,
             "feature_names": names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARPanelDEDynamic):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelDEDynamic):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, (SDMRPanelFE, SDMUPanelFE)):
+            self._prepare_dynamic_design()
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            beta1_draws = beta_draws[:, :self._X_dyn.shape[1]]
+            beta2_draws = beta_draws[:, self._X_dyn.shape[1]:]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        else:
+            # SLX/SDEM/DLM-like: no rho, effects are linear in beta
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+
+            if kw == 0:
+                # No WX columns: direct = beta, indirect = 0, total = beta
+                direct_samples = beta1_draws.copy()
+                indirect_samples = np.zeros_like(beta1_draws)
+                total_samples = beta1_draws.copy()
+            else:
+                beta2_draws = beta_draws[:, k:k + kw]
+                mean_diag_w = float(self._W_sparse.diagonal().mean())
+                mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+                wx_idx = self._wx_column_indices
+                direct_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                total_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
 
 class SDMRPanelFE(_DynamicPanelMixin, SpatialPanelModel):
@@ -300,6 +431,106 @@ class SDMRPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             "total": total,
             "feature_names": names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARPanelDEDynamic):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelDEDynamic):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, (SDMRPanelFE, SDMUPanelFE)):
+            self._prepare_dynamic_design()
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            beta1_draws = beta_draws[:, :self._X_dyn.shape[1]]
+            beta2_draws = beta_draws[:, self._X_dyn.shape[1]:]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        else:
+            # SLX/SDEM/DLM-like: no rho, effects are linear in beta
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+
+            if kw == 0:
+                # No WX columns: direct = beta, indirect = 0, total = beta
+                direct_samples = beta1_draws.copy()
+                indirect_samples = np.zeros_like(beta1_draws)
+                total_samples = beta1_draws.copy()
+            else:
+                beta2_draws = beta_draws[:, k:k + kw]
+                mean_diag_w = float(self._W_sparse.diagonal().mean())
+                mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+                wx_idx = self._wx_column_indices
+                direct_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                total_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
 
 class SDMUPanelFE(_DynamicPanelMixin, SpatialPanelModel):
@@ -459,6 +690,106 @@ class SDMUPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             "feature_names": names,
         }
 
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARPanelDEDynamic):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelDEDynamic):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, (SDMRPanelFE, SDMUPanelFE)):
+            self._prepare_dynamic_design()
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            beta1_draws = beta_draws[:, :self._X_dyn.shape[1]]
+            beta2_draws = beta_draws[:, self._X_dyn.shape[1]:]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        else:
+            # SLX/SDEM/DLM-like: no rho, effects are linear in beta
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+
+            if kw == 0:
+                # No WX columns: direct = beta, indirect = 0, total = beta
+                direct_samples = beta1_draws.copy()
+                indirect_samples = np.zeros_like(beta1_draws)
+                total_samples = beta1_draws.copy()
+            else:
+                beta2_draws = beta_draws[:, k:k + kw]
+                mean_diag_w = float(self._W_sparse.diagonal().mean())
+                mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+                wx_idx = self._wx_column_indices
+                direct_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                total_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
+
 
 class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
     """Dynamic spatial lag panel model (SAR with lagged dependent variable).
@@ -485,6 +816,10 @@ class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
     favouring near-Normal tails.  The lower bound of 2 ensures the
     variance exists.
     """
+
+    def _beta_names(self) -> list[str]:
+        """Return coefficient names without WX terms (SAR has no Durbin component)."""
+        return self._feature_names
 
     def _build_pymc_model(self) -> pm.Model:
         self._prepare_dynamic_design()
@@ -560,6 +895,7 @@ class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
         self._prepare_dynamic_design()
         rho = float(self._posterior_mean("rho"))
         beta = self._posterior_mean("beta")
+        ni = self._nonintercept_indices
         eigs = self._W_eigs
         mean_diag = float(np.mean((1.0 / (1.0 - rho * eigs)).real))
         if self._is_row_std:
@@ -571,15 +907,115 @@ class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
                     np.ones(self._W_sparse.shape[0]),
                 ).mean()
             )
-        direct = mean_diag * beta
-        total = mean_row_sum * beta
+        direct = mean_diag * beta[ni]
+        total = mean_row_sum * beta[ni]
         indirect = total - direct
         return {
             "direct": direct,
             "indirect": indirect,
             "total": total,
-            "feature_names": self._feature_names,
+            "feature_names": self._nonintercept_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARPanelDEDynamic):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelDEDynamic):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, (SDMRPanelFE, SDMUPanelFE)):
+            self._prepare_dynamic_design()
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            beta1_draws = beta_draws[:, :self._X_dyn.shape[1]]
+            beta2_draws = beta_draws[:, self._X_dyn.shape[1]:]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        else:
+            # SLX/SDEM/DLM-like: no rho, effects are linear in beta
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+
+            if kw == 0:
+                # No WX columns: direct = beta, indirect = 0, total = beta
+                direct_samples = beta1_draws.copy()
+                indirect_samples = np.zeros_like(beta1_draws)
+                total_samples = beta1_draws.copy()
+            else:
+                beta2_draws = beta_draws[:, k:k + kw]
+                mean_diag_w = float(self._W_sparse.diagonal().mean())
+                mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+                wx_idx = self._wx_column_indices
+                direct_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                total_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
 
 class SEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
@@ -607,6 +1043,10 @@ class SEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
     favouring near-Normal tails.  The lower bound of 2 ensures the
     variance exists.
     """
+
+    def _beta_names(self) -> list[str]:
+        """Return coefficient names without WX terms (SEM has no Durbin component)."""
+        return self._feature_names
 
     def _build_pymc_model(self) -> pm.Model:
         self._prepare_dynamic_design()
@@ -730,12 +1170,113 @@ class SEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
     def _compute_spatial_effects(self) -> dict[str, np.ndarray]:
         self._prepare_dynamic_design()
         beta = self._posterior_mean("beta")
+        ni = self._nonintercept_indices
         return {
-            "direct": beta.copy(),
-            "indirect": np.zeros_like(beta),
-            "total": beta.copy(),
-            "feature_names": self._feature_names,
+            "direct": beta[ni].copy(),
+            "indirect": np.zeros(len(ni)),
+            "total": beta[ni].copy(),
+            "feature_names": self._nonintercept_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARPanelDEDynamic):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelDEDynamic):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, (SDMRPanelFE, SDMUPanelFE)):
+            self._prepare_dynamic_design()
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            beta1_draws = beta_draws[:, :self._X_dyn.shape[1]]
+            beta2_draws = beta_draws[:, self._X_dyn.shape[1]:]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        else:
+            # SLX/SDEM/DLM-like: no rho, effects are linear in beta
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+
+            if kw == 0:
+                # No WX columns: direct = beta, indirect = 0, total = beta
+                direct_samples = beta1_draws.copy()
+                indirect_samples = np.zeros_like(beta1_draws)
+                total_samples = beta1_draws.copy()
+            else:
+                beta2_draws = beta_draws[:, k:k + kw]
+                mean_diag_w = float(self._W_sparse.diagonal().mean())
+                mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+                wx_idx = self._wx_column_indices
+                direct_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                total_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
 
 class SDEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
@@ -896,16 +1437,154 @@ class SDEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
         k = self._X_dyn.shape[1]
         kw = self._WX_dyn.shape[1]
         beta1, beta2 = beta[:k], beta[k:k + kw]
-        mean_diag_w = float(self._W_sparse.diagonal().mean())
-        mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
-        direct = beta1[self._wx_column_indices] + beta2 * mean_diag_w
-        total = beta1[self._wx_column_indices] + beta2 * mean_row_sum_w
+
+        if kw == 0:
+            direct = beta1.copy()
+            indirect = np.zeros_like(beta1)
+            total = beta1.copy()
+            names = self._feature_names
+        else:
+            mean_diag_w = float(self._W_sparse.diagonal().mean())
+            mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+            wx_idx = self._wx_column_indices
+            direct = np.array([
+                beta1[j] + b2 * mean_diag_w
+                for j, b2 in zip(wx_idx, beta2)
+            ])
+            total = np.array([
+                beta1[j] + b2 * mean_row_sum_w
+                for j, b2 in zip(wx_idx, beta2)
+            ])
+            indirect = total - direct
+            names = self._wx_feature_names
+
         return {
             "direct": direct,
-            "indirect": total - direct,
+            "indirect": indirect,
             "total": total,
-            "feature_names": self._wx_feature_names,
+            "feature_names": names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARPanelDEDynamic):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelDEDynamic):
+            # SEM: λ does not affect impact measures; effects are just beta
+            beta_draws = _get_posterior_draws(idata, "beta")
+            direct_samples = beta_draws.copy()
+            indirect_samples = np.zeros_like(beta_draws)
+            total_samples = beta_draws.copy()
+
+        elif isinstance(self, SDEMPanelDEDynamic):
+            # SDEM: λ does not affect impact measures; effects match SLX form
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+            beta2_draws = beta_draws[:, k:k + kw]
+            mean_diag_w = float(self._W_sparse.diagonal().mean())
+            mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, (SDMRPanelFE, SDMUPanelFE)):
+            self._prepare_dynamic_design()
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            beta1_draws = beta_draws[:, :self._X_dyn.shape[1]]
+            beta2_draws = beta_draws[:, self._X_dyn.shape[1]:]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        else:
+            # SLX/SDEM/DLM-like: no rho, effects are linear in beta
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+
+            if kw == 0:
+                # No WX columns: direct = beta, indirect = 0, total = beta
+                direct_samples = beta1_draws.copy()
+                indirect_samples = np.zeros_like(beta1_draws)
+                total_samples = beta1_draws.copy()
+            else:
+                beta2_draws = beta_draws[:, k:k + kw]
+                mean_diag_w = float(self._W_sparse.diagonal().mean())
+                mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+                wx_idx = self._wx_column_indices
+                direct_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                total_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples
 
 
 class SLXPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
@@ -990,3 +1669,103 @@ class SLXPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             "total": total,
             "feature_names": self._wx_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+
+        if isinstance(self, SARPanelDEDynamic):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            ni = self._nonintercept_indices
+            direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+            total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelDEDynamic):
+            beta_draws = _get_posterior_draws(idata, "beta")
+            ni = self._nonintercept_indices
+            direct_samples = beta_draws[:, ni].copy()
+            indirect_samples = np.zeros_like(direct_samples)
+            total_samples = direct_samples.copy()
+
+        elif isinstance(self, (SDMRPanelFE, SDMUPanelFE)):
+            self._prepare_dynamic_design()
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")
+            beta1_draws = beta_draws[:, :self._X_dyn.shape[1]]
+            beta2_draws = beta_draws[:, self._X_dyn.shape[1]:]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag_M = np.mean(inv_eigs, axis=1)
+            mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
+            if self._is_row_std:
+                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
+                mean_row_sum_MW = mean_row_sum_M
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum_M = np.empty(G)
+                mean_row_sum_MW = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    M_ones = np.linalg.solve(A, ones)
+                    mean_row_sum_M[g] = M_ones.mean()
+                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            wx_idx = self._wx_column_indices
+            direct_samples = np.column_stack([
+                beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            total_samples = np.column_stack([
+                beta1_draws[:, j] * mean_row_sum_M + beta2_draws[:, idx] * mean_row_sum_MW
+                for idx, j in enumerate(wx_idx)
+            ])
+            indirect_samples = total_samples - direct_samples
+
+        else:
+            # SLX/SDEM/DLM-like: no rho, effects are linear in beta
+            self._prepare_dynamic_design()
+            beta_draws = _get_posterior_draws(idata, "beta")
+            k = self._X_dyn.shape[1]
+            kw = self._WX_dyn.shape[1]
+            beta1_draws = beta_draws[:, :k]
+
+            if kw == 0:
+                # No WX columns: direct = beta, indirect = 0, total = beta
+                direct_samples = beta1_draws.copy()
+                indirect_samples = np.zeros_like(beta1_draws)
+                total_samples = beta1_draws.copy()
+            else:
+                beta2_draws = beta_draws[:, k:k + kw]
+                mean_diag_w = float(self._W_sparse.diagonal().mean())
+                mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+                wx_idx = self._wx_column_indices
+                direct_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                total_samples = np.column_stack([
+                    beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+                    for idx, j in enumerate(wx_idx)
+                ])
+                indirect_samples = total_samples - direct_samples
+
+        return direct_samples, indirect_samples, total_samples

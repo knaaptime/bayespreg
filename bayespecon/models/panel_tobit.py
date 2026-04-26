@@ -121,6 +121,7 @@ class SARPanelTobit(_PanelTobitBase):
         return rho * (self._W_dense @ y_lat) + self._X @ beta
 
     def _compute_spatial_effects(self) -> dict[str, np.ndarray]:
+        ni = self._nonintercept_indices
         rho = float(self._posterior_mean("rho"))
         beta = self._posterior_mean("beta")
         eigs = self._W_eigs
@@ -134,15 +135,50 @@ class SARPanelTobit(_PanelTobitBase):
                     np.ones(self._W_sparse.shape[0]),
                 ).mean()
             )
-        direct = mean_diag * beta
-        total = mean_row_sum * beta
+        direct = mean_diag * beta[ni]
+        total = mean_row_sum * beta[ni]
         indirect = total - direct
         return {
             "direct": direct,
             "indirect": indirect,
             "total": total,
-            "feature_names": self._feature_names,
+            "feature_names": self._nonintercept_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+        ni = self._nonintercept_indices
+
+        if isinstance(self, SARPanelTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")[:, ni]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            direct_samples = mean_diag[:, None] * beta_draws
+            total_samples = mean_row_sum[:, None] * beta_draws
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelTobit):
+            beta_draws = _get_posterior_draws(idata, "beta")[:, ni]
+            direct_samples = beta_draws.copy()
+            indirect_samples = np.zeros_like(beta_draws)
+            total_samples = beta_draws.copy()
+
+        return direct_samples, indirect_samples, total_samples
 
     def fit(
         self,
@@ -317,13 +353,49 @@ class SEMPanelTobit(_PanelTobitBase):
         return self._X @ beta
 
     def _compute_spatial_effects(self) -> dict[str, np.ndarray]:
+        ni = self._nonintercept_indices
         beta = self._posterior_mean("beta")
         return {
-            "direct": beta.copy(),
-            "indirect": np.zeros_like(beta),
-            "total": beta.copy(),
-            "feature_names": self._feature_names,
+            "direct": beta[ni].copy(),
+            "indirect": np.zeros_like(beta[ni]),
+            "total": beta[ni].copy(),
+            "feature_names": self._nonintercept_feature_names,
         }
+
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute posterior samples of direct, indirect, and total effects."""
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+        idata = self.inference_data
+        ni = self._nonintercept_indices
+
+        if isinstance(self, SARPanelTobit):
+            rho_draws = _get_posterior_draws(idata, "rho")
+            beta_draws = _get_posterior_draws(idata, "beta")[:, ni]
+            eigs = self._W_eigs.real.astype(np.float64)
+            inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
+            mean_diag = np.mean(inv_eigs, axis=1)
+            if self._is_row_std:
+                mean_row_sum = 1.0 / (1.0 - rho_draws)
+            else:
+                n = self._W_sparse.shape[0]
+                W_dense = self._W_sparse.toarray()
+                ones = np.ones(n)
+                G = rho_draws.shape[0]
+                mean_row_sum = np.empty(G)
+                for g in range(G):
+                    A = np.eye(n) - rho_draws[g] * W_dense
+                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            direct_samples = mean_diag[:, None] * beta_draws
+            total_samples = mean_row_sum[:, None] * beta_draws
+            indirect_samples = total_samples - direct_samples
+
+        elif isinstance(self, SEMPanelTobit):
+            beta_draws = _get_posterior_draws(idata, "beta")[:, ni]
+            direct_samples = beta_draws.copy()
+            indirect_samples = np.zeros_like(beta_draws)
+            total_samples = beta_draws.copy()
+
+        return direct_samples, indirect_samples, total_samples
 
     def fit(
         self,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import arviz as az
 import numpy as np
+import pandas as pd
 
 from bayespecon import OLSPanelRE, SARPanelRE, SEMPanelRE, SARPanelTobit, SEMPanelTobit
 from .helpers  import W_to_graph, make_line_W
@@ -52,10 +53,13 @@ def test_panel_re_fitted_values_and_effects_run_with_mock_posteriors():
         effects = m.spatial_effects()
         assert fitted.shape == y.shape
         assert np.all(np.isfinite(fitted))
-        assert set(effects.keys()) == {"direct", "indirect", "total", "feature_names"}
+        assert isinstance(effects, pd.DataFrame)
+        assert "direct" in effects.columns
+        assert "indirect" in effects.columns
+        assert "total" in effects.columns
 
     sem_eff = sem.spatial_effects()
-    assert np.allclose(sem_eff["indirect"], 0.0)
+    assert np.allclose(sem_eff["indirect"].values, 0.0)
 
 
 def test_panel_tobit_fitted_values_and_effects_run_with_latent_gap_draws():

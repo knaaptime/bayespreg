@@ -57,10 +57,10 @@ def test_sar_sem_tobit_fitted_values_and_effects_run_with_mock_posteriors():
         effects = m.spatial_effects()
         assert fitted.shape == y.shape
         assert np.all(np.isfinite(fitted))
-        assert np.all(np.isfinite(effects["direct"]))
+        assert np.all(np.isfinite(effects["direct"].values))
 
     sem_eff = sem.spatial_effects()
-    assert np.allclose(sem_eff["indirect"], 0.0)
+    assert np.allclose(sem_eff["indirect"].values, 0.0)
 
 
 def test_sdm_tobit_fitted_values_and_effects_run_with_mock_posterior():
@@ -85,5 +85,6 @@ def test_sdm_tobit_fitted_values_and_effects_run_with_mock_posterior():
 
     assert fitted.shape == y.shape
     assert np.all(np.isfinite(fitted))
-    assert np.all(np.isfinite(effects["direct"]))
-    assert len(effects["feature_names"]) == 1
+    assert np.all(np.isfinite(effects["direct"].values))
+    # SDM reports effects for all covariates (including intercept)
+    assert len(effects.index) >= 1

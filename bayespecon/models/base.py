@@ -224,6 +224,38 @@ class SpatialModel(ABC):
             )
         return self._W_dense_cache
 
+    @property
+    def _nonintercept_indices(self) -> list[int]:
+        """Return indices of non-constant (non-intercept) columns in X.
+
+        This is used to exclude the intercept from impact measures, since
+        the intercept has no meaningful spatial effect interpretation.
+
+        Returns
+        -------
+        list[int]
+            Column indices of X that are not constant/intercept columns.
+        """
+        indices: list[int] = []
+        for j, name in enumerate(self._feature_names):
+            column = self._X[:, j]
+            is_named_intercept = name.lower() == "intercept"
+            is_constant = np.allclose(column, column[0])
+            if not (is_named_intercept or is_constant):
+                indices.append(j)
+        return indices
+
+    @property
+    def _nonintercept_feature_names(self) -> list[str]:
+        """Return feature names for non-intercept columns.
+
+        Returns
+        -------
+        list[str]
+            Feature names excluding intercept/constant columns.
+        """
+        return [self._feature_names[i] for i in self._nonintercept_indices]
+
     # ------------------------------------------------------------------
     # Input parsing helpers
     # ------------------------------------------------------------------
@@ -527,30 +559,101 @@ class SpatialModel(ABC):
         summary_df = az.summary(self._idata, var_names=var_names, **kwargs)
         return self._rename_summary_index(summary_df)
 
-    def spatial_effects(self) -> dict[str, np.ndarray]:
-        """Compute posterior direct, indirect, and total impacts.
+    def spatial_effects(
+        self, return_posterior_samples: bool = False
+    ) -> "pd.DataFrame | tuple[pd.DataFrame, dict[str, np.ndarray]]":
+        """Compute Bayesian inference for direct, indirect, and total impacts.
+
+        Computes impact measures for each posterior draw, then summarises
+        the posterior distribution with means, 95% credible intervals, and
+        Bayesian p-values.  This is the fully Bayesian analog of the
+        simulation-based approach in :cite:t:`lesage2009IntroductionSpatial`
+        and the asymptotic variance formulas in
+        :cite:t:`arbia2020TestingImpact`.
 
         Models without a spatial lag on y do not exhibit global
         feedback propagation through :math:`(I-\\rho W)^{-1}`. However,
         models with spatially lagged covariates (SLX, SDEM) can still
         have non-zero neighbour spillovers captured in the indirect term.
 
+        Parameters
+        ----------
+        return_posterior_samples : bool, optional
+            If ``True``, return a ``(DataFrame, dict)`` tuple where the
+            dict contains the full posterior draws under keys
+            ``"direct"``, ``"indirect"``, and ``"total"``.  Default
+            ``False``.
+
         Returns
         -------
-        dict with keys "direct", "indirect", "total", each shaped
-        (n_features,) containing posterior mean impacts.
+        pd.DataFrame or tuple of (pd.DataFrame, dict)
+            If *return_posterior_samples* is ``False`` (default), returns
+            a DataFrame indexed by feature names with columns for posterior
+            means, credible-interval bounds, and Bayesian p-values.
+
+            If *return_posterior_samples* is ``True``, returns
+            ``(DataFrame, dict)`` where the dict has keys
+            ``"direct"``, ``"indirect"``, ``"total"``, each mapping
+            to a ``(G, k)`` array of posterior draws.
         """
+        from ..diagnostics.spatial_effects import _build_effects_dataframe
+
         self._require_fit()
-        return self._compute_spatial_effects()
+        direct_samples, indirect_samples, total_samples = self._compute_spatial_effects_posterior()
+
+        # Determine feature names based on the shape of the posterior samples.
+        # Models with WX terms (SDM, SLX, SDEM) report effects only for
+        # lagged covariates (k_wx columns), while models without WX terms
+        # (SAR, SEM) report effects for non-intercept covariates.
+        k_effects = direct_samples.shape[1]
+        if hasattr(self, "_wx_feature_names") and len(self._wx_feature_names) == k_effects:
+            feature_names = list(self._wx_feature_names)
+        elif hasattr(self, "_nonintercept_feature_names") and len(self._nonintercept_feature_names) == k_effects:
+            feature_names = list(self._nonintercept_feature_names)
+        else:
+            feature_names = list(self._feature_names[:k_effects])
+
+        # Determine model type label
+        model_type = self.__class__.__name__
+
+        df = _build_effects_dataframe(
+            direct_samples=direct_samples,
+            indirect_samples=indirect_samples,
+            total_samples=total_samples,
+            feature_names=feature_names,
+            model_type=model_type,
+        )
+
+        if return_posterior_samples:
+            posterior_samples = {
+                "direct": direct_samples,
+                "indirect": indirect_samples,
+                "total": total_samples,
+            }
+            return df, posterior_samples
+        return df
 
     @abstractmethod
     def _compute_spatial_effects(self) -> dict[str, np.ndarray]:
-        """Compute model-specific impact measures.
+        """Compute model-specific impact measures at posterior mean.
 
         Returns
         -------
         dict
             Dictionary with direct, indirect, and total effects.
+        """
+
+    @abstractmethod
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute direct, indirect, and total effects for each posterior draw.
+
+        Returns
+        -------
+        tuple of np.ndarray
+            ``(direct_samples, indirect_samples, total_samples)`` where each
+            array has shape ``(G, k)`` or ``(G, k_wx)``, with *G* being the
+            total number of posterior draws and *k* / *k_wx* being the
+            number of covariates for which effects are reported.
         """
 
     @abstractmethod

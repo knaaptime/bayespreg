@@ -87,8 +87,12 @@ def test_panel_fe_fitted_values_and_effects_with_mock_posteriors():
         effects = model.spatial_effects()
         assert fitted.shape == y.shape
         assert np.all(np.isfinite(fitted))
-        assert set(effects.keys()) == {"direct", "indirect", "total", "feature_names"}
-        assert np.all(np.isfinite(effects["direct"]))
+        assert set(effects.columns) == {
+            "direct", "direct_ci_lower", "direct_ci_upper", "direct_pvalue",
+            "indirect", "indirect_ci_lower", "indirect_ci_upper", "indirect_pvalue",
+            "total", "total_ci_lower", "total_ci_upper", "total_pvalue",
+        }
+        assert np.all(np.isfinite(effects["direct"].values))
 
 
 def test_sem_panel_fe_fit_adds_log_likelihood_when_missing(monkeypatch):

@@ -117,6 +117,56 @@ class SLX(SpatialModel):
             "feature_names": self._wx_feature_names,
         }
 
+    def _compute_spatial_effects_posterior(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute direct, indirect, and total effects for each posterior draw.
+
+        For the SLX model (no :math:`\\rho`), the impact measures for
+        covariate :math:`k` are:
+
+        .. math::
+            S_k^{(g)} = \\beta_{1j}^{(g)} I + \\beta_{2k}^{(g)} W
+
+            \\text{Direct}_k^{(g)} = \\overline{\\text{diag}}(S_k^{(g)})
+            = \\beta_{1j}^{(g)} + \\beta_{2k}^{(g)} \\overline{\\text{diag}}(W)
+
+            \\text{Total}_k^{(g)} = \\overline{\\text{rowsum}}(S_k^{(g)})
+            = \\beta_{1j}^{(g)} + \\beta_{2k}^{(g)} \\overline{\\text{rowsum}}(W)
+
+            \\text{Indirect}_k^{(g)} = \\text{Total}_k^{(g)} - \\text{Direct}_k^{(g)}
+
+        Returns
+        -------
+        tuple of np.ndarray
+            ``(direct_samples, indirect_samples, total_samples)``, each
+            of shape ``(G, k_wx)``.
+        """
+        from ..diagnostics.bayesian_lmtests import _get_posterior_draws
+
+        idata = self.inference_data
+        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k+k_wx)
+        G = beta_draws.shape[0]
+        k = self._X.shape[1]
+        kw = self._WX.shape[1]
+
+        beta1_draws = beta_draws[:, :k]  # (G, k)
+        beta2_draws = beta_draws[:, k:k + kw]  # (G, kw)
+
+        mean_diag_w = float(self._W_sparse.diagonal().mean())
+        mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+
+        wx_idx = self._wx_column_indices
+        direct_samples = np.column_stack([
+            beta1_draws[:, j] + beta2_draws[:, idx] * mean_diag_w
+            for idx, j in enumerate(wx_idx)
+        ])  # (G, kw)
+        total_samples = np.column_stack([
+            beta1_draws[:, j] + beta2_draws[:, idx] * mean_row_sum_w
+            for idx, j in enumerate(wx_idx)
+        ])  # (G, kw)
+        indirect_samples = total_samples - direct_samples  # (G, kw)
+
+        return direct_samples, indirect_samples, total_samples
+
     def _fitted_mean_from_posterior(self) -> np.ndarray:
         """Compute fitted values at posterior mean coefficients.
 
