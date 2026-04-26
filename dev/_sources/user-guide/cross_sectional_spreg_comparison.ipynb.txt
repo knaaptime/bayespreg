@@ -108,8 +108,7 @@
     "    \"SDM\": SDM(spec, data=columbus, W=w),\n",
     "    \"SDEM\": SDEM(spec, data=columbus, W=w),\n",
     "}\n",
-    "bayes_idata = {name: model.fit(**sample_kwargs) for name, model in bayes_models.items()}\n",
-    "print(\"Finished fitting all bayespecon models.\")"
+    "bayes_idata = {name: model.fit(**sample_kwargs) for name, model in bayes_models.items()}"
    ]
   },
   {
@@ -172,20 +171,25 @@
     "\n",
     "def bayes_effects_df(model):\n",
     "    eff = model.spatial_effects()\n",
+    "    # spatial_effects() returns a DataFrame indexed by feature names\n",
     "    return pd.DataFrame(\n",
     "        {\n",
-    "            \"feature\": eff[\"feature_names\"],\n",
-    "            \"direct_bayespecon\": eff[\"direct\"],\n",
-    "            \"indirect_bayespecon\": eff[\"indirect\"],\n",
-    "            \"total_bayespecon\": eff[\"total\"],\n",
+    "            \"feature\": eff.index.tolist(),\n",
+    "            \"direct_bayespecon\": eff[\"direct\"].values,\n",
+    "            \"indirect_bayespecon\": eff[\"indirect\"].values,\n",
+    "            \"total_bayespecon\": eff[\"total\"].values,\n",
     "        }\n",
     "    )\n",
     "\n",
     "\n",
     "def spreg_effects_df(model_name, sp_model):\n",
     "    if model_name == \"SEM\":\n",
+    "        # SEM has no spatial multiplier on the systematic component,\n",
+    "        # so direct = coefficient, indirect = 0, total = coefficient.\n",
+    "        # bayespecon excludes the intercept from effects, so we\n",
+    "        # only compare non-constant covariates here.\n",
     "        sp_params = extract_spreg_params(sp_model)\n",
-    "        features = [f for f in [\"CONSTANT\", \"INC\", \"CRIME\"] if f in sp_params.index]\n",
+    "        features = [f for f in [\"INC\", \"CRIME\"] if f in sp_params.index]\n",
     "        return pd.DataFrame(\n",
     "            {\n",
     "                \"feature\": features,\n",
@@ -317,7 +321,9 @@
    "source": [
     "`bayespecon` uses Bayesian inference while `spreg` reports frequentist point estimates, so exact equality is not expected. The coefficient and effects tables are intended to verify directional and numerical agreement under matched model formulas with `HOVAL` as the dependent variable.\n",
     "\n",
-    "For effects, this notebook now uses `spreg`'s own spatial-impact utilities: `spreg.sputils.spmultiplier` and `spreg.sputils._sp_effects`. SEM is the one exception, since it has no spatial multiplier on the systematic component and therefore uses direct = coefficient, indirect = 0, total = coefficient."
+    "For effects, this notebook now uses `spreg`'s own spatial-impact utilities: `spreg.sputils.spmultiplier` and `spreg.sputils._sp_effects`. SEM is the one exception, since it has no spatial multiplier on the systematic component and therefore uses direct = coefficient, indirect = 0, total = coefficient.\n",
+    "\n",
+    "**Note on intercept exclusion**: `bayespecon` excludes the intercept from spatial effects for all model types, since the intercept has no meaningful spatial impact interpretation. This is consistent with `spreg`'s `_sp_effects`, which also excludes the constant (`CONSTANT`) from its impact calculations."
    ]
   },
   {
@@ -358,7 +364,17 @@
     "model = SAR(\"y ~ X_1\", W=w, data=gdf)\n",
     "res = model.fit()\n",
     "\n",
-    "print(model.summary())"
+    "model.summary()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6bcc2558",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "model.spatial_effects()"
    ]
   },
   {

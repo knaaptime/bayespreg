@@ -1495,7 +1495,7 @@ NUTS: [beta, sigma]
 Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -1622,46 +1622,94 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
-      <td>4469.980201</td>
-      <td>0.0</td>
-      <td>4469.980201</td>
-      <td>Intercept</td>
-    </tr>
-    <tr>
-      <th>1</th>
+      <th>poverty</th>
       <td>-0.779711</td>
+      <td>-0.902205</td>
+      <td>-0.652772</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.779711</td>
-      <td>poverty</td>
+      <td>-0.902205</td>
+      <td>-0.652772</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>2</th>
+      <th>rev_rating</th>
       <td>0.621883</td>
+      <td>0.491038</td>
+      <td>0.767581</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.621883</td>
-      <td>rev_rating</td>
+      <td>0.491038</td>
+      <td>0.767581</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>3</th>
+      <th>num_spots</th>
       <td>0.399134</td>
+      <td>0.237576</td>
+      <td>0.572683</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.399134</td>
-      <td>num_spots</td>
+      <td>0.237576</td>
+      <td>0.572683</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>4</th>
+      <th>crowded</th>
       <td>-0.483840</td>
+      <td>-0.615611</td>
+      <td>-0.358625</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.483840</td>
-      <td>crowded</td>
+      <td>-0.615611</td>
+      <td>-0.358625</td>
+      <td>0.0</td>
     </tr>
   </tbody>
 </table>
@@ -1761,10 +1809,10 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -1903,46 +1951,94 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
-      <td>-22181.722659</td>
-      <td>-6934.337037</td>
-      <td>-29116.059696</td>
-      <td>Intercept</td>
+      <th>poverty</th>
+      <td>-0.794941</td>
+      <td>-0.921184</td>
+      <td>-0.672052</td>
+      <td>0.0</td>
+      <td>-0.260856</td>
+      <td>-0.532395</td>
+      <td>-0.070084</td>
+      <td>0.006667</td>
+      <td>-1.055797</td>
+      <td>-1.393542</td>
+      <td>-0.796507</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>1</th>
-      <td>-0.793534</td>
-      <td>-0.248070</td>
-      <td>-1.041604</td>
-      <td>poverty</td>
+      <th>rev_rating</th>
+      <td>0.629219</td>
+      <td>0.506198</td>
+      <td>0.755766</td>
+      <td>0.0</td>
+      <td>0.206738</td>
+      <td>0.053158</td>
+      <td>0.439318</td>
+      <td>0.006667</td>
+      <td>0.835957</td>
+      <td>0.617998</td>
+      <td>1.147002</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>2</th>
-      <td>0.628086</td>
-      <td>0.196349</td>
-      <td>0.824435</td>
-      <td>rev_rating</td>
+      <th>num_spots</th>
+      <td>0.378158</td>
+      <td>0.217951</td>
+      <td>0.525261</td>
+      <td>0.0</td>
+      <td>0.123778</td>
+      <td>0.028644</td>
+      <td>0.261822</td>
+      <td>0.006667</td>
+      <td>0.501936</td>
+      <td>0.283112</td>
+      <td>0.760715</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>3</th>
-      <td>0.377510</td>
-      <td>0.118015</td>
-      <td>0.495526</td>
-      <td>num_spots</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>-0.498857</td>
-      <td>-0.155950</td>
-      <td>-0.654807</td>
-      <td>crowded</td>
+      <th>crowded</th>
+      <td>-0.499755</td>
+      <td>-0.626853</td>
+      <td>-0.374754</td>
+      <td>0.0</td>
+      <td>-0.164171</td>
+      <td>-0.343405</td>
+      <td>-0.043669</td>
+      <td>0.006667</td>
+      <td>-0.663925</td>
+      <td>-0.908107</td>
+      <td>-0.451911</td>
+      <td>0.0</td>
     </tr>
   </tbody>
 </table>
@@ -2053,7 +2149,7 @@ NUTS: [lam, beta, sigma]
 Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2192,46 +2288,94 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
-      <td>35273.518807</td>
-      <td>0.0</td>
-      <td>35273.518807</td>
-      <td>Intercept</td>
-    </tr>
-    <tr>
-      <th>1</th>
+      <th>poverty</th>
       <td>-0.774995</td>
+      <td>-0.917082</td>
+      <td>-0.649084</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.774995</td>
-      <td>poverty</td>
+      <td>-0.917082</td>
+      <td>-0.649084</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>2</th>
+      <th>rev_rating</th>
       <td>0.600163</td>
+      <td>0.481830</td>
+      <td>0.722244</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.600163</td>
-      <td>rev_rating</td>
+      <td>0.481830</td>
+      <td>0.722244</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>3</th>
+      <th>num_spots</th>
       <td>0.361613</td>
+      <td>0.207666</td>
+      <td>0.518084</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.361613</td>
-      <td>num_spots</td>
+      <td>0.207666</td>
+      <td>0.518084</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>4</th>
+      <th>crowded</th>
       <td>-0.496180</td>
+      <td>-0.606968</td>
+      <td>-0.381158</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.496180</td>
-      <td>crowded</td>
+      <td>-0.606968</td>
+      <td>-0.381158</td>
+      <td>0.0</td>
     </tr>
   </tbody>
 </table>
@@ -2339,9 +2483,9 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [rho, beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2528,39 +2672,94 @@ We recommend running at least 4 chains for robust computation of convergence dia
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
-      <td>-0.779588</td>
-      <td>-0.145836</td>
-      <td>-0.925424</td>
-      <td>poverty</td>
+      <th>poverty</th>
+      <td>-0.779551</td>
+      <td>-0.918199</td>
+      <td>-0.648176</td>
+      <td>0.0</td>
+      <td>-0.147005</td>
+      <td>-0.510916</td>
+      <td>0.232309</td>
+      <td>0.433333</td>
+      <td>-0.926555</td>
+      <td>-1.338995</td>
+      <td>-0.493122</td>
+      <td>0.000000</td>
     </tr>
     <tr>
-      <th>1</th>
-      <td>0.658412</td>
-      <td>0.473328</td>
-      <td>1.131740</td>
-      <td>rev_rating</td>
+      <th>rev_rating</th>
+      <td>0.658783</td>
+      <td>0.512025</td>
+      <td>0.789349</td>
+      <td>0.0</td>
+      <td>0.478657</td>
+      <td>-0.008991</td>
+      <td>0.979734</td>
+      <td>0.060000</td>
+      <td>1.137440</td>
+      <td>0.583078</td>
+      <td>1.732045</td>
+      <td>0.000000</td>
     </tr>
     <tr>
-      <th>2</th>
-      <td>0.380227</td>
-      <td>0.604088</td>
-      <td>0.984315</td>
-      <td>num_spots</td>
+      <th>num_spots</th>
+      <td>0.380620</td>
+      <td>0.228367</td>
+      <td>0.522112</td>
+      <td>0.0</td>
+      <td>0.610940</td>
+      <td>0.166183</td>
+      <td>1.051684</td>
+      <td>0.003333</td>
+      <td>0.991560</td>
+      <td>0.507988</td>
+      <td>1.504997</td>
+      <td>0.000000</td>
     </tr>
     <tr>
-      <th>3</th>
-      <td>-0.481868</td>
-      <td>0.138296</td>
-      <td>-0.343571</td>
-      <td>crowded</td>
+      <th>crowded</th>
+      <td>-0.481824</td>
+      <td>-0.618741</td>
+      <td>-0.349318</td>
+      <td>0.0</td>
+      <td>0.139059</td>
+      <td>-0.269562</td>
+      <td>0.533493</td>
+      <td>0.496667</td>
+      <td>-0.342765</td>
+      <td>-0.790152</td>
+      <td>0.117110</td>
+      <td>0.133333</td>
     </tr>
   </tbody>
 </table>
@@ -2703,7 +2902,7 @@ NUTS: [lam, beta, sigma]
 Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -2890,39 +3089,94 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
+      <th>poverty</th>
       <td>-0.782301</td>
+      <td>-0.900247</td>
+      <td>-0.657615</td>
+      <td>0.0</td>
       <td>-0.149689</td>
+      <td>-0.493095</td>
+      <td>0.182125</td>
+      <td>0.400000</td>
       <td>-0.931990</td>
-      <td>poverty</td>
+      <td>-1.340581</td>
+      <td>-0.542026</td>
+      <td>0.000000</td>
     </tr>
     <tr>
-      <th>1</th>
+      <th>rev_rating</th>
       <td>0.654859</td>
+      <td>0.518565</td>
+      <td>0.797555</td>
+      <td>0.0</td>
       <td>0.420024</td>
+      <td>0.037064</td>
+      <td>0.861912</td>
+      <td>0.036667</td>
       <td>1.074883</td>
-      <td>rev_rating</td>
+      <td>0.628036</td>
+      <td>1.605049</td>
+      <td>0.000000</td>
     </tr>
     <tr>
-      <th>2</th>
+      <th>num_spots</th>
       <td>0.385399</td>
+      <td>0.227968</td>
+      <td>0.530453</td>
+      <td>0.0</td>
       <td>0.606900</td>
+      <td>0.202455</td>
+      <td>0.983406</td>
+      <td>0.000000</td>
       <td>0.992299</td>
-      <td>num_spots</td>
+      <td>0.543763</td>
+      <td>1.461754</td>
+      <td>0.000000</td>
     </tr>
     <tr>
-      <th>3</th>
+      <th>crowded</th>
       <td>-0.487322</td>
+      <td>-0.625305</td>
+      <td>-0.357446</td>
+      <td>0.0</td>
       <td>0.110211</td>
+      <td>-0.293568</td>
+      <td>0.541079</td>
+      <td>0.536667</td>
       <td>-0.377111</td>
-      <td>crowded</td>
+      <td>-0.843912</td>
+      <td>0.105413</td>
+      <td>0.113333</td>
     </tr>
   </tbody>
 </table>
@@ -3064,11 +3318,11 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [beta, sigma, sigma_alpha, alpha]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -3256,46 +3510,94 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
-      <td>2.305741</td>
-      <td>0.0</td>
-      <td>2.305741</td>
-      <td>Intercept</td>
-    </tr>
-    <tr>
-      <th>1</th>
+      <th>poverty</th>
       <td>-0.824634</td>
+      <td>-0.962644</td>
+      <td>-0.691388</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.824634</td>
-      <td>poverty</td>
+      <td>-0.962644</td>
+      <td>-0.691388</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>2</th>
+      <th>rev_rating</th>
       <td>0.635404</td>
+      <td>0.493474</td>
+      <td>0.781262</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.635404</td>
-      <td>rev_rating</td>
+      <td>0.493474</td>
+      <td>0.781262</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>3</th>
+      <th>num_spots</th>
       <td>0.418216</td>
+      <td>0.252982</td>
+      <td>0.570942</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.418216</td>
-      <td>num_spots</td>
+      <td>0.252982</td>
+      <td>0.570942</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>4</th>
+      <th>crowded</th>
       <td>-0.466801</td>
+      <td>-0.598624</td>
+      <td>-0.336878</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.466801</td>
-      <td>crowded</td>
+      <td>-0.598624</td>
+      <td>-0.336878</td>
+      <td>0.0</td>
     </tr>
   </tbody>
 </table>
@@ -3407,7 +3709,7 @@ Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) t
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -3595,46 +3897,94 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
-      <td>1.595543</td>
-      <td>0.678241</td>
-      <td>2.273784</td>
-      <td>Intercept</td>
+      <th>poverty</th>
+      <td>-0.838263</td>
+      <td>-0.973437</td>
+      <td>-0.713678</td>
+      <td>0.0</td>
+      <td>-0.370082</td>
+      <td>-0.662114</td>
+      <td>-0.138628</td>
+      <td>0.0</td>
+      <td>-1.208345</td>
+      <td>-1.543110</td>
+      <td>-0.906244</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>1</th>
-      <td>-0.836770</td>
-      <td>-0.355698</td>
-      <td>-1.192468</td>
-      <td>poverty</td>
+      <th>rev_rating</th>
+      <td>0.650614</td>
+      <td>0.522126</td>
+      <td>0.786255</td>
+      <td>0.0</td>
+      <td>0.287146</td>
+      <td>0.107687</td>
+      <td>0.527340</td>
+      <td>0.0</td>
+      <td>0.937760</td>
+      <td>0.689768</td>
+      <td>1.273430</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>2</th>
-      <td>0.649458</td>
-      <td>0.276074</td>
-      <td>0.925532</td>
-      <td>rev_rating</td>
+      <th>num_spots</th>
+      <td>0.397257</td>
+      <td>0.249877</td>
+      <td>0.554125</td>
+      <td>0.0</td>
+      <td>0.174668</td>
+      <td>0.060997</td>
+      <td>0.342674</td>
+      <td>0.0</td>
+      <td>0.571925</td>
+      <td>0.336794</td>
+      <td>0.848725</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>3</th>
-      <td>0.396597</td>
-      <td>0.168587</td>
-      <td>0.565184</td>
-      <td>num_spots</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>-0.480148</td>
-      <td>-0.204104</td>
-      <td>-0.684252</td>
-      <td>crowded</td>
+      <th>crowded</th>
+      <td>-0.481035</td>
+      <td>-0.610604</td>
+      <td>-0.344887</td>
+      <td>0.0</td>
+      <td>-0.212878</td>
+      <td>-0.388136</td>
+      <td>-0.071129</td>
+      <td>0.0</td>
+      <td>-0.693913</td>
+      <td>-0.967211</td>
+      <td>-0.454681</td>
+      <td>0.0</td>
     </tr>
   </tbody>
 </table>
@@ -3754,7 +4104,7 @@ Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) t
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
-/tmp/ipykernel_6498/3515888290.py:40: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_6630/3515888290.py:40: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
@@ -3942,46 +4292,94 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
     <tr style="text-align: right;">
       <th></th>
       <th>direct</th>
+      <th>direct_ci_lower</th>
+      <th>direct_ci_upper</th>
+      <th>direct_pvalue</th>
       <th>indirect</th>
+      <th>indirect_ci_lower</th>
+      <th>indirect_ci_upper</th>
+      <th>indirect_pvalue</th>
       <th>total</th>
-      <th>feature_names</th>
+      <th>total_ci_lower</th>
+      <th>total_ci_upper</th>
+      <th>total_pvalue</th>
+    </tr>
+    <tr>
+      <th>variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>0</th>
-      <td>2.313768</td>
-      <td>0.0</td>
-      <td>2.313768</td>
-      <td>Intercept</td>
-    </tr>
-    <tr>
-      <th>1</th>
+      <th>poverty</th>
       <td>-0.811014</td>
+      <td>-0.939370</td>
+      <td>-0.681714</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.811014</td>
-      <td>poverty</td>
+      <td>-0.939370</td>
+      <td>-0.681714</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>2</th>
+      <th>rev_rating</th>
       <td>0.615176</td>
+      <td>0.475441</td>
+      <td>0.746588</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.615176</td>
-      <td>rev_rating</td>
+      <td>0.475441</td>
+      <td>0.746588</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>3</th>
+      <th>num_spots</th>
       <td>0.382180</td>
+      <td>0.217764</td>
+      <td>0.543039</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>0.382180</td>
-      <td>num_spots</td>
+      <td>0.217764</td>
+      <td>0.543039</td>
+      <td>0.0</td>
     </tr>
     <tr>
-      <th>4</th>
+      <th>crowded</th>
       <td>-0.478021</td>
+      <td>-0.603749</td>
+      <td>-0.354817</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
       <td>0.0</td>
       <td>-0.478021</td>
-      <td>crowded</td>
+      <td>-0.603749</td>
+      <td>-0.354817</td>
+      <td>0.0</td>
     </tr>
   </tbody>
 </table>
@@ -4228,8 +4626,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-339.566775</td>
       <td>8.929896</td>
       <td>0.000000</td>
-      <td>5.259535e-01</td>
-      <td>11.493553</td>
+      <td>5.310051e-01</td>
+      <td>12.019758</td>
       <td>0.000000</td>
       <td>True</td>
       <td>log</td>
@@ -4240,8 +4638,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-340.533526</td>
       <td>9.307454</td>
       <td>0.966750</td>
-      <td>1.979296e-01</td>
-      <td>11.552161</td>
+      <td>1.949391e-01</td>
+      <td>12.068735</td>
       <td>0.560832</td>
       <td>True</td>
       <td>log</td>
@@ -4252,8 +4650,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-341.718297</td>
       <td>5.848315</td>
       <td>2.151521</td>
-      <td>1.736492e-01</td>
-      <td>11.310182</td>
+      <td>1.729006e-01</td>
+      <td>11.773581</td>
       <td>2.967481</td>
       <td>True</td>
       <td>log</td>
@@ -4264,8 +4662,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-343.455754</td>
       <td>5.710553</td>
       <td>3.888979</td>
-      <td>7.434543e-02</td>
-      <td>11.561035</td>
+      <td>7.154950e-02</td>
+      <td>11.978883</td>
       <td>3.624481</td>
       <td>True</td>
       <td>log</td>
@@ -4276,8 +4674,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-345.359753</td>
       <td>5.139489</td>
       <td>5.792978</td>
-      <td>2.812226e-02</td>
-      <td>11.649540</td>
+      <td>2.960567e-02</td>
+      <td>12.008377</td>
       <td>4.151616</td>
       <td>False</td>
       <td>log</td>
@@ -4288,8 +4686,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-395.935964</td>
       <td>33.745352</td>
       <td>56.369189</td>
-      <td>1.576849e-16</td>
-      <td>11.490107</td>
+      <td>1.177205e-16</td>
+      <td>11.439814</td>
       <td>7.301554</td>
       <td>True</td>
       <td>log</td>
@@ -4300,8 +4698,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-400.764837</td>
       <td>33.331427</td>
       <td>61.198062</td>
-      <td>1.454790e-17</td>
-      <td>11.835401</td>
+      <td>1.613060e-18</td>
+      <td>11.676601</td>
       <td>7.857173</td>
       <td>True</td>
       <td>log</td>
@@ -4312,8 +4710,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-401.533418</td>
       <td>36.094738</td>
       <td>61.966643</td>
-      <td>1.355889e-20</td>
-      <td>11.896972</td>
+      <td>4.633182e-19</td>
+      <td>11.835490</td>
       <td>7.630282</td>
       <td>True</td>
       <td>log</td>
@@ -4356,8 +4754,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-339.644530</td>
       <td>9.007651</td>
       <td>0.000000</td>
-      <td>5.367325e-01</td>
-      <td>11.352881</td>
+      <td>5.303995e-01</td>
+      <td>11.826647</td>
       <td>0.000000</td>
       <td>False</td>
       <td>log</td>
@@ -4368,8 +4766,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-340.626175</td>
       <td>9.400104</td>
       <td>0.981645</td>
-      <td>1.994851e-01</td>
-      <td>11.458983</td>
+      <td>1.888936e-01</td>
+      <td>11.883767</td>
       <td>0.566247</td>
       <td>False</td>
       <td>log</td>
@@ -4380,8 +4778,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-341.765300</td>
       <td>5.895318</td>
       <td>2.120770</td>
-      <td>1.684524e-01</td>
-      <td>11.391276</td>
+      <td>1.772336e-01</td>
+      <td>11.742023</td>
       <td>2.967288</td>
       <td>False</td>
       <td>log</td>
@@ -4392,8 +4790,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-343.497736</td>
       <td>5.752535</td>
       <td>3.853206</td>
-      <td>6.899539e-02</td>
-      <td>11.592137</td>
+      <td>7.082344e-02</td>
+      <td>11.968746</td>
       <td>3.629070</td>
       <td>False</td>
       <td>log</td>
@@ -4404,8 +4802,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-345.392961</td>
       <td>5.172696</td>
       <td>5.748430</td>
-      <td>2.633470e-02</td>
-      <td>11.744152</td>
+      <td>3.264981e-02</td>
+      <td>12.073435</td>
       <td>4.156918</td>
       <td>False</td>
       <td>log</td>
@@ -4416,8 +4814,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-396.559968</td>
       <td>34.369355</td>
       <td>56.915437</td>
-      <td>6.768979e-17</td>
-      <td>11.730038</td>
+      <td>4.849590e-19</td>
+      <td>11.928995</td>
       <td>7.297245</td>
       <td>True</td>
       <td>log</td>
@@ -4428,8 +4826,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-401.424738</td>
       <td>33.991328</td>
       <td>61.780208</td>
-      <td>1.276543e-17</td>
-      <td>12.104430</td>
+      <td>3.425559e-20</td>
+      <td>12.333144</td>
       <td>7.851546</td>
       <td>True</td>
       <td>log</td>
@@ -4440,8 +4838,8 @@ See http://arxiv.org/abs/1507.04544 for details
       <td>-402.168361</td>
       <td>36.729682</td>
       <td>62.523831</td>
-      <td>1.033177e-18</td>
-      <td>12.270632</td>
+      <td>8.166559e-22</td>
+      <td>12.458697</td>
       <td>7.646004</td>
       <td>True</td>
       <td>log</td>
@@ -4699,7 +5097,7 @@ None
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [beta, sigma]
-Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 </code></pre></div>

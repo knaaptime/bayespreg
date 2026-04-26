@@ -1188,19 +1188,19 @@ W_ed row sums: 0.999999999999998 1.0000000000000016
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Fit complete for both specifications.
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_5848/2325084382.py:2: UserWarning: W does not appear to be row-standardised (row sums ≠ 1). Most spatial models assume W is row-standardised; results may be unreliable otherwise. For a scipy sparse matrix normalise rows manually (divide each row by its sum). To use a libpysal.graph.Graph set its transformation attribute: graph = graph.transform(&#39;r&#39;).
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_5914/2325084382.py:2: UserWarning: W does not appear to be row-standardised (row sums ≠ 1). Most spatial models assume W is row-standardised; results may be unreliable otherwise. For a scipy sparse matrix normalise rows manually (divide each row by its sum). To use a libpysal.graph.Graph set its transformation attribute: graph = graph.transform(&#39;r&#39;).
   model = SDMPanelFE(
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (1 chains in 1 job)
 NUTS: [rho, beta, sigma]
 Sampling 1 chain for 600 tune and 600 draw iterations (600 + 600 draws total) took 2 seconds.
 Only one chain was sampled, this makes it impossible to run some convergence checks
-/tmp/ipykernel_5848/2325084382.py:2: UserWarning: W does not appear to be row-standardised (row sums ≠ 1). Most spatial models assume W is row-standardised; results may be unreliable otherwise. For a scipy sparse matrix normalise rows manually (divide each row by its sum). To use a libpysal.graph.Graph set its transformation attribute: graph = graph.transform(&#39;r&#39;).
+/tmp/ipykernel_5914/2325084382.py:2: UserWarning: W does not appear to be row-standardised (row sums ≠ 1). Most spatial models assume W is row-standardised; results may be unreliable otherwise. For a scipy sparse matrix normalise rows manually (divide each row by its sum). To use a libpysal.graph.Graph set its transformation attribute: graph = graph.transform(&#39;r&#39;).
   model = SDMPanelFE(
 Initializing NUTS using jitter+adapt_diag...
 Sequential sampling (1 chains in 1 job)
 NUTS: [rho, beta, sigma]
-Sampling 1 chain for 600 tune and 600 draw iterations (600 + 600 draws total) took 3 seconds.
+Sampling 1 chain for 600 tune and 600 draw iterations (600 + 600 draws total) took 2 seconds.
 Only one chain was sampled, this makes it impossible to run some convergence checks
 </code></pre></div>
 </div>
@@ -1273,7 +1273,13 @@ Only one chain was sampled, this makes it impossible to run some convergence che
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">compare_effects</span><span class="p">(</span><span class="n">spec_name</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
-    <span class="n">be</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">spatial_effects</span><span class="p">())</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;feature_names&quot;</span><span class="p">:</span> <span class="s2">&quot;feature&quot;</span><span class="p">})</span>
+    <span class="n">eff</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">spatial_effects</span><span class="p">()</span>
+    <span class="n">be</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+        <span class="s2">&quot;feature&quot;</span><span class="p">:</span> <span class="n">eff</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
+        <span class="s2">&quot;direct&quot;</span><span class="p">:</span> <span class="n">eff</span><span class="p">[</span><span class="s2">&quot;direct&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+        <span class="s2">&quot;indirect&quot;</span><span class="p">:</span> <span class="n">eff</span><span class="p">[</span><span class="s2">&quot;indirect&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+        <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="n">eff</span><span class="p">[</span><span class="s2">&quot;total&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+    <span class="p">})</span>
     <span class="n">merged</span> <span class="o">=</span> <span class="n">orig_effects</span><span class="p">[</span><span class="n">spec_name</span><span class="p">]</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">be</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;feature&quot;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;_orig&quot;</span><span class="p">,</span> <span class="s2">&quot;_bayes&quot;</span><span class="p">))</span>
     <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;direct&quot;</span><span class="p">,</span> <span class="s2">&quot;indirect&quot;</span><span class="p">,</span> <span class="s2">&quot;total&quot;</span><span class="p">]:</span>
         <span class="n">merged</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">_diff&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">merged</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">_bayes&quot;</span><span class="p">]</span> <span class="o">-</span> <span class="n">merged</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">_orig&quot;</span><span class="p">]</span>
@@ -1546,15 +1552,15 @@ Effects comparison: ED
       <td>0.003500</td>
       <td>0.021200</td>
       <td>0.024700</td>
-      <td>0.003670</td>
-      <td>0.020257</td>
-      <td>0.023927</td>
-      <td>0.000170</td>
-      <td>0.000170</td>
-      <td>-0.000943</td>
-      <td>0.000943</td>
-      <td>-0.000773</td>
-      <td>0.000773</td>
+      <td>0.003676</td>
+      <td>0.020255</td>
+      <td>0.023931</td>
+      <td>0.000176</td>
+      <td>0.000176</td>
+      <td>-0.000945</td>
+      <td>0.000945</td>
+      <td>-0.000769</td>
+      <td>0.000769</td>
     </tr>
     <tr>
       <th>1</th>
@@ -1562,15 +1568,15 @@ Effects comparison: ED
       <td>-0.008800</td>
       <td>-0.013500</td>
       <td>-0.022300</td>
-      <td>-0.008856</td>
-      <td>-0.013528</td>
-      <td>-0.022384</td>
-      <td>-0.000056</td>
-      <td>0.000056</td>
-      <td>-0.000028</td>
-      <td>0.000028</td>
-      <td>-0.000084</td>
-      <td>0.000084</td>
+      <td>-0.008860</td>
+      <td>-0.013523</td>
+      <td>-0.022383</td>
+      <td>-0.000060</td>
+      <td>0.000060</td>
+      <td>-0.000023</td>
+      <td>0.000023</td>
+      <td>-0.000083</td>
+      <td>0.000083</td>
     </tr>
     <tr>
       <th>2</th>
@@ -1578,15 +1584,15 @@ Effects comparison: ED
       <td>-0.092100</td>
       <td>0.032200</td>
       <td>-0.059900</td>
-      <td>-0.092321</td>
-      <td>0.032266</td>
-      <td>-0.060056</td>
-      <td>-0.000221</td>
-      <td>0.000221</td>
-      <td>0.000066</td>
-      <td>0.000066</td>
-      <td>-0.000156</td>
-      <td>0.000156</td>
+      <td>-0.092313</td>
+      <td>0.032246</td>
+      <td>-0.060067</td>
+      <td>-0.000213</td>
+      <td>0.000213</td>
+      <td>0.000046</td>
+      <td>0.000046</td>
+      <td>-0.000167</td>
+      <td>0.000167</td>
     </tr>
     <tr>
       <th>3</th>
@@ -1594,15 +1600,15 @@ Effects comparison: ED
       <td>0.035100</td>
       <td>0.402900</td>
       <td>0.438000</td>
-      <td>0.036091</td>
-      <td>0.405902</td>
-      <td>0.441992</td>
-      <td>0.000991</td>
-      <td>0.000991</td>
-      <td>0.003002</td>
-      <td>0.003002</td>
-      <td>0.003992</td>
-      <td>0.003992</td>
+      <td>0.036207</td>
+      <td>0.405759</td>
+      <td>0.441966</td>
+      <td>0.001107</td>
+      <td>0.001107</td>
+      <td>0.002859</td>
+      <td>0.002859</td>
+      <td>0.003966</td>
+      <td>0.003966</td>
     </tr>
   </tbody>
 </table>
@@ -1647,14 +1653,14 @@ Effects comparison: ED
       <td>0.028100</td>
       <td>0.030700</td>
       <td>0.002412</td>
-      <td>0.028356</td>
-      <td>0.030768</td>
+      <td>0.028388</td>
+      <td>0.030800</td>
       <td>-0.000188</td>
       <td>0.000188</td>
-      <td>0.000256</td>
-      <td>0.000256</td>
-      <td>0.000068</td>
-      <td>0.000068</td>
+      <td>0.000288</td>
+      <td>0.000288</td>
+      <td>0.000100</td>
+      <td>0.000100</td>
     </tr>
     <tr>
       <th>1</th>
@@ -1663,14 +1669,14 @@ Effects comparison: ED
       <td>-0.028200</td>
       <td>-0.037100</td>
       <td>-0.008834</td>
-      <td>-0.027765</td>
-      <td>-0.036598</td>
+      <td>-0.027812</td>
+      <td>-0.036647</td>
       <td>0.000066</td>
       <td>0.000066</td>
-      <td>0.000435</td>
-      <td>0.000435</td>
-      <td>0.000502</td>
-      <td>0.000502</td>
+      <td>0.000388</td>
+      <td>0.000388</td>
+      <td>0.000453</td>
+      <td>0.000453</td>
     </tr>
     <tr>
       <th>2</th>
@@ -1678,15 +1684,15 @@ Effects comparison: ED
       <td>-0.087600</td>
       <td>0.035200</td>
       <td>-0.052300</td>
-      <td>-0.087497</td>
+      <td>-0.087498</td>
       <td>0.035119</td>
-      <td>-0.052378</td>
-      <td>0.000103</td>
-      <td>0.000103</td>
+      <td>-0.052379</td>
+      <td>0.000102</td>
+      <td>0.000102</td>
       <td>-0.000081</td>
       <td>0.000081</td>
-      <td>-0.000078</td>
-      <td>0.000078</td>
+      <td>-0.000079</td>
+      <td>0.000079</td>
     </tr>
     <tr>
       <th>3</th>
@@ -1694,15 +1700,15 @@ Effects comparison: ED
       <td>0.029100</td>
       <td>0.556600</td>
       <td>0.585700</td>
-      <td>0.029993</td>
-      <td>0.552198</td>
-      <td>0.582191</td>
-      <td>0.000893</td>
-      <td>0.000893</td>
-      <td>-0.004402</td>
-      <td>0.004402</td>
-      <td>-0.003509</td>
-      <td>0.003509</td>
+      <td>0.029995</td>
+      <td>0.552818</td>
+      <td>0.582813</td>
+      <td>0.000895</td>
+      <td>0.000895</td>
+      <td>-0.003782</td>
+      <td>0.003782</td>
+      <td>-0.002887</td>
+      <td>0.002887</td>
     </tr>
   </tbody>
 </table>
@@ -1768,9 +1774,9 @@ Effects comparison: ED
       <td>Table 1 col[1] 6NN</td>
       <td>0.000433</td>
       <td>0.504599</td>
-      <td>0.000359</td>
-      <td>0.001010</td>
-      <td>0.001251</td>
+      <td>0.000389</td>
+      <td>0.000968</td>
+      <td>0.001246</td>
     </tr>
     <tr>
       <th>1</th>
@@ -1778,8 +1784,8 @@ Effects comparison: ED
       <td>0.000389</td>
       <td>1.012088</td>
       <td>0.000313</td>
-      <td>0.001294</td>
-      <td>0.001039</td>
+      <td>0.001135</td>
+      <td>0.000880</td>
     </tr>
   </tbody>
 </table>

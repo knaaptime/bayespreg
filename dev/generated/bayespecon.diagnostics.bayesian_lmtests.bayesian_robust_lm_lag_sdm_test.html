@@ -1658,9 +1658,9 @@
 <dd><p>Bayesian robust LM-Lag test in SDM context (H₀: ρ = 0, robust to γ).</p>
 <p>Tests the null hypothesis that the spatial lag coefficient is zero,
 robust to the local presence of WX effects (γ). Uses the Neyman
-orthogonal score adjustment from <span id="id1">Doğan <em>et al.</em> [<a class="reference internal" href="../references.html#id10" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">2021</a>]</span>, Proposition 3,
+orthogonal score adjustment from <span id="id1">Doğan <em>et al.</em> [<a class="reference internal" href="../references.html#id11" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">2021</a>]</span>, Proposition 3,
 which is the Bayesian analogue of the robust LM-Lag-SDM test in
-<span id="id2">Koley and Bera [<a class="reference internal" href="../references.html#id15" title="Malabika Koley and Anil K. Bera. To use, or not to use the spatial Durbin model? – that is the question. Spatial Economic Analysis, 19(1):30–56, 2024. URL: https://doi.org/10.1080/17421772.2023.2256810 (visited on 2025-05-21), doi:10.1080/17421772.2023.2256810.">2024</a>]</span>.</p>
+<span id="id2">Koley and Bera [<a class="reference internal" href="../references.html#id17" title="Malabika Koley and Anil K. Bera. To use, or not to use the spatial Durbin model? – that is the question. Spatial Economic Analysis, 19(1):30–56, 2024. URL: https://doi.org/10.1080/17421772.2023.2256810 (visited on 2025-05-21), doi:10.1080/17421772.2023.2256810.">2024</a>]</span>.</p>
 <p>The alternative model is SLX (includes γ but not ρ). For each
 posterior draw from the SLX model, residuals are:</p>
 <div class="math notranslate nohighlight">
@@ -1681,7 +1681,7 @@ J_{\gamma\gamma \cdot \sigma}^{-1} J_{\gamma\rho \cdot \sigma}\]</div>
 <div class="math notranslate nohighlight">
 \[\mathrm{LM}_R = \frac{(g_\rho^*)^2}{V^*}\]</div>
 <p>which is distributed as <span class="math notranslate nohighlight">\(\chi^2_1\)</span> under H₀, irrespective of
-local misspecification in γ (<span id="id3">[<a class="reference internal" href="../references.html#id10" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">Doğan <em>et al.</em>, 2021</a>]</span>, Proposition 3).</p>
+local misspecification in γ (<span id="id3">[<a class="reference internal" href="../references.html#id11" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">Doğan <em>et al.</em>, 2021</a>]</span>, Proposition 3).</p>
 <dl class="field-list simple">
 <dt class="field-odd" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-parameters">Parameters<span class="colon">:</span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-parameters" title="Permalink to this headline">¶</a></dt>
 <dd class="field-odd"><dl class="simple api-field highlight">
