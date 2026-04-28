@@ -34,12 +34,12 @@ Cross Sectional Spatial Models
 .. autosummary::
    :toctree: generated/
 
-    SAR
-      OLS
-    SEM
-    SLX
-    SDM
-    SDEM
+   OLS
+   SAR
+   SEM
+   SLX
+   SDM
+   SDEM
 
 
 Panel Spatial Models
@@ -112,6 +112,38 @@ Panel Spatial Models (Tobit)
    SEMPanelTobit
 
 
+
+Flow Models
+-----------
+
+.. currentmodule:: bayespecon.models.flow
+
+.. autosummary::
+   :toctree: generated/
+
+   FlowModel
+   SAR_Flow
+   SAR_Flow_Separable
+   PoissonFlow
+   PoissonFlow_Separable
+
+
+Panel Flow Models
+^^^^^^^^^^^^^^^^^
+
+.. currentmodule:: bayespecon.models.flow_panel
+
+.. autosummary::
+   :toctree: generated/
+
+   FlowPanelModel
+   SAR_Flow_Panel
+   SAR_Flow_Separable_Panel
+   PoissonFlow_Panel
+   PoissonFlow_Separable_Panel
+
+
+
 Bayesian Diagnostics
 ---------------------
 
@@ -158,6 +190,9 @@ Bayesian Model Comparison
    :toctree: generated/
 
    bayes_factor_compare_models
+   bic_to_bf
+   compile_log_posterior
+   post_prob
 
 
 Log-Determinant Methods
@@ -196,7 +231,7 @@ Data Generating Processes
    :toctree: generated/
 
    simulate_sar
-      simulate_ols
+   simulate_ols
    simulate_sem
    simulate_slx
    simulate_sdm
@@ -208,13 +243,98 @@ Data Generating Processes
    simulate_panel_ols_fe
    simulate_panel_sar_fe
    simulate_panel_sem_fe
+
+
+Flow Models
+-----------
+
+.. currentmodule:: bayespecon.models.flow
+
+.. autosummary::
+   :toctree: generated/
+
+   FlowModel
+   SAR_Flow
+   SAR_Flow_Separable
+   PoissonFlow
+   PoissonFlow_Separable
+
+Panel Flow Models
+^^^^^^^^^^^^^^^^^
+
+.. currentmodule:: bayespecon.models.flow_panel
+
+.. autosummary::
+   :toctree: generated/
+
+   FlowPanelModel
+   SAR_Flow_Panel
+   SAR_Flow_Separable_Panel
+   PoissonFlow_Panel
+   PoissonFlow_Separable_Panel
+
+
+Graph Utilities
+---------------
+
+.. currentmodule:: bayespecon.graph
+
+.. autosummary::
+   :toctree: generated/
+
+   FlowDesignMatrix
+   flow_design_matrix
+   flow_design_matrix_with_orig
+   flow_weight_matrices
+   destination_weights
+   origin_weights
+   network_weights
    simulate_panel_sdm_fe
    simulate_panel_sdem_fe
+   simulate_panel_slx_fe
    simulate_panel_ols_re
    simulate_panel_sar_re
    simulate_panel_sem_re
    simulate_panel_dlm_fe
    simulate_panel_sdmr_fe
    simulate_panel_sdmu_fe
+   simulate_panel_sar_dynamic_fe
+   simulate_panel_sem_dynamic_fe
+   simulate_panel_sdem_dynamic_fe
+   simulate_panel_slx_dynamic_fe
    simulate_panel_sar_tobit_fe
    simulate_panel_sem_tobit_fe
+
+Flow Data Generating Processes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. currentmodule:: bayespecon.dgp
+
+.. autosummary::
+   :toctree: generated/
+
+   generate_flow_data
+   generate_flow_data_separable
+   generate_poisson_flow_data
+   generate_poisson_flow_data_separable
+   generate_panel_flow_data
+   generate_panel_flow_data_separable
+   generate_panel_poisson_flow_data
+   generate_panel_poisson_flow_data_separable
+
+
+Graph Utilities
+---------------
+
+.. currentmodule:: bayespecon.graph
+
+.. autosummary::
+   :toctree: generated/
+
+   FlowDesignMatrix
+   flow_design_matrix
+   flow_design_matrix_with_orig
+   flow_weight_matrices
+   destination_weights
+   origin_weights
+   network_weights

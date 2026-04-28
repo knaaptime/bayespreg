@@ -24,7 +24,7 @@ from .helpers  import (
     make_panel_sem_data,
 )
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 
 # True parameters
 RHO_TRUE = 0.4
@@ -42,7 +42,6 @@ ABS_TOL_SIGMA_ALPHA = 0.30
 # OLS Panel RE
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_ols_panel_re_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """OLSPanelRE posterior means of beta should match truth."""
     y, X, _ = make_panel_ols_data(
@@ -58,7 +57,6 @@ def test_ols_panel_re_recovers_beta(rng, W_panel_dense, W_panel_graph):
         )
 
 
-@pytest.mark.slow
 def test_ols_panel_re_recovers_sigma_alpha(rng, W_panel_dense, W_panel_graph):
     """OLSPanelRE posterior mean of sigma_alpha should be close to the true value."""
     y, X, _ = make_panel_ols_data(
@@ -77,7 +75,6 @@ def test_ols_panel_re_recovers_sigma_alpha(rng, W_panel_dense, W_panel_graph):
 # SAR Panel RE
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sar_panel_re_recovers_rho(rng, W_panel_dense, W_panel_graph):
     """SARPanelRE posterior mean of rho should be close to the true rho."""
     y, X, _ = make_panel_sar_data(
@@ -93,7 +90,6 @@ def test_sar_panel_re_recovers_rho(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sar_panel_re_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SARPanelRE posterior means of beta should match truth."""
     y, X, _ = make_panel_sar_data(
@@ -110,7 +106,6 @@ def test_sar_panel_re_recovers_beta(rng, W_panel_dense, W_panel_graph):
         )
 
 
-@pytest.mark.slow
 def test_sar_panel_re_recovers_sigma_alpha(rng, W_panel_dense, W_panel_graph):
     """SARPanelRE posterior mean of sigma_alpha should be close to the true value."""
     y, X, _ = make_panel_sar_data(
@@ -130,7 +125,6 @@ def test_sar_panel_re_recovers_sigma_alpha(rng, W_panel_dense, W_panel_graph):
 # SEM Panel RE
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sem_panel_re_recovers_lam(rng, W_panel_dense, W_panel_graph):
     """SEMPanelRE posterior mean of lambda should be close to the true value."""
     y, X, _ = make_panel_sem_data(
@@ -146,7 +140,6 @@ def test_sem_panel_re_recovers_lam(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sem_panel_re_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SEMPanelRE posterior means of beta should match truth."""
     y, X, _ = make_panel_sem_data(
@@ -163,7 +156,6 @@ def test_sem_panel_re_recovers_beta(rng, W_panel_dense, W_panel_graph):
         )
 
 
-@pytest.mark.slow
 def test_sem_panel_re_recovers_sigma_alpha(rng, W_panel_dense, W_panel_graph):
     """SEMPanelRE posterior mean of sigma_alpha should be close to the true value."""
     y, X, _ = make_panel_sem_data(

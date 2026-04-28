@@ -26,10 +26,11 @@ dependencies = [
 include = ["bayespecon", "bayespecon.*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["bayespecon/tests"]
 addopts = "-m 'not slow'"   # run fast tests by default; use -m slow or -m '' to include all
 markers = [
     "slow: marks tests as slow (MCMC parameter recovery — deselected by default)",
+    "recovery: marks parameter recovery tests (fit model, assert posterior ≈ true params)",
 ]
 
 [tool.coverage.run]

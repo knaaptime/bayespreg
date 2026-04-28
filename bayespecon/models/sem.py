@@ -166,9 +166,8 @@ class SEM(SpatialModel):
                     - 0.5 * np.log(2 * np.pi)
                 )  # (n_draws, n)
 
-            # Jacobian contribution per draw: log|I - lam*W| / n (pure numpy)
-            eigs = self._W_eigs.real.astype(np.float64)
-            jacobian = np.array([np.sum(np.log(np.abs(1.0 - lv * eigs))) for lv in lam_draws])  # (n_draws,)
+            # Jacobian contribution per draw: log|I - lam*W| / n (respects logdet_method)
+            jacobian = self._logdet_numpy_vec_fn(lam_draws)  # (n_draws,)
             ll_jac = jacobian[:, None] / n  # (n_draws, 1) broadcast to (n_draws, n)
 
             ll_total = ll_gauss + ll_jac  # (n_draws, n)
@@ -200,12 +199,7 @@ class SEM(SpatialModel):
         beta_sigma = self.priors.get("beta_sigma", 1e6)
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
-        logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
-            method=self.logdet_method,
-            rho_min=lam_lower,
-            rho_max=lam_upper,
-        )
+        logdet_fn = self._logdet_pytensor_fn
         W_pt = pt.as_tensor_variable(self._W_dense)
 
         with pm.Model(coords=self._model_coords()) as model:

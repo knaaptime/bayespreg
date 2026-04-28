@@ -17,7 +17,7 @@ from .helpers  import (
     make_sem_tobit_data,
 )
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 
 RHO_TRUE = 0.4
 LAM_TRUE = 0.4
@@ -31,7 +31,6 @@ ABS_TOL_BETA = 0.55
 ABS_TOL_WX = 0.70
 
 
-@pytest.mark.slow
 def test_sar_tobit_recovers_rho_and_beta(rng, W_dense, W_graph):
     y, X = make_sar_tobit_data(
         rng,
@@ -52,7 +51,6 @@ def test_sar_tobit_recovers_rho_and_beta(rng, W_dense, W_graph):
         assert abs(bhat - btrue) < ABS_TOL_BETA
 
 
-@pytest.mark.slow
 def test_sem_tobit_recovers_lam_and_beta(rng, W_dense, W_graph):
     y, X = make_sem_tobit_data(
         rng,
@@ -73,7 +71,6 @@ def test_sem_tobit_recovers_lam_and_beta(rng, W_dense, W_graph):
         assert abs(bhat - btrue) < ABS_TOL_BETA
 
 
-@pytest.mark.slow
 def test_sdm_tobit_recovers_rho_and_beta(rng, W_dense, W_graph):
     y, X = make_sdm_tobit_data(
         rng,

@@ -14,7 +14,7 @@ from .helpers  import (
     make_panel_sem_tobit_data,
 )
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 
 RHO_TRUE = 0.35
 LAM_TRUE = 0.35
@@ -26,7 +26,6 @@ ABS_TOL_SPATIAL = 0.35
 ABS_TOL_BETA = 0.60
 
 
-@pytest.mark.slow
 def test_sar_panel_tobit_recovers_rho_and_beta(rng, W_panel_dense, W_panel_graph):
     y, X = make_panel_sar_tobit_data(
         rng,
@@ -49,7 +48,6 @@ def test_sar_panel_tobit_recovers_rho_and_beta(rng, W_panel_dense, W_panel_graph
         assert abs(bhat - btrue) < ABS_TOL_BETA
 
 
-@pytest.mark.slow
 def test_sem_panel_tobit_recovers_lam_and_beta(rng, W_panel_dense, W_panel_graph):
     y, X = make_panel_sem_tobit_data(
         rng,

@@ -103,12 +103,8 @@ class SDM(SpatialModel):
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y)
 
-            # Jacobian: log|I - rho*W|
-            # Build the expression inline so pytensor can resolve rho as a graph input.
-            # eigs is a constant (no gradient w.r.t. it), so it does not cause
-            # MissingInputError — only rho does, and it's properly defined above.
-            eigs = self._W_eigs.real.astype(np.float64)
-            pm.Potential("jacobian", pt.sum(pt.log(pt.abs(1.0 - rho * pt.as_tensor_variable(eigs)))))
+            # Jacobian: log|I - rho*W|  (respects logdet_method via self._logdet_pytensor_fn)
+            pm.Potential("jacobian", self._logdet_pytensor_fn(rho))
 
         return model
 
@@ -208,9 +204,8 @@ class SDM(SpatialModel):
             else:
                 ll_gauss = -0.5 * (resid / sigma_draws[:, None]) ** 2 - np.log(sigma_draws[:, None]) - 0.5 * np.log(2 * np.pi)  # (n_draws, n)
 
-            # Jacobian contribution per draw: log|I - rho*W| / n (pure numpy)
-            eigs = self._W_eigs.real.astype(np.float64)
-            jacobian = np.array([np.sum(np.log(np.abs(1.0 - rv * eigs))) for rv in rho_draws])  # (n_draws,)
+            # Jacobian contribution per draw: log|I - rho*W| / n (respects logdet_method)
+            jacobian = self._logdet_numpy_vec_fn(rho_draws)  # (n_draws,)
             ll_jac = jacobian[:, None] / n  # (n_draws, 1) broadcast to (n_draws, n)
 
             ll_total = ll_gauss + ll_jac  # (n_draws, n)
@@ -255,15 +250,9 @@ class SDM(SpatialModel):
         inv_eigs = 1.0 / (1.0 - rho * eigs)
         mean_diag_M = float(np.mean(inv_eigs.real))
         mean_diag_MW = float(np.mean((eigs * inv_eigs).real))
-        if self._is_row_std:
-            mean_row_sum_M = 1.0 / (1.0 - rho)
-            mean_row_sum_MW = mean_row_sum_M
-        else:
-            ones = np.ones(self._W_sparse.shape[0])
-            A = np.eye(self._W_sparse.shape[0]) - rho * self._W_sparse.toarray()
-            M_ones = np.linalg.solve(A, ones)
-            mean_row_sum_M = float(M_ones.mean())
-            mean_row_sum_MW = float((self._W_sparse.toarray() @ M_ones).mean())
+        rho_arr = np.array([rho])
+        mean_row_sum_M = float(self._batch_mean_row_sum(rho_arr)[0])
+        mean_row_sum_MW = float(self._batch_mean_row_sum_MW(rho_arr)[0])
         direct = np.array([
             beta1[j] * mean_diag_M + b2 * mean_diag_MW
             for j, b2 in zip(self._wx_column_indices, beta2)
@@ -326,20 +315,8 @@ class SDM(SpatialModel):
         mean_diag_M = np.mean(inv_eigs, axis=1)  # (G,)
         mean_diag_MW = np.mean(eigs[None, :] * inv_eigs, axis=1)  # (G,)
 
-        if self._is_row_std:
-            mean_row_sum_M = 1.0 / (1.0 - rho_draws)  # (G,)
-            mean_row_sum_MW = mean_row_sum_M  # row sums of M*W = row sums of M for row-std W
-        else:
-            n = self._W_sparse.shape[0]
-            W_dense = self._W_dense
-            ones = np.ones(n)
-            mean_row_sum_M = np.empty(G)
-            mean_row_sum_MW = np.empty(G)
-            for g in range(G):
-                A = np.eye(n) - rho_draws[g] * W_dense
-                M_ones = np.linalg.solve(A, ones)
-                mean_row_sum_M[g] = M_ones.mean()
-                mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+        mean_row_sum_M = self._batch_mean_row_sum(rho_draws)  # (G,)
+        mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)  # (G,)
 
         # For each lagged covariate k (with index j in X):
         # Direct_k = beta1_j * mean_diag_M + beta2_k * mean_diag_MW

@@ -24,7 +24,7 @@ from .helpers  import (
     make_slx_data,
 )
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 
 # True parameters used across all cross-sectional tests
 RHO_TRUE = 0.5
@@ -44,7 +44,6 @@ ABS_TOL_WX = 0.65        # for lagged-X coefficients (harder to recover at N=36)
 # SAR
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sar_recovers_rho(rng, W_dense, W_graph):
     """SAR posterior mean of rho should be close to the true rho."""
     y, X = make_sar_data(rng, W_dense, rho=RHO_TRUE, beta=BETA_TRUE,
@@ -57,7 +56,6 @@ def test_sar_recovers_rho(rng, W_dense, W_graph):
     )
 
 
-@pytest.mark.slow
 def test_sar_recovers_beta(rng, W_dense, W_graph):
     """SAR posterior means of beta should be close to the true betas."""
     y, X = make_sar_data(rng, W_dense, rho=RHO_TRUE, beta=BETA_TRUE,
@@ -75,7 +73,6 @@ def test_sar_recovers_beta(rng, W_dense, W_graph):
 # SEM
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sem_recovers_lam(rng, W_dense, W_graph):
     """SEM posterior mean of lambda should be close to the true lambda."""
     y, X = make_sem_data(rng, W_dense, lam=LAM_TRUE, beta=BETA_TRUE,
@@ -88,7 +85,6 @@ def test_sem_recovers_lam(rng, W_dense, W_graph):
     )
 
 
-@pytest.mark.slow
 def test_sem_recovers_beta(rng, W_dense, W_graph):
     """SEM posterior means of beta should be close to the true betas."""
     y, X = make_sem_data(rng, W_dense, lam=LAM_TRUE, beta=BETA_TRUE,
@@ -106,7 +102,6 @@ def test_sem_recovers_beta(rng, W_dense, W_graph):
 # SLX
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_slx_recovers_beta(rng, W_dense, W_graph):
     """SLX posterior means of beta (X + WX) should be close to true values."""
     y, X = make_slx_data(rng, W_dense, beta1=BETA_TRUE, beta2=BETA2_TRUE,
@@ -126,7 +121,6 @@ def test_slx_recovers_beta(rng, W_dense, W_graph):
 # SDM
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sdm_recovers_rho(rng, W_dense, W_graph):
     """SDM posterior mean of rho should be close to the true rho."""
     y, X = make_sdm_data(rng, W_dense, rho=RHO_TRUE, beta1=BETA_TRUE,
@@ -139,7 +133,6 @@ def test_sdm_recovers_rho(rng, W_dense, W_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdm_recovers_beta(rng, W_dense, W_graph):
     """SDM posterior means of beta (X + WX) should be close to true values."""
     y, X = make_sdm_data(rng, W_dense, rho=RHO_TRUE, beta1=BETA_TRUE,
@@ -159,7 +152,6 @@ def test_sdm_recovers_beta(rng, W_dense, W_graph):
 # SDEM
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sdem_recovers_lam(rng, W_dense, W_graph):
     """SDEM posterior mean of lambda should be close to the true lambda."""
     y, X = make_sdem_data(rng, W_dense, lam=LAM_TRUE, beta1=BETA_TRUE,
@@ -172,7 +164,6 @@ def test_sdem_recovers_lam(rng, W_dense, W_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdem_recovers_beta(rng, W_dense, W_graph):
     """SDEM posterior means of beta should be close to true values."""
     y, X = make_sdem_data(rng, W_dense, lam=LAM_TRUE, beta1=BETA_TRUE,

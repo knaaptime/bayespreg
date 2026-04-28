@@ -146,11 +146,6 @@ def weights_from_geodataframe(
     Graph
         Row-standardized graph built from geometry.
     """
-    try:
-        from libpysal.weights import DistanceBand, KNN, Queen, Rook
-    except Exception as exc:  # pragma: no cover
-        raise ImportError("libpysal weights builders are required for GeoDataFrame support.") from exc
-
     if gdf is None:
         raise ValueError("gdf must be provided when building weights from geometry.")
     if not hasattr(gdf, "geometry"):
@@ -158,20 +153,18 @@ def weights_from_geodataframe(
 
     mode = contiguity.lower()
     if mode == "queen":
-        w = Queen.from_dataframe(gdf, use_index=False)
+        g = Graph.build_contiguity(gdf, rook=False)
     elif mode == "rook":
-        w = Rook.from_dataframe(gdf, use_index=False)
+        g = Graph.build_contiguity(gdf, rook=True)
     elif mode == "knn":
-        w = KNN.from_dataframe(gdf, k=int(k), use_index=False)
+        g = Graph.build_knn(gdf, k=int(k))
     elif mode == "distance":
         if distance_threshold is None:
             raise ValueError("distance_threshold must be supplied when contiguity='distance'.")
-        cent = np.column_stack([gdf.geometry.centroid.x.values, gdf.geometry.centroid.y.values])
-        w = DistanceBand(cent, threshold=float(distance_threshold), binary=True)
+        g = Graph.build_distance_band(gdf, threshold=float(distance_threshold), binary=True)
     else:
-        raise ValueError("contiguity must be one of {'queen', 'rook', 'knn', 'distance'}." )
+        raise ValueError("contiguity must be one of {'queen', 'rook', 'knn', 'distance'}.")
 
-    g = Graph.from_W(w)
     return g.transform("r")
 
 

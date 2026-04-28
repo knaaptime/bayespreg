@@ -18,6 +18,13 @@ from .panel_dynamic import DLMPanelFE, SDMRPanelFE, SDMUPanelFE, SARPanelDEDynam
 from .panel_base import SpatialPanelModel
 from .panel_re import OLSPanelRE, SARPanelRE, SEMPanelRE
 from .panel_tobit import SARPanelTobit, SEMPanelTobit
+from .flow_panel import (
+    FlowPanelModel,
+    SAR_Flow_Panel,
+    SAR_Flow_Separable_Panel,
+    PoissonFlow_Panel,
+    PoissonFlow_Separable_Panel,
+)
 
 __all__ = [
     "SpatialModel",
@@ -50,4 +57,9 @@ __all__ = [
     "SARPanelTobit",
     "SEMPanelTobit",
     "SpatialPanelModel",
+    "FlowPanelModel",
+    "SAR_Flow_Panel",
+    "SAR_Flow_Separable_Panel",
+    "PoissonFlow_Panel",
+    "PoissonFlow_Separable_Panel",
 ]

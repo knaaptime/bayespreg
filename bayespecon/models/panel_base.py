@@ -14,6 +14,8 @@ import scipy.sparse as sp
 from formulaic import model_matrix
 from libpysal.graph import Graph
 
+from ..logdet import make_logdet_fn, make_logdet_numpy_fn, make_logdet_numpy_vec_fn
+
 
 def _demean_panel(y: np.ndarray, X: np.ndarray, N: int, T: int, model: int):
     """Apply panel demeaning transformation.
@@ -209,7 +211,7 @@ class SpatialPanelModel(ABC):
         T: Optional[int] = None,
         model: int = 0,
         priors: Optional[dict] = None,
-        logdet_method: str = "eigenvalue",
+        logdet_method: str | None = None,
         robust: bool = False,
     ):
         if W is None:
@@ -284,6 +286,26 @@ class SpatialPanelModel(ABC):
         # full dense materialisation.  For an N×N unit matrix W, the panel lag
         # of a stacked vector v (length N*T, ordered T×N) is equivalent to
         # applying W row-wise within each time period.
+        # Store a numpy logdet callable for post-sampling LL Jacobians.
+        self._logdet_numpy_fn = make_logdet_numpy_fn(
+            self._W_sparse, self._W_eigs.real, method=self.logdet_method
+        )
+        # Vectorized version: evaluates logdet over an array of rho draws in one call.
+        self._logdet_numpy_vec_fn = make_logdet_numpy_vec_fn(
+            self._W_sparse, self._W_eigs.real, method=self.logdet_method
+        )
+        # Store the correct W argument for logdet calls (1-D for eigenvalue,
+        # 2-D for other methods so auto-selection works correctly for large n).
+        self._W_for_logdet: np.ndarray = (
+            self._W_eigs.real.astype(np.float64)
+            if self.logdet_method == "eigenvalue"
+            else self._W_sparse.toarray().astype(np.float64)
+        )
+        # Store a pytensor logdet callable for use in _build_pymc_model.
+        self._logdet_pytensor_fn = make_logdet_fn(
+            self._W_for_logdet, method=self.logdet_method, T=self._T
+        )
+
         self._Wy = self._sparse_panel_lag(self._y)
         if self._wx_column_indices:
             self._WX = np.column_stack([
@@ -315,6 +337,87 @@ class SpatialPanelModel(ABC):
         if self._W_dense_cache is None:
             self._W_dense_cache = _as_dense_W(self._W_sparse, self._N, self._T)
         return self._W_dense_cache
+
+    @property
+    def _T_ww(self) -> float:
+        """Trace of W'W + W², cached on first access.
+
+        Computed as ``||W||_F² + sum(W * W')`` using sparse operations,
+        which is O(nnz) rather than O(n²).
+        """
+        if not hasattr(self, "_T_ww_cache"):
+            W_sp = self._W_sparse
+            self._T_ww_cache = float(W_sp.power(2).sum() + W_sp.multiply(W_sp.T).sum())
+        return self._T_ww_cache
+
+    def _batch_mean_row_sum(self, rho_draws: np.ndarray) -> np.ndarray:
+        """Compute mean row sum of (I - rho*W)^{-1} for each posterior draw.
+
+        For row-standardised W this is the scalar ``1/(1 - rho)``.
+        For non-row-standardised W the eigenvalue decomposition is used:
+        ``mean_row_sum = (1/n) * ones' V diag(1/(1-rho*omega)) V^{-1} ones``,
+        where the vector ``c = V^{-1} ones`` is pre-computed once.
+
+        Parameters
+        ----------
+        rho_draws : np.ndarray, shape (G,)
+            Spatial autoregressive parameter draws.
+
+        Returns
+        -------
+        np.ndarray, shape (G,)
+            Mean row sum for each draw.
+        """
+        if self._is_row_std:
+            return 1.0 / (1.0 - rho_draws)
+
+        # Eigenvalue-based computation: precompute c = V^{-1} @ ones once.
+        if not hasattr(self, "_eig_inv_ones"):
+            W_dense = self._W_dense
+            eigs, V = np.linalg.eig(W_dense)
+            self._W_eigs_full = eigs.real.astype(np.float64)
+            self._V_full = V.real.astype(np.float64)
+            self._eig_inv_ones = np.linalg.solve(self._V_full, np.ones(W_dense.shape[0]))
+
+        c = self._eig_inv_ones
+        eigs = self._W_eigs_full
+        inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])  # (G, n)
+        V_col_sums = self._V_full.sum(axis=0)  # (n,)
+        return (1.0 / len(c)) * (inv_eigs * c[None, :]) @ V_col_sums
+
+    def _batch_mean_row_sum_MW(self, rho_draws: np.ndarray) -> np.ndarray:
+        """Compute mean row sum of (I - rho*W)^{-1} W for each posterior draw.
+
+        For row-standardised W this equals ``1/(1 - rho)`` (same as
+        ``_batch_mean_row_sum``) because row sums of M@W = row sums of M
+        when W is row-standardised.
+
+        For non-row-standardised W the eigenvalue decomposition is used:
+        ``mean_row_sum_MW = (1/n) * ones' V diag(omega/(1-rho*omega)) V^{-1} ones``.
+
+        Parameters
+        ----------
+        rho_draws : np.ndarray, shape (G,)
+            Spatial autoregressive parameter draws.
+
+        Returns
+        -------
+        np.ndarray, shape (G,)
+            Mean row sum of M@W for each draw.
+        """
+        if self._is_row_std:
+            return 1.0 / (1.0 - rho_draws)
+
+        # Ensure eigenvalue decomposition is available
+        if not hasattr(self, "_eig_inv_ones"):
+            _ = self._batch_mean_row_sum(rho_draws[:1])
+
+        c = self._eig_inv_ones
+        eigs = self._W_eigs_full
+        inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])  # (G, n)
+        eig_weighted = eigs[None, :] * inv_eigs  # omega / (1 - rho*omega)
+        V_col_sums = self._V_full.sum(axis=0)  # (n,)
+        return (1.0 / len(c)) * (eig_weighted * c[None, :]) @ V_col_sums
 
     @property
     def _nonintercept_indices(self) -> list[int]:
@@ -541,9 +644,8 @@ class SpatialPanelModel(ABC):
         n = self._y.shape[0]
         param_draws = idata.posterior[spatial_param].values.reshape(-1)  # (n_draws,)
 
-        # Eigenvalue-based Jacobian: log|I - param*W| * T (pure numpy)
-        eigs = self._W_eigs.real.astype(np.float64)
-        jacobian = np.array([np.sum(np.log(np.abs(1.0 - v * eigs))) for v in param_draws]) * T  # (n_draws,)
+        # Jacobian: log|I - param*W| * T (pure numpy, respects logdet_method)
+        jacobian = self._logdet_numpy_vec_fn(param_draws) * T  # (n_draws,)
         ll_jac = jacobian[:, None] / n  # (n_draws, 1)
 
         # Add Jacobian to each variable in the log_likelihood group

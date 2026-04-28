@@ -21,7 +21,7 @@ from .helpers  import (
     W_to_graph,
 )
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 
 # Data generating process parameters
 M_REGIONS = 10
@@ -50,7 +50,6 @@ def _fit_spatial_probit(rng):
     return model.fit(**SAMPLE_KWARGS), model
 
 
-@pytest.mark.slow
 def test_spatialprobit_recovers_rho(rng):
     """Posterior mean rho should be close to the true rho."""
     idata, _ = _fit_spatial_probit(rng)
@@ -60,7 +59,6 @@ def test_spatialprobit_recovers_rho(rng):
     )
 
 
-@pytest.mark.slow
 def test_spatialprobit_recovers_beta(rng):
     """Posterior means of beta should be close to true values."""
     idata, _ = _fit_spatial_probit(rng)
@@ -71,7 +69,6 @@ def test_spatialprobit_recovers_beta(rng):
         )
 
 
-@pytest.mark.slow
 def test_spatialprobit_recovers_sigma_a(rng):
     """Posterior mean sigma_a should be close to true value."""
     idata, _ = _fit_spatial_probit(rng)
@@ -81,7 +78,6 @@ def test_spatialprobit_recovers_sigma_a(rng):
     )
 
 
-@pytest.mark.slow
 def test_spatialprobit_fitted_probabilities_in_unit_interval(rng):
     """Posterior mean fitted probabilities should lie in [0, 1]."""
     _, model = _fit_spatial_probit(rng)

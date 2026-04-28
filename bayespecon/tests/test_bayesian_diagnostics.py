@@ -65,6 +65,7 @@ def _make_mock_model(y, X, W_sparse, beta_noise=0.1, draws=100):
     model._WX = np.empty((n, 0), dtype=float)
     model._Wy = Wy
     model._W_sparse = W_sparse
+    model._T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
     model.inference_data = idata
     return model
 
@@ -166,6 +167,7 @@ def _make_mock_sar_model(y, X, WX, W_sparse, beta_noise=0.1, rho_noise=0.05, dra
     model._WX = WX
     model._Wy = Wy
     model._W_sparse = W_sparse
+    model._T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
     model.inference_data = idata
     return model
 
@@ -196,6 +198,7 @@ def _make_mock_slx_model(y, X, WX, W_sparse, beta_noise=0.1, draws=100):
     model._WX = WX
     model._Wy = Wy
     model._W_sparse = W_sparse
+    model._T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
     model.inference_data = idata
     return model
 
@@ -510,6 +513,7 @@ def _make_mock_panel_ols_model(N=6, T=3, k_wx=0, beta_noise=0.1, draws=100, seed
     model._W_eigs = W_eigs
     model._N = N
     model._T = T
+    model._T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
     model.inference_data = idata
     return model
 
@@ -542,6 +546,7 @@ def _make_mock_panel_sar_model(N=6, T=3, k_wx=2, beta_noise=0.1, rho_noise=0.05,
     model._W_eigs = W_eigs
     model._N = N
     model._T = T
+    model._T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
     model.inference_data = idata
     return model
 
@@ -573,6 +578,7 @@ def _make_mock_panel_slx_model(N=6, T=3, k_wx=2, beta_noise=0.1, draws=100, seed
     model._W_eigs = W_eigs
     model._N = N
     model._T = T
+    model._T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
     model.inference_data = idata
     return model
 

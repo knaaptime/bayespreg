@@ -15,7 +15,6 @@ import numpy as np
 import pymc as pm
 import pytensor
 import pytensor.tensor as pt
-
 from .base import SpatialModel
 
 
@@ -107,12 +106,8 @@ class SAR(SpatialModel):
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y)
 
-            # Jacobian: log|I - rho*W|
-            # Build the expression inline so pytensor can resolve rho as a graph input.
-            # eigs is a constant (no gradient w.r.t. it), so it does not cause
-            # MissingInputError — only rho does, and it's properly defined above.
-            eigs = self._W_eigs.real.astype(np.float64)
-            pm.Potential("jacobian", pt.sum(pt.log(pt.abs(1.0 - rho * pt.as_tensor_variable(eigs)))))
+            # Jacobian: log|I - rho*W|  (respects logdet_method via self._logdet_pytensor_fn)
+            pm.Potential("jacobian", self._logdet_pytensor_fn(rho))
 
         return model
 
@@ -221,9 +216,8 @@ class SAR(SpatialModel):
             else:
                 ll_gauss = -0.5 * (resid / sigma_draws[:, None]) ** 2 - np.log(sigma_draws[:, None]) - 0.5 * np.log(2 * np.pi)  # (n_draws, n)
 
-            # Jacobian contribution per draw: log|I - rho*W| / n (pure numpy)
-            eigs = self._W_eigs.real.astype(np.float64)
-            jacobian = np.array([np.sum(np.log(np.abs(1.0 - rv * eigs))) for rv in rho_draws])  # (n_draws,)
+            # Jacobian contribution per draw: log|I - rho*W| / n (respects logdet_method)
+            jacobian = self._logdet_numpy_vec_fn(rho_draws)  # (n_draws,)
             ll_jac = jacobian[:, None] / n  # (n_draws, 1) broadcast to (n_draws, n)
 
             ll_total = ll_gauss + ll_jac  # (n_draws, n)
@@ -262,15 +256,7 @@ class SAR(SpatialModel):
         beta = self._posterior_mean("beta")
         eigs = self._W_eigs
         mean_diag = float(np.mean((1.0 / (1.0 - rho * eigs)).real))
-        if self._is_row_std:
-            mean_row_sum = 1.0 / (1.0 - rho)
-        else:
-            mean_row_sum = float(
-                np.linalg.solve(
-                    np.eye(self._W_sparse.shape[0]) - rho * self._W_sparse.toarray(),
-                    np.ones(self._W_sparse.shape[0]),
-                ).mean()
-            )
+        mean_row_sum = float(self._batch_mean_row_sum(np.array([rho]))[0])
         ni = self._nonintercept_indices
         direct = mean_diag * beta[ni]
         total = mean_row_sum * beta[ni]
@@ -323,22 +309,12 @@ class SAR(SpatialModel):
         # Using eigenvalues: diag(S) has entries 1/(1 - rho*omega_i)
         # mean_diag = (1/n) * sum_i 1/(1 - rho*omega_i)
         # mean_rowsum: if W is row-standardized, mean_rowsum = 1/(1-rho)
-        #              otherwise, solve (I - rho*W) @ ones = v, then mean_rowsum = mean(v)
+        #              otherwise, use eigenvalue decomposition (vectorised)
         # Vectorised over draws:
         inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])  # (G, n)
         mean_diag = np.mean(inv_eigs, axis=1)  # (G,)
 
-        if self._is_row_std:
-            mean_row_sum = 1.0 / (1.0 - rho_draws)  # (G,)
-        else:
-            # Fallback: solve (I - rho*W) @ ones for each draw
-            n = self._W_sparse.shape[0]
-            W_dense = self._W_dense
-            mean_row_sum = np.empty(G)
-            ones = np.ones(n)
-            for g in range(G):
-                A = np.eye(n) - rho_draws[g] * W_dense
-                mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+        mean_row_sum = self._batch_mean_row_sum(rho_draws)  # (G,)
 
         # Direct = mean_diag * beta_k, Total = mean_row_sum * beta_k
         # Exclude intercept from effects (it has no meaningful spatial interpretation)

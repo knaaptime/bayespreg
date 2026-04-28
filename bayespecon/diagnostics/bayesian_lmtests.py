@@ -1,7 +1,7 @@
 def bayesian_panel_lm_wx_sem_test(
     model,
 ) -> "BayesianLMTestResult":
-    """Bayesian panel LM test for WX coefficients in SEM (H₀: γ = 0 | SEM).
+    r"""Bayesian panel LM test for WX coefficients in SEM (H₀: γ = 0 | SEM).
 
     Tests whether spatially lagged covariates (WX) should be added to a
     panel SEM model, i.e., whether the SEM panel model should be extended to an SDEM panel.
@@ -70,7 +70,7 @@ def bayesian_panel_lm_wx_sem_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
-    LM = np.array([g_gamma[g] @ J_inv @ g_gamma[g] for g in range(g_gamma.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g_gamma, J_inv, g_gamma)
 
     df = k_wx
     mean = float(np.mean(LM))
@@ -96,7 +96,7 @@ def bayesian_panel_lm_wx_sem_test(
 def bayesian_lm_wx_sem_test(
     model,
 ) -> "BayesianLMTestResult":
-    """Bayesian LM test for WX coefficients in SEM (H₀: γ = 0 | SEM).
+    r"""Bayesian LM test for WX coefficients in SEM (H₀: γ = 0 | SEM).
 
     Tests whether spatially lagged covariates (WX) should be added to a
     SEM model, i.e., whether the SEM model should be extended to an SDEM
@@ -169,7 +169,7 @@ def bayesian_lm_wx_sem_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
-    LM = np.array([g_gamma[g] @ J_inv @ g_gamma[g] for g in range(g_gamma.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g_gamma, J_inv, g_gamma)
 
     df = k_wx
     mean = float(np.mean(LM))
@@ -309,7 +309,12 @@ def bayesian_lm_lag_test(
     The variance is:
 
     .. math::
-        V = \\mathbb{E}\\left[ \\sum_{i} (e_i W y_i)^2 \\right]
+        V = T_{WW} \\bar{\\sigma}^2 + \\|W\\mathbf{y}\\|^2
+
+    where :math:`T_{WW} = \\mathrm{tr}(W^\\top W + W^2)` and
+    :math:`\\bar{\\sigma}^2` is the posterior mean of :math:`\\sigma^2`.
+    This matches the Fisher information denominator of the classical LM-lag
+    test (:cite:p:`anselin1996SimpleTest`).
 
     The LM statistic is:
 
@@ -346,12 +351,17 @@ def bayesian_lm_lag_test(
         X = model._X
     # Wy is pre-computed and stored as a dense array — no need to materialize W
     Wy = model._Wy
+    W_sp = model._W_sparse
+    sigma_draws = _get_posterior_draws(idata, "sigma")  # (draws,)
+    sigma2_mean = float(np.mean(sigma_draws**2))
+    # T_ww = tr(W'W + W²) — cached on the model
+    T_ww = model._T_ww
     fitted = beta_draws @ X.T  # (draws, n)
     resid = y[None, :] - fitted  # (draws, n)
     # Score for each draw: S = resid @ Wy
     S = np.dot(resid, Wy)  # (draws,)
-    # Variance: V = mean(resid^2 @ Wy^2)
-    V = np.mean(np.sum(resid**2 * Wy**2, axis=1))
+    # Variance: V = T_ww * sigma2_mean + ||Wy||^2  (Fisher information denominator)
+    V = T_ww * sigma2_mean + float(np.dot(Wy, Wy))
     LM = S**2 / (V + 1e-12)
     mean = float(np.mean(LM))
     median = float(np.median(LM))
@@ -388,7 +398,12 @@ def bayesian_lm_error_test(
     The variance is:
 
     .. math::
-        V = \\mathbb{E}\\left[ \\sum_{i} (e_i (W \\mathbf{e})_i)^2 \\right]
+        V = T_{WW} \\bar{\\sigma}^2
+
+    where :math:`T_{WW} = \\mathrm{tr}(W^\\top W + W^2)` and
+    :math:`\\bar{\\sigma}^2` is the posterior mean of :math:`\\sigma^2`.
+    This matches the Fisher information denominator of the classical LM-error
+    test (:cite:p:`anselin1996SimpleTest`).
 
     The LM statistic is:
 
@@ -429,10 +444,14 @@ def bayesian_lm_error_test(
     # sparse matmul: (draws, n) @ (n, n)^T = (draws, n)
     # We = W @ resid.T = (n, draws) then transpose to (draws, n)
     We = (W_sp @ resid.T).T  # (draws, n)
+    sigma_draws = _get_posterior_draws(idata, "sigma")  # (draws,)
+    sigma2_mean = float(np.mean(sigma_draws**2))
+    # T_ww = tr(W'W + W²) — cached on the model
+    T_ww = model._T_ww
     # Score for each draw: S = resid * We (element-wise, then sum)
     S = np.sum(resid * We, axis=1)  # (draws,)
-    # Variance: V = mean(sum((resid * We)^2))
-    V = np.mean(np.sum((resid * We) ** 2, axis=1))
+    # Variance: V = T_ww * sigma2_mean  (Fisher information denominator)
+    V = T_ww * sigma2_mean
     LM = S**2 / (V + 1e-12)
     mean = float(np.mean(LM))
     median = float(np.median(LM))
@@ -533,7 +552,7 @@ def bayesian_lm_wx_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
-    LM = np.array([g_gamma[g] @ J_inv @ g_gamma[g] for g in range(g_gamma.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g_gamma, J_inv, g_gamma)
 
     df = k_wx
     mean = float(np.mean(LM))
@@ -645,7 +664,7 @@ def bayesian_lm_sdm_joint_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
-    LM = np.array([g[d] @ J_inv @ g[d] for d in range(g.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g, J_inv, g)
 
     df = p
     mean = float(np.mean(LM))
@@ -749,9 +768,8 @@ def bayesian_lm_slx_error_joint_test(
     # so we use the information matrix instead (Dogan et al. 2021, Proposition 1).
     sigma_draws = _get_posterior_draws(idata, "sigma")  # (draws,)
     sigma2_mean = float(np.mean(sigma_draws**2))
-    WtW = W_sp.T @ W_sp
-    WW = W_sp @ W_sp
-    T_ww = float(WtW.diagonal().sum() + WW.diagonal().sum())
+    # T_ww = tr(W'W + W²) — cached on the model
+    T_ww = model._T_ww
     p = 1 + k_wx
     J = np.zeros((p, p))
     J[0, 0] = T_ww  # J_{lambda,lambda} = tr(W'W + W^2)
@@ -760,7 +778,7 @@ def bayesian_lm_slx_error_joint_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
-    LM = np.array([g[d] @ J_inv @ g[d] for d in range(g.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g, J_inv, g)
 
     df = p
     mean = float(np.mean(LM))
@@ -791,6 +809,7 @@ def _info_matrix_blocks_sdm(
     W_sparse,
     sigma2: float,
     Wy_hat: np.ndarray | None = None,
+    T_ww: float | None = None,
 ) -> dict:
     """Compute partitioned information matrix blocks for SDM specification.
 
@@ -836,14 +855,16 @@ def _info_matrix_blocks_sdm(
     n = X.shape[0]
     k_wx = WX.shape[1]
 
-    # T = tr(W'W + W²) = tr(W'W) + tr(W²)
-    WtW = W_sparse.T @ W_sparse
-    WW = W_sparse @ W_sparse
-    T_ww = float(WtW.diagonal().sum() + WW.diagonal().sum())
+    # T = tr(W'W + W²) = ||W||_F^2 + sum(W*W') [O(nnz)]
+    if T_ww is None:
+        T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
 
-    # J_{ρρ·σ} = n + T_ww
-    # Under H₀ from OLS: this matches spreg's J_{11} after conditioning on σ²
-    J_rho_rho = float(n + T_ww)
+    # J_{ρρ·σ} = (Wŷ)'(Wŷ)/σ² + T_ww  (Fisher information for ρ in SAR/SDM model)
+    # When Wy_hat is not available, fall back to T_ww (error-model null only)
+    if Wy_hat is not None:
+        J_rho_rho = float((Wy_hat @ Wy_hat) / sigma2 + T_ww)
+    else:
+        J_rho_rho = float(T_ww)
 
     # J_{γγ·σ} = (WX)'(WX) / σ²
     J_gamma_gamma = (WX.T @ WX) / sigma2  # (k_wx, k_wx)
@@ -872,6 +893,7 @@ def _info_matrix_blocks_sdem(
     WX: np.ndarray,
     W_sparse,
     sigma2: float,
+    T_ww: float | None = None,
 ) -> dict:
     """Compute partitioned information matrix blocks for SDEM specification.
 
@@ -899,10 +921,9 @@ def _info_matrix_blocks_sdem(
         Dictionary with keys ``J_lam_lam``, ``J_lam_gamma``, ``J_gamma_gamma``,
         ``T_ww``.
     """
-    # T = tr(W'W + W²)
-    WtW = W_sparse.T @ W_sparse
-    WW = W_sparse @ W_sparse
-    T_ww = float(WtW.diagonal().sum() + WW.diagonal().sum())
+    # T = tr(W'W + W²) = ||W||_F^2 + sum(W*W') [O(nnz)]
+    if T_ww is None:
+        T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
 
     # J_{λλ·σ} = T_ww  (for error model under H₀: λ=0)
     J_lam_lam = T_ww
@@ -1018,7 +1039,7 @@ def bayesian_robust_lm_lag_sdm_test(
 
     # Information matrix blocks (evaluated at posterior mean of sigma²)
     sigma2_mean = float(np.mean(sigma_draws**2))
-    info = _info_matrix_blocks_sdm(X, WX, W_sp, sigma2_mean, Wy_hat=Wy_hat)
+    info = _info_matrix_blocks_sdm(X, WX, W_sp, sigma2_mean, Wy_hat=Wy_hat, T_ww=model._T_ww)
 
     J_rho_rho = info["J_rho_rho"]
     J_rho_gamma = info["J_rho_gamma"]  # (k_wx,)
@@ -1158,7 +1179,7 @@ def bayesian_robust_lm_wx_test(
 
     # Information matrix blocks (evaluated at posterior mean of sigma²)
     sigma2_mean = float(np.mean(sigma_draws**2))
-    info = _info_matrix_blocks_sdm(X, WX, W_sp, sigma2_mean, Wy_hat=Wy_hat)
+    info = _info_matrix_blocks_sdm(X, WX, W_sp, sigma2_mean, Wy_hat=Wy_hat, T_ww=model._T_ww)
 
     J_rho_rho = info["J_rho_rho"]
     J_rho_gamma = info["J_rho_gamma"]  # (k_wx,)
@@ -1194,12 +1215,7 @@ def bayesian_robust_lm_wx_test(
 
     # Robust LM = g_gamma*' C*^{-1} g_gamma* for each draw
     C_star_inv = np.linalg.inv(C_star + 1e-12 * np.eye(k_wx))
-    LM = np.array(
-        [
-            g_gamma_star[d] @ C_star_inv @ g_gamma_star[d]
-            for d in range(g_gamma_star.shape[0])
-        ]
-    )
+    LM = np.einsum('di,ij,dj->d', g_gamma_star, C_star_inv, g_gamma_star)
 
     df = k_wx
     mean = float(np.mean(LM))
@@ -1299,7 +1315,7 @@ def bayesian_robust_lm_error_sdem_test(
 
     # Information matrix blocks (evaluated at posterior mean of sigma²)
     sigma2_mean = float(np.mean(sigma_draws**2))
-    info = _info_matrix_blocks_sdem(X, WX, W_sp, sigma2_mean)
+    info = _info_matrix_blocks_sdem(X, WX, W_sp, sigma2_mean, T_ww=model._T_ww)
 
     J_lam_lam = info["J_lam_lam"]
     J_lam_gamma = info["J_lam_gamma"]  # (k_wx,)
@@ -1433,9 +1449,9 @@ def _panel_trace_WtW_WW(W_sparse) -> float:
     float
         Trace of W'W + W².
     """
-    WtW = W_sparse.T @ W_sparse
-    WW = W_sparse @ W_sparse
-    return float(WtW.diagonal().sum() + WW.diagonal().sum())
+    # tr(W'W) = ||W||_F^2 = sum(W_ij^2)  [O(nnz)]
+    # tr(W^2) = sum_ij W_ij * W_ji = sum(W * W.T)  [O(nnz)]
+    return float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
 
 
 def _panel_info_matrix_blocks(
@@ -1448,6 +1464,7 @@ def _panel_info_matrix_blocks(
     T: int,
     y_hat: np.ndarray | None = None,
     Wy_hat: np.ndarray | None = None,
+    T_ww: float | None = None,
 ) -> dict:
     """Compute partitioned information matrix blocks for panel models.
 
@@ -1501,7 +1518,8 @@ def _panel_info_matrix_blocks(
     k_wx = WX.shape[1]
 
     # tr(W'W + W²) from N×N matrix
-    T_ww = _panel_trace_WtW_WW(W_sparse)
+    if T_ww is None:
+        T_ww = _panel_trace_WtW_WW(W_sparse)
     T_mult = T  # multiplier from Kronecker structure
 
     # J_{λλ·σ} = T * tr(W'W + W²)
@@ -1638,7 +1656,7 @@ def bayesian_panel_lm_lag_test(
     M_Wy = Wy_hat - X @ (XtX_inv @ (X.T @ Wy_hat))
     WbMWb = float(Wy_hat @ M_Wy)
 
-    T_ww = _panel_trace_WtW_WW(W_sp)
+    T_ww = model._T_ww
     J_val = WbMWb + T * T_ww * sigma2_mean
 
     # LM = S² / (sigma2 * J_val) for each draw
@@ -1729,7 +1747,7 @@ def bayesian_panel_lm_error_test(
     S = np.sum(resid * We_panel, axis=1)  # (draws,)
 
     # Variance: V = sigma^4 * T * tr(W'W + W²)
-    T_ww = _panel_trace_WtW_WW(W_sp)
+    T_ww = model._T_ww
     sigma2_draws = sigma_draws**2  # (draws,)
     V = sigma2_draws**2 * T * T_ww  # (draws,)
 
@@ -1818,7 +1836,7 @@ def bayesian_panel_robust_lm_lag_test(
     M_Wy = Wy_hat - X @ (XtX_inv @ (X.T @ Wy_hat))
     WbMWb = float(Wy_hat @ M_Wy)
 
-    T_ww = _panel_trace_WtW_WW(W_sp)
+    T_ww = model._T_ww
     J_val = WbMWb + T * T_ww * sigma2_mean
 
     # Robust LM = (S_lag/σ² - S_err/σ²)² / (J - T*tr)
@@ -1914,7 +1932,7 @@ def bayesian_panel_robust_lm_error_test(
     M_Wy = Wy_hat - X @ (XtX_inv @ (X.T @ Wy_hat))
     WbMWb = float(Wy_hat @ M_Wy)
 
-    T_ww = _panel_trace_WtW_WW(W_sp)
+    T_ww = model._T_ww
     J_val = WbMWb + T * T_ww * sigma2_mean
 
     # Robust LM = (S_err/σ² - T*tr/J * S_lag/σ²)² / (T*tr*(1 - T*tr/J))
@@ -2036,7 +2054,7 @@ def bayesian_panel_lm_wx_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
-    LM = np.array([g_gamma[g] @ J_inv @ g_gamma[g] for g in range(g_gamma.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g_gamma, J_inv, g_gamma)
 
     df = k_wx
     mean = float(np.mean(LM))
@@ -2131,6 +2149,7 @@ def bayesian_panel_lm_sdm_joint_test(
         N,
         T,
         y_hat=y_hat,
+        T_ww=model._T_ww,
     )
 
     p = 1 + k_wx
@@ -2143,7 +2162,7 @@ def bayesian_panel_lm_sdm_joint_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
-    LM = np.array([g[d] @ J_inv @ g[d] for d in range(g.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g, J_inv, g)
 
     df = p
     mean = float(np.mean(LM))
@@ -2228,7 +2247,7 @@ def bayesian_panel_lm_slx_error_joint_test(
 
     # Information matrix
     sigma2_mean = float(np.mean(sigma_draws**2))
-    T_ww = _panel_trace_WtW_WW(W_sp)
+    T_ww = model._T_ww
 
     p = 1 + k_wx
     J = np.zeros((p, p))
@@ -2239,7 +2258,7 @@ def bayesian_panel_lm_slx_error_joint_test(
 
     # LM = g' J^{-1} g for each draw
     J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
-    LM = np.array([g[d] @ J_inv @ g[d] for d in range(g.shape[0])])
+    LM = np.einsum('di,ij,dj->d', g, J_inv, g)
 
     df = p
     mean = float(np.mean(LM))
@@ -2335,6 +2354,7 @@ def bayesian_panel_robust_lm_lag_sdm_test(
         N,
         T,
         Wy_hat=Wy_hat,
+        T_ww=model._T_ww,
     )
 
     J_rho_rho = info["J_rho_rho"]
@@ -2456,6 +2476,7 @@ def bayesian_panel_robust_lm_wx_test(
         N,
         T,
         Wy_hat=Wy_hat,
+        T_ww=model._T_ww,
     )
 
     J_rho_rho = info["J_rho_rho"]
@@ -2483,12 +2504,7 @@ def bayesian_panel_robust_lm_wx_test(
 
     # Robust LM = g_gamma*' C*^{-1} g_gamma* for each draw
     C_star_inv = np.linalg.inv(C_star + 1e-12 * np.eye(k_wx))
-    LM = np.array(
-        [
-            g_gamma_star[d] @ C_star_inv @ g_gamma_star[d]
-            for d in range(g_gamma_star.shape[0])
-        ]
-    )
+    LM = np.einsum('di,ij,dj->d', g_gamma_star, C_star_inv, g_gamma_star)
 
     df = k_wx
     mean = float(np.mean(LM))
@@ -2572,7 +2588,7 @@ def bayesian_panel_robust_lm_error_sdem_test(
 
     # Information matrix blocks
     sigma2_mean = float(np.mean(sigma_draws**2))
-    T_ww = _panel_trace_WtW_WW(W_sp)
+    T_ww = model._T_ww
 
     J_lam_lam = T * T_ww
     J_lam_gamma = np.zeros(k_wx)  # zero under H₀

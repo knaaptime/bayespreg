@@ -120,6 +120,7 @@ def test_panel_generators_run_with_dense_W() -> None:
         dgp.simulate_panel_sdmu_fe(N=N, T=T, W=W, rng=rng),
         dgp.simulate_panel_sar_tobit_fe(N=N, T=T, W=W, rng=rng),
         dgp.simulate_panel_sem_tobit_fe(N=N, T=T, W=W, rng=rng),
+        dgp.simulate_panel_slx_fe(N=N, T=T, W=W, rng=rng),
     ]
 
     for out in panel_outs:

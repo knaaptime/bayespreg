@@ -190,17 +190,7 @@ class DLMPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -223,21 +213,8 @@ class DLMPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -313,7 +290,7 @@ class SDMRPanelFE(_DynamicPanelMixin, SpatialPanelModel):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
+            self._W_for_logdet,
             method=self.logdet_method,
             rho_min=rho_lower,
             rho_max=rho_upper,
@@ -405,15 +382,9 @@ class SDMRPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho * eigs)
             mean_diag_M = float(np.mean(inv_eigs.real))
             mean_diag_MW = float(np.mean((eigs * inv_eigs).real))
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                ones = np.ones(self._W_sparse.shape[0])
-                A = np.eye(self._W_sparse.shape[0]) - rho * self._W_sparse.toarray()
-                M_ones = np.linalg.solve(A, ones)
-                mean_row_sum_M = float(M_ones.mean())
-                mean_row_sum_MW = float((self._W_sparse.toarray() @ M_ones).mean())
+            rho_arr = np.array([rho])
+            mean_row_sum_M = float(self._batch_mean_row_sum(rho_arr)[0])
+            mean_row_sum_MW = float(self._batch_mean_row_sum_MW(rho_arr)[0])
             direct = np.array([
                 beta1[j] * mean_diag_M + b2 * mean_diag_MW
                 for j, b2 in zip(self._wx_column_indices, beta2)
@@ -443,17 +414,7 @@ class SDMRPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -476,21 +437,8 @@ class SDMRPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -568,7 +516,7 @@ class SDMUPanelFE(_DynamicPanelMixin, SpatialPanelModel):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
+            self._W_for_logdet,
             method=self.logdet_method,
             rho_min=rho_lower,
             rho_max=rho_upper,
@@ -663,15 +611,9 @@ class SDMUPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho * eigs)
             mean_diag_M = float(np.mean(inv_eigs.real))
             mean_diag_MW = float(np.mean((eigs * inv_eigs).real))
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                ones = np.ones(self._W_sparse.shape[0])
-                A = np.eye(self._W_sparse.shape[0]) - rho * self._W_sparse.toarray()
-                M_ones = np.linalg.solve(A, ones)
-                mean_row_sum_M = float(M_ones.mean())
-                mean_row_sum_MW = float((self._W_sparse.toarray() @ M_ones).mean())
+            rho_arr = np.array([rho])
+            mean_row_sum_M = float(self._batch_mean_row_sum(rho_arr)[0])
+            mean_row_sum_MW = float(self._batch_mean_row_sum_MW(rho_arr)[0])
             direct = np.array([
                 beta1[j] * mean_diag_M + b2 * mean_diag_MW
                 for j, b2 in zip(self._wx_column_indices, beta2)
@@ -701,17 +643,7 @@ class SDMUPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -734,21 +666,8 @@ class SDMUPanelFE(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -833,7 +752,7 @@ class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
+            self._W_for_logdet,
             method=self.logdet_method,
             rho_min=rho_lower,
             rho_max=rho_upper,
@@ -898,15 +817,7 @@ class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
         ni = self._nonintercept_indices
         eigs = self._W_eigs
         mean_diag = float(np.mean((1.0 / (1.0 - rho * eigs)).real))
-        if self._is_row_std:
-            mean_row_sum = 1.0 / (1.0 - rho)
-        else:
-            mean_row_sum = float(
-                np.linalg.solve(
-                    np.eye(self._W_sparse.shape[0]) - rho * self._W_sparse.toarray(),
-                    np.ones(self._W_sparse.shape[0]),
-                ).mean()
-            )
+        mean_row_sum = float(self._batch_mean_row_sum(np.array([rho]))[0])
         direct = mean_diag * beta[ni]
         total = mean_row_sum * beta[ni]
         indirect = total - direct
@@ -928,17 +839,7 @@ class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -961,21 +862,8 @@ class SARPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -1060,7 +948,7 @@ class SEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
+            self._W_for_logdet,
             method=self.logdet_method,
             rho_min=lam_lower,
             rho_max=lam_upper,
@@ -1152,8 +1040,7 @@ class SEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
                 + 2.0 * np.log(sigma_f[:, None])
             )
 
-        eigs = self._W_eigs.real.astype(np.float64)
-        jac = np.array([np.sum(np.log(np.abs(1.0 - lv * eigs))) for lv in lam_f]) * self._n_time_eff
+        jac = self._logdet_numpy_vec_fn(lam_f) * self._n_time_eff
         ll = ll + jac[:, None] / n
 
         ll = ll.reshape(c, d, n)
@@ -1189,17 +1076,7 @@ class SEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -1222,21 +1099,8 @@ class SEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -1323,7 +1187,7 @@ class SDEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
+            self._W_for_logdet,
             method=self.logdet_method,
             rho_min=lam_lower,
             rho_max=lam_upper,
@@ -1415,8 +1279,7 @@ class SDEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
                 + 2.0 * np.log(sigma_f[:, None])
             )
 
-        eigs = self._W_eigs.real.astype(np.float64)
-        jac = np.array([np.sum(np.log(np.abs(1.0 - lv * eigs))) for lv in lam_f]) * self._n_time_eff
+        jac = self._logdet_numpy_vec_fn(lam_f) * self._n_time_eff
         ll = ll + jac[:, None] / n
 
         ll = ll.reshape(c, d, n)
@@ -1476,17 +1339,7 @@ class SDEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -1530,21 +1383,8 @@ class SDEMPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -1681,17 +1521,7 @@ class SLXPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -1714,21 +1544,8 @@ class SLXPanelDEDynamic(_DynamicPanelMixin, SpatialPanelModel):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_sparse.toarray()
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW

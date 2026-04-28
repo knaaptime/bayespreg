@@ -49,12 +49,9 @@ def _compute_bayesian_pvalue(samples: np.ndarray) -> np.ndarray:
         frac_above = np.mean(samples > 0)
         frac_below = np.mean(samples < 0)
         return np.array([2.0 * min(frac_above, frac_below)])
-    pvals = np.zeros(samples.shape[1])
-    for j in range(samples.shape[1]):
-        frac_above = np.mean(samples[:, j] > 0)
-        frac_below = np.mean(samples[:, j] < 0)
-        pvals[j] = 2.0 * min(frac_above, frac_below)
-    return pvals
+    frac_above = np.mean(samples > 0, axis=0)
+    frac_below = np.mean(samples < 0, axis=0)
+    return 2.0 * np.minimum(frac_above, frac_below)
 
 
 def _compute_ci(samples: np.ndarray) -> List[Tuple[float, float]]:
@@ -72,10 +69,9 @@ def _compute_ci(samples: np.ndarray) -> List[Tuple[float, float]]:
     """
     if samples.ndim == 1:
         return [(float(np.percentile(samples, 2.5)), float(np.percentile(samples, 97.5)))]
-    return [
-        (float(np.percentile(samples[:, j], 2.5)), float(np.percentile(samples[:, j], 97.5)))
-        for j in range(samples.shape[1])
-    ]
+    lo = np.percentile(samples, 2.5, axis=0)
+    hi = np.percentile(samples, 97.5, axis=0)
+    return [(float(lo[j]), float(hi[j])) for j in range(samples.shape[1])]
 
 
 def _build_effects_dataframe(

@@ -6,7 +6,8 @@ imported from test files directly without conftest injection.
 All tests are marked slow because they run MCMC. Run them with::
 
     pytest -m slow
-    pytest           # skips slow by default (see pyproject.toml)
+    pytest -m recovery   # parameter recovery tests only
+    pytest               # skips slow by default (see pyproject.toml)
 """
 
 from __future__ import annotations

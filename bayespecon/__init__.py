@@ -11,6 +11,18 @@ Import a model class directly from the package namespace::
 """
 
 from . import dgp
+from .graph import (
+    destination_weights,
+    flow_design_matrix,
+    flow_design_matrix_with_orig,
+    flow_weight_matrices,
+    FlowDesignMatrix,
+    network_weights,
+    origin_weights,
+)
+from .models.flow import SAR_Flow, SAR_Flow_Separable, PoissonFlow, PoissonFlow_Separable
+from .dgp.flows import generate_flow_data, generate_poisson_flow_data
+from .ops import SparseFlowSolveOp, kron_solve_matrix, kron_solve_vec
 from .diagnostics import (
     BayesianLMTestResult,
     bayesian_lm_lag_test,
@@ -64,6 +76,10 @@ from .models import (
     SEMPanelFE,
     SEMPanelRE,
     SEMPanelTobit,
+    SAR_Flow_Panel,
+    SAR_Flow_Separable_Panel,
+    PoissonFlow_Panel,
+    PoissonFlow_Separable_Panel,
     SEMTobit,
     SpatialProbit,
 )
@@ -98,6 +114,24 @@ __all__ = [
     "SARPanelTobit",
     "SEMPanelTobit",
     "dgp",
+    "SAR_Flow",
+    "SAR_Flow_Separable",
+    "PoissonFlow",
+    "PoissonFlow_Separable",
+    "SAR_Flow_Panel",
+    "SAR_Flow_Separable_Panel",
+    "PoissonFlow_Panel",
+    "PoissonFlow_Separable_Panel",
+    "SparseFlowSolveOp",
+    "destination_weights",
+    "origin_weights",
+    "network_weights",
+    "flow_weight_matrices",
+    "flow_design_matrix",
+    "flow_design_matrix_with_orig",
+    "FlowDesignMatrix",
+    "generate_flow_data",
+    "generate_poisson_flow_data",
     "bayes_factor_compare_models",
     "bic_to_bf",
     "BayesianLMTestResult",

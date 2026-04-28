@@ -457,3 +457,96 @@ def simulate_panel_sdem_fe(
     if create_gdf or gdf is not None or wide:
         return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
     return out
+
+
+def simulate_panel_slx_fe(
+    N: int,
+    T: int,
+    beta1: np.ndarray | None = None,
+    beta2: np.ndarray | None = None,
+    sigma: float = 1.0,
+    sigma_alpha: float = 0.5,
+    err_hetero: bool = False,
+    rng: np.random.Generator | None = None,
+    seed: int | None = None,
+    W=None,
+    gdf=None,
+    contiguity: str = "queen",
+    create_gdf: bool = False,
+    geometry_type: str = "polygon",
+    wide: bool = False,
+) -> dict:
+    """Simulate SLX panel FE data.
+
+    DGP
+    ---
+    ``y_t = X_t beta1 + W X_t[:,1:] beta2 + alpha + eps_t``.
+
+    Parameters
+    ----------
+    N, T : int
+        Number of units and time periods.
+    beta1 : np.ndarray, optional
+        Coefficients on ``X`` including intercept.
+    beta2 : np.ndarray, optional
+        Coefficients on spatially lagged non-intercept regressors.
+    sigma : float, default=1.0
+        Idiosyncratic noise scale.
+    sigma_alpha : float, default=0.5
+        Unit effect scale.
+    err_hetero : bool, default=False
+        If True, generate heteroskedastic innovations with
+        observation-specific standard deviations
+        :math:`\\sigma_i = \\sigma \\sqrt{1 + \\|x_{it}\\|^2}` per period.
+    rng, seed
+        Random state controls.
+    W, gdf, contiguity
+        Spatial structure input and GeoDataFrame neighbor rule.
+
+    Returns
+    -------
+    dict
+        Includes time-first stacked arrays and panel index columns.
+    """
+    rng = ensure_rng(rng, seed)
+    Wd, Wg = resolve_weights(W=W, gdf=gdf, contiguity=contiguity)
+    if Wd.shape[0] != N:
+        raise ValueError("N must match W/gdf unit count.")
+
+    if beta1 is None:
+        beta1 = np.array([1.0, 2.0], dtype=float)
+    beta1 = np.asarray(beta1, dtype=float)
+    if beta2 is None:
+        beta2 = np.array([0.8], dtype=float)
+    beta2 = np.asarray(beta2, dtype=float)
+
+    alpha = rng.normal(0.0, sigma_alpha, N)
+    y_list, X_list = [], []
+    for _ in range(T):
+        Xt = make_design_matrix(rng, N, k=max(len(beta1) - 1, 0), add_intercept=True)
+        Wx = Wd @ Xt[:, 1:]
+        if Wx.shape[1] != len(beta2):
+            raise ValueError("len(beta2) must match number of non-intercept regressors.")
+        eps = (_hetero_scale(Xt, sigma) if err_hetero else sigma) * rng.standard_normal(N)
+        yt = Xt @ beta1 + Wx @ beta2 + alpha + eps
+        y_list.append(yt)
+        X_list.append(Xt)
+
+    y, X, idx = _panel_finalize(y_list, X_list, N, T)
+    out = {
+        "y": y,
+        "X": X,
+        "unit": idx["unit"],
+        "time": idx["time"],
+        "W_dense": Wd,
+        "W_graph": Wg,
+        "params_true": {
+            "beta1": beta1,
+            "beta2": beta2,
+            "sigma": sigma,
+            "sigma_alpha": sigma_alpha,
+        },
+    }
+    if create_gdf or gdf is not None or wide:
+        return make_panel_output_geodataframe(y, X, idx["unit"], idx["time"], N, T, gdf=gdf, geometry_type=geometry_type, wide=wide)
+    return out

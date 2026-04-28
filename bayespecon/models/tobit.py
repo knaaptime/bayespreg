@@ -102,12 +102,7 @@ class SARTobit(_SpatialTobitBase):
         beta_sigma = self.priors.get("beta_sigma", 1e6)
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
-        logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
-            method=self.logdet_method,
-            rho_min=rho_lower,
-            rho_max=rho_upper,
-        )
+        logdet_fn = self._logdet_pytensor_fn
         W_pt = pt.as_tensor_variable(self._W_dense)
 
         with pm.Model(coords=self._model_coords()) as model:
@@ -133,15 +128,7 @@ class SARTobit(_SpatialTobitBase):
         beta = self._posterior_mean("beta")
         eigs = self._W_eigs
         mean_diag = float(np.mean((1.0 / (1.0 - rho * eigs)).real))
-        if self._is_row_std:
-            mean_row_sum = 1.0 / (1.0 - rho)
-        else:
-            mean_row_sum = float(
-                np.linalg.solve(
-                    np.eye(self._W_sparse.shape[0]) - rho * self._W_sparse.toarray(),
-                    np.ones(self._W_sparse.shape[0]),
-                ).mean()
-            )
+        mean_row_sum = float(self._batch_mean_row_sum(np.array([rho]))[0])
         ni = self._nonintercept_indices
         direct = mean_diag * beta[ni]
         total = mean_row_sum * beta[ni]
@@ -164,17 +151,7 @@ class SARTobit(_SpatialTobitBase):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_dense
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -198,21 +175,8 @@ class SARTobit(_SpatialTobitBase):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_dense
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -326,9 +290,8 @@ class SARTobit(_SpatialTobitBase):
                 (censoring - mu[:, censored]) / sigma_f[:, None]
             )
 
-        # Eigenvalue-based Jacobian: log|I - rho*W| / n (pure numpy)
-        eigs = self._W_eigs.real.astype(np.float64)
-        jac = np.array([np.sum(np.log(np.abs(1.0 - rv * eigs))) for rv in rho_f])  # (n_draws,)
+        # Jacobian (respects logdet_method)
+        jac = self._logdet_numpy_vec_fn(rho_f)  # (n_draws,)
         ll = ll + jac[:, None] / n
 
         ll = ll.reshape(c, d, n)
@@ -382,12 +345,7 @@ class SEMTobit(_SpatialTobitBase):
         beta_sigma = self.priors.get("beta_sigma", 1e6)
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
-        logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
-            method=self.logdet_method,
-            rho_min=lam_lower,
-            rho_max=lam_upper,
-        )
+        logdet_fn = self._logdet_pytensor_fn
         W_pt = pt.as_tensor_variable(self._W_dense)
 
         with pm.Model(coords=self._model_coords()) as model:
@@ -430,17 +388,7 @@ class SEMTobit(_SpatialTobitBase):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_dense
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -464,21 +412,8 @@ class SEMTobit(_SpatialTobitBase):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_dense
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -588,9 +523,8 @@ class SEMTobit(_SpatialTobitBase):
                 (censoring - mu[:, censored]) / sigma_f[:, None]
             )
 
-        # Eigenvalue-based Jacobian: log|I - lam*W| / n (pure numpy)
-        eigs = self._W_eigs.real.astype(np.float64)
-        jac = np.array([np.sum(np.log(np.abs(1.0 - lv * eigs))) for lv in lam_f])  # (n_draws,)
+        # Jacobian (respects logdet_method)
+        jac = self._logdet_numpy_vec_fn(lam_f)  # (n_draws,)
         ll = ll + jac[:, None] / n
 
         ll = ll.reshape(c, d, n)
@@ -645,12 +579,7 @@ class SDMTobit(_SpatialTobitBase):
         beta_sigma = self.priors.get("beta_sigma", 1e6)
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
-        logdet_fn = make_logdet_fn(
-            self._W_eigs.real,
-            method=self.logdet_method,
-            rho_min=rho_lower,
-            rho_max=rho_upper,
-        )
+        logdet_fn = self._logdet_pytensor_fn
         W_pt = pt.as_tensor_variable(self._W_dense)
 
         with pm.Model(coords=self._model_coords()) as model:
@@ -682,15 +611,9 @@ class SDMTobit(_SpatialTobitBase):
         inv_eigs = 1.0 / (1.0 - rho * eigs)
         mean_diag_M = float(np.mean(inv_eigs.real))
         mean_diag_MW = float(np.mean((eigs * inv_eigs).real))
-        if self._is_row_std:
-            mean_row_sum_M = 1.0 / (1.0 - rho)
-            mean_row_sum_MW = mean_row_sum_M
-        else:
-            ones = np.ones(self._W_sparse.shape[0])
-            A = np.eye(self._W_sparse.shape[0]) - rho * self._W_sparse.toarray()
-            M_ones = np.linalg.solve(A, ones)
-            mean_row_sum_M = float(M_ones.mean())
-            mean_row_sum_MW = float((self._W_sparse.toarray() @ M_ones).mean())
+        rho_arr = np.array([rho])
+        mean_row_sum_M = float(self._batch_mean_row_sum(rho_arr)[0])
+        mean_row_sum_MW = float(self._batch_mean_row_sum_MW(rho_arr)[0])
         direct = np.array([
             beta1[j] * mean_diag_M + b2 * mean_diag_MW
             for j, b2 in zip(self._wx_column_indices, beta2)
@@ -719,17 +642,7 @@ class SDMTobit(_SpatialTobitBase):
             eigs = self._W_eigs.real.astype(np.float64)
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag = np.mean(inv_eigs, axis=1)
-            if self._is_row_std:
-                mean_row_sum = 1.0 / (1.0 - rho_draws)
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_dense
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    mean_row_sum[g] = np.linalg.solve(A, ones).mean()
+            mean_row_sum = self._batch_mean_row_sum(rho_draws)
             ni = self._nonintercept_indices
             direct_samples = mean_diag[:, None] * beta_draws[:, ni]
             total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
@@ -753,21 +666,8 @@ class SDMTobit(_SpatialTobitBase):
             inv_eigs = 1.0 / (1.0 - rho_draws[:, None] * eigs[None, :])
             mean_diag_M = np.mean(inv_eigs, axis=1)
             mean_diag_MW = np.mean((eigs * inv_eigs).real, axis=1)
-            if self._is_row_std:
-                mean_row_sum_M = 1.0 / (1.0 - rho_draws)
-                mean_row_sum_MW = mean_row_sum_M
-            else:
-                n = self._W_sparse.shape[0]
-                W_dense = self._W_dense
-                ones = np.ones(n)
-                G = rho_draws.shape[0]
-                mean_row_sum_M = np.empty(G)
-                mean_row_sum_MW = np.empty(G)
-                for g in range(G):
-                    A = np.eye(n) - rho_draws[g] * W_dense
-                    M_ones = np.linalg.solve(A, ones)
-                    mean_row_sum_M[g] = M_ones.mean()
-                    mean_row_sum_MW[g] = (W_dense @ M_ones).mean()
+            mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+            mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
             wx_idx = self._wx_column_indices
             direct_samples = np.column_stack([
                 beta1_draws[:, j] * mean_diag_M + beta2_draws[:, idx] * mean_diag_MW
@@ -881,9 +781,8 @@ class SDMTobit(_SpatialTobitBase):
                 (censoring - mu[:, censored]) / sigma_f[:, None]
             )
 
-        # Eigenvalue-based Jacobian: log|I - rho*W| / n (pure numpy)
-        eigs = self._W_eigs.real.astype(np.float64)
-        jac = np.array([np.sum(np.log(np.abs(1.0 - rv * eigs))) for rv in rho_f])  # (n_draws,)
+        # Jacobian (respects logdet_method)
+        jac = self._logdet_numpy_vec_fn(rho_f)  # (n_draws,)
         ll = ll + jac[:, None] / n
 
         ll = ll.reshape(c, d, n)

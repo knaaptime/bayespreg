@@ -44,7 +44,7 @@ from .helpers import (
     make_panel_slx_dynamic_data,
 )
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 
 # True parameters
 PHI_TRUE = 0.4
@@ -67,7 +67,6 @@ ABS_TOL_THETA = 0.40
 # DLM Panel FE  (non-spatial dynamic)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_dlm_panel_fe_recovers_phi(rng, W_panel_dense, W_panel_graph):
     """DLMPanelFE posterior mean of phi should be close to the true value."""
     y, X, _ = make_panel_dlm_data(
@@ -83,7 +82,6 @@ def test_dlm_panel_fe_recovers_phi(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_dlm_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """DLMPanelFE posterior means of beta should match truth."""
     y, X, _ = make_panel_dlm_data(
@@ -104,7 +102,6 @@ def test_dlm_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SDMR Panel FE  (restricted SDM dynamic)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sdmr_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     """SDMRPanelFE posterior mean of rho should be close to the true value."""
     y, X, _ = make_panel_sdmr_data(
@@ -120,7 +117,6 @@ def test_sdmr_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdmr_panel_fe_recovers_phi(rng, W_panel_dense, W_panel_graph):
     """SDMRPanelFE posterior mean of phi should be close to the true value."""
     y, X, _ = make_panel_sdmr_data(
@@ -136,7 +132,6 @@ def test_sdmr_panel_fe_recovers_phi(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdmr_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SDMRPanelFE posterior means of beta should match truth."""
     y, X, _ = make_panel_sdmr_data(
@@ -157,7 +152,6 @@ def test_sdmr_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SDMU Panel FE  (unrestricted SDM dynamic)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sdmu_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     """SDMUPanelFE posterior mean of rho should be close to the true value."""
     y, X, _ = make_panel_sdmu_data(
@@ -173,7 +167,6 @@ def test_sdmu_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdmu_panel_fe_recovers_phi(rng, W_panel_dense, W_panel_graph):
     """SDMUPanelFE posterior mean of phi should be close to the true value."""
     y, X, _ = make_panel_sdmu_data(
@@ -189,7 +182,6 @@ def test_sdmu_panel_fe_recovers_phi(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdmu_panel_fe_recovers_theta(rng, W_panel_dense, W_panel_graph):
     """SDMUPanelFE posterior mean of theta should be close to the true value."""
     y, X, _ = make_panel_sdmu_data(
@@ -205,7 +197,6 @@ def test_sdmu_panel_fe_recovers_theta(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdmu_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SDMUPanelFE posterior means of beta should match truth."""
     y, X, _ = make_panel_sdmu_data(
@@ -226,7 +217,6 @@ def test_sdmu_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SAR Panel DE Dynamic  (SAR with lagged DV, no WX)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sar_panel_de_dynamic_recovers_rho(rng, W_panel_dense, W_panel_graph):
     """SARPanelDEDynamic posterior mean of rho should be close to the true value."""
     y, X, _ = make_panel_sar_dynamic_data(
@@ -242,7 +232,6 @@ def test_sar_panel_de_dynamic_recovers_rho(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sar_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     """SARPanelDEDynamic posterior mean of phi should be close to the true value."""
     y, X, _ = make_panel_sar_dynamic_data(
@@ -258,7 +247,6 @@ def test_sar_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sar_panel_de_dynamic_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SARPanelDEDynamic posterior means of beta should match truth."""
     y, X, _ = make_panel_sar_dynamic_data(
@@ -279,7 +267,6 @@ def test_sar_panel_de_dynamic_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SEM Panel DE Dynamic  (SEM with lagged DV)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sem_panel_de_dynamic_recovers_lam(rng, W_panel_dense, W_panel_graph):
     """SEMPanelDEDynamic posterior mean of lam should be close to the true value."""
     y, X, _ = make_panel_sem_dynamic_data(
@@ -295,7 +282,6 @@ def test_sem_panel_de_dynamic_recovers_lam(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sem_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     """SEMPanelDEDynamic posterior mean of phi should be close to the true value."""
     y, X, _ = make_panel_sem_dynamic_data(
@@ -311,7 +297,6 @@ def test_sem_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sem_panel_de_dynamic_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SEMPanelDEDynamic posterior means of beta should match truth."""
     y, X, _ = make_panel_sem_dynamic_data(
@@ -332,7 +317,6 @@ def test_sem_panel_de_dynamic_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SDEM Panel DE Dynamic  (SDEM with lagged DV)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sdem_panel_de_dynamic_recovers_lam(rng, W_panel_dense, W_panel_graph):
     """SDEMPanelDEDynamic posterior mean of lam should be close to the true value."""
     y, X, _ = make_panel_sdem_dynamic_data(
@@ -348,7 +332,6 @@ def test_sdem_panel_de_dynamic_recovers_lam(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdem_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     """SDEMPanelDEDynamic posterior mean of phi should be close to the true value."""
     y, X, _ = make_panel_sdem_dynamic_data(
@@ -364,7 +347,6 @@ def test_sdem_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdem_panel_de_dynamic_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SDEMPanelDEDynamic posterior means of beta should match truth."""
     y, X, _ = make_panel_sdem_dynamic_data(
@@ -385,7 +367,6 @@ def test_sdem_panel_de_dynamic_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SLX Panel DE Dynamic  (SLX with lagged DV)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_slx_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     """SLXPanelDEDynamic posterior mean of phi should be close to the true value."""
     y, X, _ = make_panel_slx_dynamic_data(
@@ -401,7 +382,6 @@ def test_slx_panel_de_dynamic_recovers_phi(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_slx_panel_de_dynamic_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SLXPanelDEDynamic posterior means of beta should match truth."""
     y, X, _ = make_panel_slx_dynamic_data(

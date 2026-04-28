@@ -16,9 +16,20 @@ from .panel_fe import (
     simulate_panel_sdem_fe,
     simulate_panel_sdm_fe,
     simulate_panel_sem_fe,
+    simulate_panel_slx_fe,
 )
 from .panel_re import simulate_panel_ols_re, simulate_panel_sar_re, simulate_panel_sem_re
 from .panel_tobit import simulate_panel_sar_tobit_fe, simulate_panel_sem_tobit_fe
+from .flows import (
+    generate_flow_data,
+    generate_flow_data_separable,
+    generate_panel_flow_data,
+    generate_panel_flow_data_separable,
+    generate_panel_poisson_flow_data,
+    generate_panel_poisson_flow_data_separable,
+    generate_poisson_flow_data,
+    generate_poisson_flow_data_separable,
+)
 
 __all__ = [
     "simulate_ols",
@@ -36,6 +47,7 @@ __all__ = [
     "simulate_panel_sem_fe",
     "simulate_panel_sdm_fe",
     "simulate_panel_sdem_fe",
+    "simulate_panel_slx_fe",
     "simulate_panel_ols_re",
     "simulate_panel_sar_re",
     "simulate_panel_sem_re",
@@ -48,4 +60,12 @@ __all__ = [
     "simulate_panel_slx_dynamic_fe",
     "simulate_panel_sar_tobit_fe",
     "simulate_panel_sem_tobit_fe",
+    "generate_flow_data",
+    "generate_flow_data_separable",
+    "generate_panel_flow_data",
+    "generate_panel_flow_data_separable",
+    "generate_panel_poisson_flow_data",
+    "generate_panel_poisson_flow_data_separable",
+    "generate_poisson_flow_data",
+    "generate_poisson_flow_data_separable",
 ]

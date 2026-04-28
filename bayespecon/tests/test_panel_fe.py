@@ -33,7 +33,7 @@ from .helpers import (
     make_panel_sdem_fe_data,
 )
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 
 # True parameters
 RHO_TRUE = 0.4
@@ -52,7 +52,6 @@ ABS_TOL_WX = 0.65     # WX coefficients are harder to recover
 # OLS Panel FE (unit fixed effects)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_ols_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """OLSPanelFE (unit FE) posterior means of beta should match truth."""
     y, X, df = make_panel_ols_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -66,7 +65,6 @@ def test_ols_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_ols_panel_fe_recovers_sigma(rng, W_panel_dense, W_panel_graph):
     """OLSPanelFE posterior mean of sigma should be close to the true value.
 
@@ -89,7 +87,6 @@ def test_ols_panel_fe_recovers_sigma(rng, W_panel_dense, W_panel_graph):
 # SAR Panel FE
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sar_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     """SARPanelFE posterior mean of rho should be close to the true rho."""
     y, X, _ = make_panel_sar_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -102,7 +99,6 @@ def test_sar_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sar_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SARPanelFE posterior means of beta (slope) should match truth."""
     y, X, _ = make_panel_sar_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -119,7 +115,6 @@ def test_sar_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SEM Panel FE
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sem_panel_fe_recovers_lam(rng, W_panel_dense, W_panel_graph):
     """SEMPanelFE posterior mean of lambda should be close to the true value."""
     y, X, _ = make_panel_sem_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -132,7 +127,6 @@ def test_sem_panel_fe_recovers_lam(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sem_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SEMPanelFE posterior means of beta (slope) should match truth."""
     y, X, _ = make_panel_sem_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -149,7 +143,6 @@ def test_sem_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SDM Panel FE  (uses SDM-type data with WX terms)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sdm_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     """SDMPanelFE posterior mean of rho should be close to the true rho."""
     y, X, _ = make_panel_sdm_fe_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -163,7 +156,6 @@ def test_sdm_panel_fe_recovers_rho(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdm_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SDMPanelFE posterior means of beta (slope) should match truth."""
     y, X, _ = make_panel_sdm_fe_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -182,7 +174,6 @@ def test_sdm_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SDEM Panel FE  (uses SDEM-type data with WX terms)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_sdem_panel_fe_recovers_lam(rng, W_panel_dense, W_panel_graph):
     """SDEMPanelFE posterior mean of lambda should be close to the true value."""
     y, X, _ = make_panel_sdem_fe_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -196,7 +187,6 @@ def test_sdem_panel_fe_recovers_lam(rng, W_panel_dense, W_panel_graph):
     )
 
 
-@pytest.mark.slow
 def test_sdem_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SDEMPanelFE posterior means of beta (slope) should match truth."""
     y, X, _ = make_panel_sdem_fe_data(rng, W_panel_dense, PANEL_N, PANEL_T,
@@ -215,7 +205,6 @@ def test_sdem_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
 # SLX Panel FE  (uses SDM-type data with rho=0 to generate WX signal)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.slow
 def test_slx_panel_fe_recovers_beta(rng, W_panel_dense, W_panel_graph):
     """SLXPanelFE posterior means of beta (slope) should match truth."""
     y, X, _ = make_panel_sdm_fe_data(rng, W_panel_dense, PANEL_N, PANEL_T,
