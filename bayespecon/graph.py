@@ -257,11 +257,58 @@ def flow_design_matrix(
                  [,\\; \\gamma]]
 
     matching ``f2_sarfm.m`` from the LeSage spatial flows toolbox.
+
+    The leading **intercept** column is always added because flow models
+    are typically estimated on log-flow outcomes whose grand mean is
+    informative; omitting it would force the destination/origin/intra
+    blocks to absorb the global level and complicates effects
+    decomposition.  Users wishing to suppress the intercept should drop
+    the first column of ``combined`` *and* the corresponding row/column
+    of any prior covariance.
+
+    Examples
+    --------
+    Build a flow design from a 3-region attribute matrix with population
+    and income:
+
+    >>> import numpy as np
+    >>> X = np.array([[100.0, 50.0],     # region 0: pop=100, inc=50
+    ...               [200.0, 75.0],     # region 1: pop=200, inc=75
+    ...               [150.0, 60.0]])    # region 2: pop=150, inc=60
+    >>> design = flow_design_matrix(X, col_names=["pop", "inc"])
+    >>> design.combined.shape  # 3*3 = 9 OD pairs, 1+1+2+2+2 = 8 cols
+    (9, 8)
+    >>> design.feature_names[:4]
+    ['intercept', 'intra_indicator', 'dest_pop', 'dest_inc']
+
+    Optionally append a vectorised distance matrix as a final column:
+
+    >>> dist = np.array([[0.0, 10.0, 5.0],
+    ...                  [10.0, 0.0, 8.0],
+    ...                  [5.0, 8.0, 0.0]])
+    >>> design_d = flow_design_matrix(X, col_names=["pop", "inc"], dist=dist)
+    >>> design_d.feature_names[-1]
+    'dist'
     """
     X_arr = np.asarray(X, dtype=np.float64)
     if X_arr.ndim == 1:
         X_arr = X_arr[:, None]
     n, k = X_arr.shape
+
+    # Warn on zero-variance columns: they are perfectly collinear with
+    # the intercept and would inflate the design's condition number.
+    if k > 0:
+        col_var = X_arr.var(axis=0)
+        zero_var = np.where(col_var == 0.0)[0]
+        if zero_var.size > 0:
+            warnings.warn(
+                f"flow_design_matrix received zero-variance column(s) at "
+                f"indices {zero_var.tolist()}; these are collinear with the "
+                "intercept block and will inflate the condition number of "
+                "`combined`.",
+                stacklevel=2,
+            )
+
     N = n * n
     ones_n = np.ones((n, 1), dtype=np.float64)
 

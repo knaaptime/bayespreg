@@ -25,6 +25,7 @@ from __future__ import annotations
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pytensor import sparse as pts
 
 from .panel_base import SpatialPanelModel
 
@@ -485,7 +486,7 @@ class SEMPanelRE(SpatialPanelModel):
         sigma_alpha_sigma = self.priors.get("sigma_alpha_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
         unit_idx = self._unit_idx
 
         with pm.Model(coords=self._model_coords()) as model:
@@ -498,7 +499,7 @@ class SEMPanelRE(SpatialPanelModel):
             # epsilon = (I - lam*W)(y - X@beta - alpha_expanded)
             #         = resid - lam * W @ resid
             resid = self._y - pt.dot(self._X, beta) - alpha[unit_idx]
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]
@@ -727,7 +728,7 @@ class SDEMPanelRE(SpatialPanelModel):
         sigma_alpha_sigma = self.priors.get("sigma_alpha_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
         unit_idx = self._unit_idx
 
         with pm.Model(coords=self._model_coords()) as model:
@@ -738,7 +739,7 @@ class SDEMPanelRE(SpatialPanelModel):
             alpha = pm.Normal("alpha", mu=0.0, sigma=sigma_alpha, dims="unit")
 
             resid = self._y - pt.dot(Z, beta) - alpha[unit_idx]
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]

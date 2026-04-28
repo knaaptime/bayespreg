@@ -16,6 +16,7 @@ import arviz as az
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pytensor import sparse as pts
 import xarray as xr
 
 from .base import SpatialModel
@@ -215,7 +216,7 @@ class SDEM(SpatialModel):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -223,7 +224,7 @@ class SDEM(SpatialModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             resid = self._y - pt.dot(Z, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]

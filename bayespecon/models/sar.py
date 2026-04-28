@@ -315,6 +315,13 @@ class SAR(SpatialModel):
             ``(direct_samples, indirect_samples, total_samples)``, each
             of shape ``(G, k)`` where *G* is the total number of posterior
             draws and *k* is the number of covariates.
+
+        References
+        ----------
+        LeSage, J.P. & Pace, R.K. (2009). *Introduction to Spatial
+        Econometrics*. Chapman & Hall/CRC.  Sections 2.7 and 5.6 derive
+        the impact decomposition above and motivate the trace-based
+        scalar summaries used here.
         """
         from ..diagnostics.bayesian_lmtests import _get_posterior_draws
 

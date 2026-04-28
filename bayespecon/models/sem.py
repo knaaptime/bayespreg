@@ -14,6 +14,7 @@ import arviz as az
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pytensor import sparse as pts
 import xarray as xr
 
 from .base import SpatialModel
@@ -70,6 +71,11 @@ class SEM(SpatialModel):
                 "bayespecon.diagnostics.bayesian_lmtests",
                 fromlist=["bayesian_lm_wx_sem_test"],
             ).bayesian_lm_wx_sem_test(m),
+            # Note: this label is "LM-WX" for backwards compatibility, but
+            # the underlying score is the SEM-null variant
+            # (``bayesian_lm_wx_sem_test``) — i.e. it tests H₀: γ = 0
+            # *given* SEM residuals, not the OLS/SAR-null LM-WX with the
+            # same display name reported by SAR.diagnostics().
             "LM-WX",
         ),
     ]
@@ -207,7 +213,7 @@ class SEM(SpatialModel):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -215,7 +221,7 @@ class SEM(SpatialModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             resid = self._y - pt.dot(self._X, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]

@@ -125,6 +125,25 @@ class SLX(SpatialModel):
     def _compute_spatial_effects(self) -> dict[str, np.ndarray]:
         """Compute SLX direct/indirect/total effects.
 
+        Notes
+        -----
+        Unlike SAR / SDM, the SLX model does **not** invert
+        :math:`(I - \\rho W)`: the partial-derivative matrix for
+        covariate :math:`k` is simply
+
+        .. math::
+
+            S_k \\;=\\; \\beta_{1k}\\, I \\;+\\; \\beta_{2k}\\, W,
+
+        a *linear* (W-direct) impact rather than the full Leontief
+        multiplier :math:`(I - \\rho W)^{-1}` that arises in SAR-style
+        models.  Consequently SLX impacts are exact functions of the
+        posterior :math:`(\\beta_1, \\beta_2)` draws and the row-sum /
+        diagonal summaries of :math:`W` — no global feedback loop is
+        implied.  This is the key conceptual difference from
+        SDM/SAR/SDEM impact reporting (LeSage & Pace 2009, ch. 2;
+        Halleck Vega & Elhorst 2015).
+
         Returns
         -------
         dict

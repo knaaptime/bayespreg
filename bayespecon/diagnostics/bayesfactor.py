@@ -240,7 +240,21 @@ def compile_log_posterior(pymc_model) -> tuple[Callable, list[str], dict, Callab
                 if lower is not None:
                     arr = np.log(arr - lower)
                 else:
-                    # Fallback: assume lower=0 (HalfNormal, HalfCauchy, etc.)
+                    # No bound metadata available — emit a warning before
+                    # falling back to the lower=0 assumption (correct for
+                    # HalfNormal/HalfCauchy/Exponential but wrong if the
+                    # variable was constructed with a non-zero lower bound
+                    # via, e.g., ``pm.Bound(lower=2.5)`` or a custom
+                    # ``Transform`` subclass).
+                    import warnings as _warnings
+
+                    _warnings.warn(
+                        f"LowerBound transform for '{constrained_name}' "
+                        "has no recorded bound; assuming lower=0. If the "
+                        "actual lower bound is non-zero this will bias the "
+                        "marginal-likelihood Jacobian.",
+                        stacklevel=3,
+                    )
                     arr = np.log(arr)
             elif transform_type == "LogExpM1":
                 # forward: log(exp(x) - 1), used by some distributions

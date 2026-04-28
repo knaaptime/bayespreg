@@ -26,6 +26,35 @@ from .base import _is_row_standardized_csr
 def _demean_panel(y: np.ndarray, X: np.ndarray, N: int, T: int, model: int):
     """Apply panel demeaning transformation.
 
+    Implements the within-transformation for two-way fixed-effects panel
+    models prior to the spatial filter.  In the SAR-FE setting we model
+
+    .. math::
+
+        y_{it} = \\rho \\sum_j W_{ij} y_{jt} + X_{it}\\beta + \\mu_i
+                 + \\alpha_t + \\varepsilon_{it},
+
+    and concentrate out the fixed effects by demeaning *both* sides of
+    the equation before the spatial lag is applied.  Because :math:`W`
+    operates only across units (within a period), the within-period
+    demeaning commutes with :math:`W` (i.e. ``W (M_T y) = M_T (W y)``)
+    so the order of "demean then apply :math:`W`" or "apply :math:`W`
+    then demean" yields the same likelihood — a fact exploited in
+    Lee & Yu (2010) and Elhorst (2014, ch. 3).  This is why
+    :func:`bayespecon.models.panel.SARPanel` builds ``Wy`` from the
+    *demeaned* ``y`` returned here without an additional Jacobian
+    correction beyond the standard :math:`T\\,\\log|I_N - \\rho W|`
+    panel Jacobian.
+
+    References
+    ----------
+    Lee, L.-F. & Yu, J. (2010). Estimation of spatial autoregressive
+    panel data models with fixed effects.  *Journal of Econometrics*,
+    154(2), 165–185.
+
+    Elhorst, J.P. (2014). *Spatial Econometrics: From Cross-Sectional
+    Data to Spatial Panels*. Springer.
+
     Parameters
     ----------
     y : np.ndarray
@@ -387,6 +416,44 @@ class SpatialPanelModel(ABC):
         return self._W_dense_cache
 
     @property
+    def _W_sparse_NT(self) -> "sp.csr_matrix":
+        """Sparse (N*T)×(N*T) Kronecker-block weight matrix ``I_T ⊗ W_n``.
+
+        Cached on first access. Used by symbolic (PyMC/PyTensor) likelihoods
+        to avoid the O((N*T)²) memory footprint of :attr:`_W_dense` while
+        still exposing a single linear operator that can be applied to a
+        stacked panel residual vector.
+        """
+        if not hasattr(self, "_W_sparse_NT_cache") or self._W_sparse_NT_cache is None:
+            W = self._W_sparse
+            if W.shape[0] == self._N:
+                # Force ``csr_matrix`` (not ``csr_array``) so the result is
+                # accepted by :mod:`pytensor.sparse`, which currently only
+                # supports the legacy ``scipy.sparse`` matrix API.
+                self._W_sparse_NT_cache = sp.csr_matrix(
+                    sp.kron(sp.eye(self._T, format="csr"), W, format="csr")
+                )
+            else:
+                # Caller already supplied a full (N*T)×(N*T) matrix.
+                self._W_sparse_NT_cache = sp.csr_matrix(W)
+        return self._W_sparse_NT_cache
+
+    @property
+    def _W_pt_sparse(self):
+        """PyTensor sparse variable wrapping :attr:`_W_sparse_NT`.
+
+        Cached so that repeated PyMC model builds reuse the same symbolic
+        sparse weight operator, avoiding redundant ``as_sparse_variable`` calls.
+        """
+        if not hasattr(self, "_W_pt_sparse_cache") or self._W_pt_sparse_cache is None:
+            from pytensor import sparse as pts
+
+            self._W_pt_sparse_cache = pts.as_sparse_variable(
+                sp.csc_matrix(self._W_sparse_NT)
+            )
+        return self._W_pt_sparse_cache
+
+    @property
     def _T_ww(self) -> float:
         """Trace of W'W + W², cached on first access.
 
@@ -680,6 +747,20 @@ class SpatialPanelModel(ABC):
         the Gaussian part in the ``log_likelihood`` group but the Jacobian
         term is absent.  This method adds the per-observation Jacobian
         contribution ``log|I - ρW| * T / n`` to each pointwise LL value.
+
+        Notes
+        -----
+        The full panel log-determinant of the spatial filter is
+        :math:`T \\log|I_N - \\rho W|` because the stacked
+        :math:`(N T) \\times (N T)` filter is
+        :math:`I_T \\otimes (I_N - \\rho W)`, whose determinant is
+        :math:`|I_N - \\rho W|^T` by the Kronecker product rule.  Dividing
+        by :math:`n = N T` distributes that scalar Jacobian uniformly
+        over the per-observation pointwise log-likelihood entries that
+        ArviZ expects, so quantities like LOO and WAIC are computed on a
+        per-observation log density.  For dynamic panels the time
+        dimension is ``T - 1`` (one period is consumed by the lag), so
+        callers pass ``T = T - 1`` here.
 
         Parameters
         ----------

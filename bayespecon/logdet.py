@@ -12,13 +12,31 @@ import scipy.sparse.linalg as spla
 from scipy.interpolate import CubicSpline
 
 
-def _stable_rho_grid(rmin: float, rmax: float, grid: float) -> np.ndarray:
-    """Build a rho grid that excludes exact endpoints to avoid singularity hits."""
+def _stable_rho_grid(
+    rmin: float, rmax: float, grid: float, eps: float = 1e-6
+) -> np.ndarray:
+    """Build a rho grid that excludes exact endpoints to avoid singularity hits.
+
+    Parameters
+    ----------
+    rmin, rmax : float
+        Endpoints of the rho domain (typically the SAR / SEM stability
+        boundary, e.g. ``-1`` and ``1`` for row-standardised W).
+    grid : float
+        Spacing between consecutive grid points.
+    eps : float, default 1e-6
+        Endpoint stand-off.  Larger values give a more robust spline
+        away from the eigen-singularity ``1/eig_max`` at the cost of
+        coverage near the boundary; values below ``1e-8`` may produce
+        ill-conditioned ``log|I - rho W|`` evaluations on
+        weakly-stationary W.
+    """
     if grid <= 0:
         raise ValueError("grid must be positive.")
     if rmax <= rmin:
         raise ValueError("rmax must be greater than rmin.")
-    eps = 1e-6
+    if eps <= 0:
+        raise ValueError("eps must be positive.")
     lo = rmin + eps
     hi = rmax - eps
     if hi <= lo:
@@ -43,9 +61,22 @@ def logdet_eigenvalue(rho, eigs: np.ndarray) -> pt.TensorVariable:
     -------
     pytensor.tensor.TensorVariable
         Symbolic log-determinant.
+
+    Notes
+    -----
+    Stability requires ``|rho| < 1 / max(|eigs|)``; for row-standardised W
+    this is ``|rho| < 1``. When ``1 - rho * eig_i`` is numerically zero
+    (rho exactly at the stability boundary) the unguarded ``log`` would
+    return ``-inf``. The argument is therefore clamped at a small floor
+    (``1e-300``) before taking ``log``; this keeps NUTS gradients finite
+    and produces a very large negative penalty rather than a hard NaN.
+    Callers should still constrain ``rho`` away from ``1 / eig_max`` via
+    the prior bounds.
     """
     eigs_t = pt.as_tensor_variable(eigs.astype(np.float64))
-    return pt.sum(pt.log(pt.abs(1.0 - rho * eigs_t)))
+    arg = pt.abs(1.0 - rho * eigs_t)
+    safe = pt.maximum(arg, 1e-300)
+    return pt.sum(pt.log(safe))
 
 
 def logdet_exact(rho, W_dense: np.ndarray) -> pt.TensorVariable:
@@ -92,10 +123,14 @@ def _build_logdet_grid(
         Pair ``(rho_grid, logdet_grid)``.
     """
     rho_grid = np.linspace(rho_min + 1e-6, rho_max - 1e-6, n_grid)
-    I = np.eye(W_dense.shape[0])
-    # Vectorised batched slogdet — faster than a sequential Python loop.
-    A = I[np.newaxis] - rho_grid[:, np.newaxis, np.newaxis] * W_dense[np.newaxis]
-    _, logdet_grid = np.linalg.slogdet(A)
+    n = W_dense.shape[0]
+    I = np.eye(n)
+    # Loop over rho_grid: same FLOPs as a batched slogdet but avoids the
+    # O(n_grid * n^2) intermediate tensor that batched broadcasting would
+    # allocate (which can exceed memory for n in the low thousands).
+    logdet_grid = np.empty(n_grid, dtype=np.float64)
+    for i, r in enumerate(rho_grid):
+        _, logdet_grid[i] = np.linalg.slogdet(I - r * W_dense)
     return rho_grid, logdet_grid
 
 
@@ -311,6 +346,7 @@ def chebyshev(
     rmax: float = 1.0,
     random_state: int | None = None,
     eigs: np.ndarray | None = None,
+    n_mc_iter: int = 30,
 ) -> dict:
     """Compute Chebyshev approximation of log|I - rho*W| (:cite:p:`pace2004ChebyshevApproximation`).
 
@@ -347,6 +383,11 @@ def chebyshev(
         Pre-computed real eigenvalues of *W*.  When supplied, the
         eigenvalue decomposition step is skipped, avoiding redundant
         O(n³) work when the caller already has them cached.
+    n_mc_iter : int, default=30
+        Number of Hutchinson probes used by the Monte-Carlo trace
+        estimator (only consulted when *n* > 2000 and ``eigs`` is
+        ``None``).  Larger values reduce stochastic variance at
+        linear cost.
 
     Returns
     -------
@@ -391,6 +432,11 @@ def chebyshev(
     log-determinants of spatial weight matrices. *Computational
     Statistics & Data Analysis*, 45(2), 179–196.
     :cite:p:`pace2004ChebyshevApproximation`
+
+    Trefethen, L.N. (2013). *Approximation Theory and Approximation
+    Practice*. SIAM. (Background on Chebyshev nodes, the Clenshaw
+    recurrence used in :func:`logdet_chebyshev` for stable evaluation,
+    and near-minimax convergence rates for analytic functions.)
     """
     if order <= 0:
         raise ValueError("order must be positive.")
@@ -431,7 +477,6 @@ def chebyshev(
         # Monte Carlo trace-based: use Barry-Pace stochastic trace
         # ln|I - ρW| = -Σ_{k=1}^{∞} (ρ^k / k) tr(W^k)
         # Approximate tr(W^k) via MC, then evaluate at nodes
-        n_mc_iter = 30
         rng = np.random.default_rng(random_state)
 
         # Compute MC trace estimates for k=1..order
@@ -803,6 +848,21 @@ def _flow_logdet_poly_coeffs(
         ``miter_coeffs[i] = C(miter;a,b,c) \\cdot tw[a+c] \\cdot tw[b+c]``
         (positive, without the 1/k division — used for the geometric tail
         inside :func:`flow_logdet_pytensor`).
+
+    Examples
+    --------
+    For ``miter = 2`` the routine enumerates seven exact triples
+    (k=1: ``{(1,0,0), (0,1,0), (0,0,1)}``; k=2: ``{(2,0,0), (0,2,0),
+    (0,0,2), (1,1,0), (1,0,1), (0,1,1)}`` — six triples plus the three
+    k=1 ones gives nine, of which the cross terms with ``b+c=0`` collapse
+    by symmetry to seven distinct rows).  Each row contributes
+    :math:`\\rho_d^a \\rho_o^b \\rho_w^c` weighted by ``poly_coeffs[i]``;
+    ``flow_logdet_pytensor`` evaluates the dot product
+    ``poly_coeffs @ (rho_d**a * rho_o**b * rho_w**c)`` symbolically.  The
+    ``miter_*`` arrays alone power the geometric-series tail
+    :math:`\\sum_{k=miter+1}^{\\infty}` whose closed form is
+    :math:`\\text{tail} \\cdot \\rho^{miter+1} / (1 - \\rho)`
+    (after clipping :math:`\\rho_d + \\rho_o + \\rho_w` away from 1).
     """
     from math import factorial
 
@@ -927,7 +987,13 @@ def flow_logdet_pytensor(
     )
 
     # scalarparm = rho_d + rho_o + rho_w  (spectral radius bound for row-stochastic W)
-    scalarparm = rho_d + rho_o + rho_w
+    # The geometric tail series ``sum_j s^j / (miter+j)`` only converges
+    # for ``|s| < 1``. We clip ``s`` strictly inside the unit interval to
+    # avoid ``s^titer`` overflowing for j up to ~``titer-miter``; the
+    # bias introduced very close to the boundary is preferable to NaN/Inf
+    # gradients during NUTS adaptation.
+    s_raw = rho_d + rho_o + rho_w
+    scalarparm = pt.clip(s_raw, -1.0 + 1e-6, 1.0 - 1e-6)
 
     # tail_sum = sum_{j=1}^{titer-miter} scalarparm^j / (miter + j)
     j_arr = np.arange(1, titer - miter + 1, dtype=np.float64)
@@ -1006,8 +1072,9 @@ def make_logdet_numpy_fn(
         return lambda r: float(np.sum(np.log(np.abs(1.0 - r * _eigs))))
 
     elif method == "chebyshev":
-        W_dense = np.asarray(W_sparse.toarray(), dtype=np.float64)
-        out = chebyshev(W_dense, order=20, rmin=rho_min, rmax=rho_max)
+        # Pass precomputed eigs to skip the redundant toarray + eigvals
+        # that chebyshev() would otherwise perform internally.
+        out = chebyshev(W_sparse, order=20, rmin=rho_min, rmax=rho_max, eigs=eigs)
         coeffs = out["coeffs"]
         rmin_cb, rmax_cb = out["rmin"], out["rmax"]
         m = len(coeffs)
@@ -1196,6 +1263,34 @@ def make_logdet_fn(
     -------
     callable
         Function mapping symbolic ``rho`` to symbolic log-determinant.
+
+    Notes
+    -----
+    Per-method valid ``rho`` domains:
+
+    * ``"eigenvalue"`` and ``"exact"`` — accept the full numerical
+      stability domain ``rho ∈ (1/min(eigs), 1/max(eigs))``; for
+      row-standardised W this reduces to ``rho ∈ (-1, 1)``.
+    * ``"dense_grid"`` (``"grid"``) and ``"sparse_grid"`` (``"full"``)
+      — accept any ``rho ∈ (rho_min + 1e-6, rho_max - 1e-6)``; outside
+      this interval the cubic spline extrapolates with rapidly degrading
+      accuracy and **must not** be trusted.  Set ``rho_min`` / ``rho_max``
+      to match your prior bounds.
+    * ``"spline"`` (``"int"``) — restricted to ``rho ≥ 0`` because the
+      MATLAB ``lndetint`` routine builds its grid on
+      ``[max(rho_min, 0), rho_max]``; passing negative ``rho`` is
+      silently extrapolated, which is rarely intended.
+    * ``"mc"`` — restricted to ``rho ≥ 1e-5`` for the same reason
+      (``mc`` builds the grid on ``[max(rho_min, 1e-5), rho_max]``);
+      negative ρ is supported only via separate calls with reversed
+      sign on a row-standardised W.
+    * ``"ilu"`` (``"ichol"``) — accepts any ``rho`` inside the supplied
+      grid bounds, but the ILU factorisation degrades with ``|rho|``
+      approaching the spectral boundary and should be paired with a
+      tight prior.
+    * ``"chebyshev"`` — exact within ``[rmin, rmax] = [rho_min, rho_max]``
+      up to the polynomial order (default 20); evaluation outside the
+      Chebyshev interval diverges rapidly and should never be attempted.
     """
     T = int(T)
     W = np.asarray(W, dtype=np.float64)

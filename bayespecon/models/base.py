@@ -265,6 +265,30 @@ class SpatialModel(ABC):
         return self._W_dense_cache
 
     @property
+    def _W_pt_sparse(self):
+        """PyTensor sparse variable wrapping :attr:`_W_sparse`.
+
+        Cached so repeated PyMC model builds reuse the same symbolic sparse
+        operator and avoid the ``O(n²)`` dense materialisation that
+        ``pt.as_tensor_variable(self._W_dense)`` performs each time.
+
+        Use with :func:`pytensor.sparse.structured_dot` (vector inputs must
+        first be reshaped to ``(n, 1)`` because the vector overload's
+        backward pass is broken in PyTensor).
+        """
+        if (
+            not hasattr(self, "_W_pt_sparse_cache")
+            or self._W_pt_sparse_cache is None
+        ):
+            import scipy.sparse as _sp
+            from pytensor import sparse as _pts
+
+            self._W_pt_sparse_cache = _pts.as_sparse_variable(
+                _sp.csc_matrix(self._W_sparse)
+            )
+        return self._W_pt_sparse_cache
+
+    @property
     def _T_ww(self) -> float:
         """Trace of W'W + W², cached on first access.
 

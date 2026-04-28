@@ -1,10 +1,36 @@
-"""Dynamic spatial panel model classes inspired by MATLAB dynamic panel routines."""
+"""Dynamic spatial panel model classes inspired by MATLAB dynamic panel routines.
+
+This module provides Bayesian dynamic spatial panel models that include a
+lagged dependent variable :math:`\\phi y_{i,t-1}` alongside the spatial lag.
+Estimation is performed by direct posterior sampling of the conditional
+likelihood — *not* by Arellano-Bond / system-GMM moment conditions, which
+are not implemented in this package.
+
+Notes
+-----
+The classical bias result is due to Nickell (1981): when unit fixed
+effects are removed by within-demeaning of a panel that contains a
+lagged dependent variable, the demeaned lag becomes correlated with the
+demeaned error of order :math:`O(1/T)`, biasing the OLS / quasi-MLE
+estimator of :math:`\\phi` toward zero.  Bayesian inference suffers
+from the same identification pathology because the *likelihood* (not
+the estimator) is the source of the bias.  This package therefore
+forbids ``model=1`` (unit FE) for dynamic specifications and the
+constructor raises ``ValueError``.  Users who require unit FE with a
+lagged dependent variable should use a GMM package (e.g. ``linearmodels``).
+
+References
+----------
+Nickell, S. (1981). Biases in dynamic models with fixed effects.
+*Econometrica*, 49(6), 1417–1426.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pytensor import sparse as pts
 
 from ..logdet import make_logdet_fn
 from .panel_base import SpatialPanelModel
@@ -97,6 +123,37 @@ class _DynamicPanelMixin:
             )
             self._W_dense_dyn_cache = np.kron(np.eye(self._n_time_eff), Wn)
         return self._W_dense_dyn_cache
+
+    @property
+    def _W_sparse_dyn(self):
+        """Sparse (N*(T-1))×(N*(T-1)) Kronecker block weight ``I_{T-1} ⊗ W_n``."""
+        if (
+            not hasattr(self, "_W_sparse_dyn_cache")
+            or self._W_sparse_dyn_cache is None
+        ):
+            import scipy.sparse as sp
+
+            W = self._W_sparse
+            # Force ``csr_matrix`` (not ``csr_array``) for pytensor.sparse compatibility.
+            self._W_sparse_dyn_cache = sp.csr_matrix(
+                sp.kron(sp.eye(self._n_time_eff, format="csr"), W, format="csr")
+            )
+        return self._W_sparse_dyn_cache
+
+    @property
+    def _W_pt_sparse_dyn(self):
+        """PyTensor sparse variable wrapping :attr:`_W_sparse_dyn`."""
+        if (
+            not hasattr(self, "_W_pt_sparse_dyn_cache")
+            or self._W_pt_sparse_dyn_cache is None
+        ):
+            import scipy.sparse as sp
+            from pytensor import sparse as pts
+
+            self._W_pt_sparse_dyn_cache = pts.as_sparse_variable(
+                sp.csc_matrix(self._W_sparse_dyn)
+            )
+        return self._W_pt_sparse_dyn_cache
 
     def _beta_names(self) -> list[str]:
         if self._wx_feature_names:
@@ -1016,7 +1073,7 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
             T=self._n_time_eff,
         )
 
-        W_pt = pt.as_tensor_variable(self._W_dense_dyn)
+        W_pt = self._W_pt_sparse_dyn
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -1025,7 +1082,7 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             resid = self._y_dyn - phi * self._y_lag - pt.dot(self._X_dyn, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]
@@ -1274,7 +1331,7 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
             T=self._n_time_eff,
         )
 
-        W_pt = pt.as_tensor_variable(self._W_dense_dyn)
+        W_pt = self._W_pt_sparse_dyn
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -1283,7 +1340,7 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             resid = self._y_dyn - phi * self._y_lag - pt.dot(Z, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]

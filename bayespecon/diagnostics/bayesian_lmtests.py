@@ -69,7 +69,7 @@ def bayesian_panel_lm_wx_sem_test(
     J_gamma_gamma = (WX.T @ WX) / sigma2_mean  # (k_wx, k_wx)
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+    J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (panel WX-SEM)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
     df = k_wx
@@ -168,7 +168,7 @@ def bayesian_lm_wx_sem_test(
     J_gamma_gamma = (WX.T @ WX) / sigma2_mean  # (k_wx, k_wx)
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+    J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (LM-WX-SEM)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
     df = k_wx
@@ -206,6 +206,45 @@ from typing import Any, Dict, Tuple
 import arviz as az
 import numpy as np
 from scipy import stats as sp_stats
+
+
+def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
+    """Robust matrix inverse for LM-test information / cross-product matrices.
+
+    Adds a tiny ridge (``1e-12 * I``) to prevent exact singularity, checks the
+    condition number of the regularised matrix, and emits a ``RuntimeWarning``
+    plus falls back to ``np.linalg.pinv`` when ``cond > 1e12``. This replaces
+    the previous silent ``np.linalg.inv(M + 1e-12 * np.eye(...))`` pattern,
+    which masked rank-deficient information matrices without notice.
+
+    Parameters
+    ----------
+    M : np.ndarray
+        Square matrix to invert (typically a Fisher information block or
+        :math:`X^\\top X`).
+    label : str
+        Human-readable label used in the warning message.
+
+    Returns
+    -------
+    np.ndarray
+        Either ``inv(M + ε I)`` (well-conditioned) or ``pinv(M)``
+        (ill-conditioned).
+    """
+    M = np.asarray(M, dtype=np.float64)
+    n = M.shape[0]
+    M_reg = M + 1e-12 * np.eye(n)
+    cond = np.linalg.cond(M_reg)
+    if not np.isfinite(cond) or cond > 1e12:
+        import warnings
+
+        warnings.warn(
+            f"{label} is ill-conditioned (cond={cond:.2e}); falling back to pseudo-inverse.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return np.linalg.pinv(M)
+    return np.linalg.inv(M_reg)
 
 
 @dataclass
@@ -552,7 +591,7 @@ def bayesian_lm_wx_test(
     J_gamma_gamma = (WX.T @ WX) / sigma2_mean  # (k_wx, k_wx)
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+    J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
     df = k_wx
@@ -664,7 +703,7 @@ def bayesian_lm_sdm_joint_test(
     J[1:, 1:] = (WX.T @ WX) / sigma2_mean
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
+    J_inv = _safe_inv(J, "J (SDM joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
     df = p
@@ -778,7 +817,7 @@ def bayesian_lm_slx_error_joint_test(
     J[1:, 1:] = (WX.T @ WX) / sigma2_mean
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
+    J_inv = _safe_inv(J, "J (SLX-error joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
     df = p
@@ -1050,7 +1089,7 @@ def bayesian_robust_lm_lag_sdm_test(
 
     # Neyman adjustment: g_rho* = g_rho - J_{ργ·σ} J_{γγ·σ}^{-1} g_gamma
     if k_wx > 0:
-        J_gamma_gamma_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+        J_gamma_gamma_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (robust LM-lag-SDM)")
         neyman_coef = J_rho_gamma @ J_gamma_gamma_inv  # (k_wx,)
         adjustment = g_gamma @ neyman_coef  # (draws,)
         g_rho_star = g_rho - adjustment
@@ -1202,7 +1241,7 @@ def bayesian_robust_lm_wx_test(
 
     # Adjusted weight matrix: C*_{γγ} = P_{γγ} J_{γ·ρ}
     # P_{γγ} = I - J_{γρ·σ} J_{ρρ·σ}^{-1} J_{ργ·σ} J_{γ·ρ}^{-1}
-    J_gamma_given_rho_inv = np.linalg.inv(J_gamma_given_rho + 1e-12 * np.eye(k_wx))
+    J_gamma_given_rho_inv = _safe_inv(J_gamma_given_rho, "J_gamma_given_rho (robust LM-WX)")
     P_gamma = (
         np.eye(k_wx)
         - np.outer(J_rho_gamma, J_rho_gamma)
@@ -1219,7 +1258,7 @@ def bayesian_robust_lm_wx_test(
     C_star = P_gamma @ J_gamma_given_rho  # (k_wx, k_wx)
 
     # Robust LM = g_gamma*' C*^{-1} g_gamma* for each draw
-    C_star_inv = np.linalg.inv(C_star + 1e-12 * np.eye(k_wx))
+    C_star_inv = _safe_inv(C_star, "C_star (robust LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma_star, C_star_inv, g_gamma_star)
 
     df = k_wx
@@ -1328,7 +1367,7 @@ def bayesian_robust_lm_error_sdem_test(
 
     # Neyman adjustment: g_lambda* = g_lambda - J_{λγ·σ} J_{γγ·σ}^{-1} g_gamma
     if k_wx > 0:
-        J_gamma_gamma_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+        J_gamma_gamma_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (robust LM-error-SDEM)")
         neyman_coef = J_lam_gamma @ J_gamma_gamma_inv  # (k_wx,)
         adjustment = g_gamma @ neyman_coef  # (draws,)
         g_lambda_star = g_lambda - adjustment
@@ -1540,7 +1579,7 @@ def _panel_info_matrix_blocks(
             Wy_hat = _panel_spatial_lag(W_sparse, y_hat, N, T_mult)
 
         # M = I - X(X'X)^{-1}X' (annihilator matrix)
-        XtX_inv = np.linalg.inv(X.T @ X + 1e-12 * np.eye(X.shape[1]))
+        XtX_inv = _safe_inv(X.T @ X, "X'X (panel info blocks)")
         M_Wy = Wy_hat - X @ (XtX_inv @ (X.T @ Wy_hat))
         WbMWb = float(Wy_hat @ M_Wy)
         J_rho_rho = (WbMWb + T_mult * T_ww) / sigma2
@@ -1656,7 +1695,7 @@ def bayesian_panel_lm_lag_test(
     Wy_hat = _panel_spatial_lag(W_sp, y_hat, N, T)  # (n,)
 
     # Annihilator matrix: M = I - X(X'X)^{-1}X'
-    XtX_inv = np.linalg.inv(X.T @ X + 1e-12 * np.eye(X.shape[1]))
+    XtX_inv = _safe_inv(X.T @ X, "X'X (panel LM-lag)")
     M_Wy = Wy_hat - X @ (XtX_inv @ (X.T @ Wy_hat))
     WbMWb = float(Wy_hat @ M_Wy)
 
@@ -1833,7 +1872,7 @@ def bayesian_panel_robust_lm_lag_test(
     sigma2_mean = float(np.mean(sigma_draws**2))
     y_hat = X @ beta_mean
     Wy_hat = _panel_spatial_lag(W_sp, y_hat, N, T)
-    XtX_inv = np.linalg.inv(X.T @ X + 1e-12 * np.eye(X.shape[1]))
+    XtX_inv = _safe_inv(X.T @ X, "X'X (panel robust LM-lag)")
     M_Wy = Wy_hat - X @ (XtX_inv @ (X.T @ Wy_hat))
     WbMWb = float(Wy_hat @ M_Wy)
 
@@ -1928,7 +1967,7 @@ def bayesian_panel_robust_lm_error_test(
     sigma2_mean = float(np.mean(sigma_draws**2))
     y_hat = X @ beta_mean
     Wy_hat = _panel_spatial_lag(W_sp, y_hat, N, T)
-    XtX_inv = np.linalg.inv(X.T @ X + 1e-12 * np.eye(X.shape[1]))
+    XtX_inv = _safe_inv(X.T @ X, "X'X (panel robust LM-error)")
     M_Wy = Wy_hat - X @ (XtX_inv @ (X.T @ Wy_hat))
     WbMWb = float(Wy_hat @ M_Wy)
 
@@ -2052,7 +2091,7 @@ def bayesian_panel_lm_wx_test(
     J_gamma_gamma = (WX.T @ WX) / sigma2_mean  # (k_wx, k_wx)
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+    J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (panel LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
     df = k_wx
@@ -2159,7 +2198,7 @@ def bayesian_panel_lm_sdm_joint_test(
         J[1:, 1:] = info["J_gamma_gamma"]
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
+    J_inv = _safe_inv(J, "J (panel SDM joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
     df = p
@@ -2253,7 +2292,7 @@ def bayesian_panel_lm_slx_error_joint_test(
         J[1:, 1:] = (WX.T @ WX) / sigma2_mean
 
     # LM = g' J^{-1} g for each draw
-    J_inv = np.linalg.inv(J + 1e-12 * np.eye(p))
+    J_inv = _safe_inv(J, "J (panel SLX-error joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
     df = p
@@ -2359,7 +2398,7 @@ def bayesian_panel_robust_lm_lag_sdm_test(
 
     # Neyman adjustment
     if k_wx > 0:
-        J_gamma_gamma_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+        J_gamma_gamma_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (panel robust LM-lag-SDM)")
         neyman_coef = J_rho_gamma @ J_gamma_gamma_inv  # (k_wx,)
         adjustment = g_gamma @ neyman_coef  # (draws,)
         g_rho_star = g_rho - adjustment
@@ -2489,7 +2528,7 @@ def bayesian_panel_robust_lm_wx_test(
     g_gamma_star = g_gamma - np.outer(g_rho, neyman_coef)  # (draws, k_wx)
 
     # Adjusted weight matrix: C*_{γγ} = P_{γγ} J_{γ·ρ}
-    J_gamma_given_rho_inv = np.linalg.inv(J_gamma_given_rho + 1e-12 * np.eye(k_wx))
+    J_gamma_given_rho_inv = _safe_inv(J_gamma_given_rho, "J_gamma_given_rho (panel robust LM-WX)")
     P_gamma = (
         np.eye(k_wx)
         - (np.outer(J_rho_gamma, J_rho_gamma) / (J_rho_rho + 1e-12))
@@ -2499,7 +2538,7 @@ def bayesian_panel_robust_lm_wx_test(
     C_star = P_gamma @ J_gamma_given_rho  # (k_wx, k_wx)
 
     # Robust LM = g_gamma*' C*^{-1} g_gamma* for each draw
-    C_star_inv = np.linalg.inv(C_star + 1e-12 * np.eye(k_wx))
+    C_star_inv = _safe_inv(C_star, "C_star (panel robust LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma_star, C_star_inv, g_gamma_star)
 
     df = k_wx
@@ -2592,7 +2631,7 @@ def bayesian_panel_robust_lm_error_sdem_test(
 
     # Neyman adjustment (no-op since J_lam_gamma = 0)
     if k_wx > 0:
-        J_gamma_gamma_inv = np.linalg.inv(J_gamma_gamma + 1e-12 * np.eye(k_wx))
+        J_gamma_gamma_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (panel robust LM-error-SDEM)")
         neyman_coef = J_lam_gamma @ J_gamma_gamma_inv  # zeros
         adjustment = g_gamma @ neyman_coef  # zeros
         g_lambda_star = g_lambda - adjustment

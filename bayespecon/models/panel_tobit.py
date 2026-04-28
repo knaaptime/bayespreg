@@ -7,8 +7,33 @@ Implements left-censored (default at 0) panel spatial Tobit variants:
 
 Notes
 -----
-These classes force ``model=0`` (pooled transform) because within transforms
-are not compatible with censoring augmentation on the observed scale.
+The Tobit specification splits the observation vector into two pieces:
+
+* **Uncensored** observations enter the likelihood directly through the
+  Gaussian density evaluated at the observed value.
+* **Censored** observations have unknown latent values
+  :math:`y^*_i < c` (with :math:`c` the censoring threshold).  These are
+  augmented in the PyMC model via a half-Normal *gap* parameter
+  ``y_cens_gap`` such that
+  :math:`y^*_i = c - \\text{gap}_i` with :math:`\\text{gap}_i \\geq 0`,
+  which trades the analytic ``Φ((c-μ)/σ)`` factor of a marginal Tobit
+  likelihood for tractable posterior sampling on the joint
+  :math:`(\\theta, y^*_{\\text{cens}})` space (Albert & Chib, 1993;
+  Chib, 1992).
+
+These classes force ``model=0`` (pooled transform) because within
+transformations are not compatible with the censoring augmentation on
+the *observed* scale: subtracting unit means would mix censored and
+uncensored values inside the Gaussian likelihood.
+
+References
+----------
+Chib, S. (1992). Bayes inference in the Tobit censored regression
+model. *Journal of Econometrics*, 51(1–2), 79–99.
+
+Albert, J.H. & Chib, S. (1993). Bayesian analysis of binary and
+polychotomous response data. *Journal of the American Statistical
+Association*, 88(422), 669–679.
 """
 
 from __future__ import annotations
@@ -16,6 +41,7 @@ from __future__ import annotations
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pytensor import sparse as pts
 
 from .panel_base import SpatialPanelModel
 
@@ -91,7 +117,7 @@ class SARPanelTobit(_PanelTobitBase):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             rho = pm.Uniform("rho", lower=rho_lower, upper=rho_upper)
@@ -99,7 +125,7 @@ class SARPanelTobit(_PanelTobitBase):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             y_lat = self._latent_y_tensor()
-            resid = y_lat - rho * pt.dot(W_pt, y_lat) - pt.dot(self._X, beta)
+            resid = y_lat - rho * pts.structured_dot(W_pt, y_lat[:, None]).flatten() - pt.dot(self._X, beta)
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]
@@ -303,7 +329,7 @@ class SEMPanelTobit(_PanelTobitBase):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -312,7 +338,7 @@ class SEMPanelTobit(_PanelTobitBase):
 
             y_lat = self._latent_y_tensor()
             resid = y_lat - pt.dot(self._X, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]

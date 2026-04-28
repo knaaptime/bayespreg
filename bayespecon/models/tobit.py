@@ -14,6 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pytensor import sparse as pts
 
 from .base import SpatialModel
 
@@ -24,7 +25,12 @@ class _SpatialTobitBase(SpatialModel):
     def __init__(self, *args, censoring: float = 0.0, **kwargs):
         self.censoring = float(censoring)
         super().__init__(*args, **kwargs)
-        self._censored_mask = self._y <= self.censoring + 1e-12
+        # Censored observations are those at (or below) the censoring point.
+        # Use exact comparison: ``y_i == censoring`` is the definition of a
+        # left-censored observation; an arbitrary ``+ 1e-12`` slack would
+        # silently mark uncensored values that happen to be just above the
+        # threshold as censored.
+        self._censored_mask = self._y <= self.censoring
         self._censored_idx = np.where(self._censored_mask)[0]
 
     def _latent_y_tensor(self) -> pt.TensorVariable:
@@ -117,7 +123,7 @@ class SARTobit(_SpatialTobitBase):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             rho = pm.Uniform("rho", lower=rho_lower, upper=rho_upper)
@@ -125,7 +131,7 @@ class SARTobit(_SpatialTobitBase):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             y_lat = self._latent_y_tensor()
-            resid = y_lat - rho * pt.dot(W_pt, y_lat) - pt.dot(self._X, beta)
+            resid = y_lat - rho * pts.structured_dot(W_pt, y_lat[:, None]).flatten() - pt.dot(self._X, beta)
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]
@@ -215,10 +221,20 @@ class SARTobit(_SpatialTobitBase):
         return direct_samples, indirect_samples, total_samples
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
+        """Reported fitted mean: ``max(c, E[y* | X, params])``.
+
+        The structural latent mean for SAR-Tobit is
+        :math:`E[y^* \\mid X] = (I - \\rho W)^{-1} X \\beta`, evaluated at the
+        posterior mean of :math:`(\\rho, \\beta)`. Censored observations are
+        reported at the censoring point ``c`` (consistent with the
+        observation rule ``y = max(c, y*)``).
+        """
         rho = float(self._posterior_mean("rho"))
         beta = self._posterior_mean("beta")
-        y_lat = self._posterior_latent_y_mean()
-        return rho * (self._W_dense @ y_lat) + self._X @ beta
+        n = self._y.shape[0]
+        A = np.eye(n) - rho * self._W_dense
+        structural = np.linalg.solve(A, self._X @ beta)
+        return np.maximum(self.censoring, structural)
 
     def fit(
         self,
@@ -273,9 +289,16 @@ class SARTobit(_SpatialTobitBase):
         beta_f = beta.reshape(s, beta.shape[-1])
         sigma_f = sigma.reshape(s)
 
-        # Get posterior mean of latent y* for computing mu
-        y_lat = self._posterior_latent_y_mean()
-        mu = rho_f[:, None] * (W @ y_lat)[None, :] + beta_f @ X.T  # (s, n)
+        # Structural latent mean per draw: mu = (I - rho W)^{-1} X beta.
+        # We deliberately do NOT plug the posterior mean of the latent y*
+        # into mu: the pointwise observed-data likelihood must be a function
+        # of the model parameters only (not of latent quantities), otherwise
+        # marginal-likelihood / WAIC / LOO comparisons are biased.
+        I_n = np.eye(n)
+        Xb = beta_f @ X.T  # (s, n)
+        mu = np.empty((s, n), dtype=np.float64)
+        for i in range(s):
+            mu[i] = np.linalg.solve(I_n - rho_f[i] * W, Xb[i])
 
         # Tobit pointwise log-likelihood
         ll = np.empty((s, n), dtype=np.float64)
@@ -378,7 +401,7 @@ class SEMTobit(_SpatialTobitBase):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -387,7 +410,7 @@ class SEMTobit(_SpatialTobitBase):
 
             y_lat = self._latent_y_tensor()
             resid = y_lat - pt.dot(self._X, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]
@@ -470,8 +493,15 @@ class SEMTobit(_SpatialTobitBase):
         return direct_samples, indirect_samples, total_samples
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
+        """Reported fitted mean: ``max(c, E[y* | X, params])``.
+
+        For SEM-Tobit the structural latent mean is
+        :math:`E[y^* \\mid X] = X\\beta` (the spatial filter operates on the
+        error term and integrates out). Censored entries are reported at
+        the censoring point.
+        """
         beta = self._posterior_mean("beta")
-        return self._X @ beta
+        return np.maximum(self.censoring, self._X @ beta)
 
     def fit(
         self,
@@ -626,7 +656,7 @@ class SDMTobit(_SpatialTobitBase):
         sigma_sigma = self.priors.get("sigma_sigma", 10.0)
 
         logdet_fn = self._logdet_pytensor_fn
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             rho = pm.Uniform("rho", lower=rho_lower, upper=rho_upper)
@@ -634,7 +664,7 @@ class SDMTobit(_SpatialTobitBase):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             y_lat = self._latent_y_tensor()
-            resid = y_lat - rho * pt.dot(W_pt, y_lat) - pt.dot(Z, beta)
+            resid = y_lat - rho * pts.structured_dot(W_pt, y_lat[:, None]).flatten() - pt.dot(Z, beta)
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]
@@ -742,11 +772,20 @@ class SDMTobit(_SpatialTobitBase):
         return direct_samples, indirect_samples, total_samples
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
+        """Reported fitted mean: ``max(c, E[y* | X, params])``.
+
+        The structural latent mean for SDM-Tobit is
+        :math:`E[y^* \\mid X] = (I - \\rho W)^{-1} (X\\beta_1 + WX\\beta_2)`,
+        evaluated at posterior means; censored entries are reported at
+        the censoring point.
+        """
         rho = float(self._posterior_mean("rho"))
         beta = self._posterior_mean("beta")
-        y_lat = self._posterior_latent_y_mean()
         Z = np.hstack([self._X, self._WX])
-        return rho * (self._W_dense @ y_lat) + Z @ beta
+        n = self._y.shape[0]
+        A = np.eye(n) - rho * self._W_dense
+        structural = np.linalg.solve(A, Z @ beta)
+        return np.maximum(self.censoring, structural)
 
     def fit(
         self,
@@ -803,9 +842,13 @@ class SDMTobit(_SpatialTobitBase):
         beta_f = beta.reshape(s, beta.shape[-1])
         sigma_f = sigma.reshape(s)
 
-        # Get posterior mean of latent y* for computing mu
-        y_lat = self._posterior_latent_y_mean()
-        mu = rho_f[:, None] * (W @ y_lat)[None, :] + beta_f @ Z.T  # (s, n)
+        # Structural latent mean per draw: mu = (I - rho W)^{-1} Z beta.
+        # See SARTobit.fit for rationale (must not depend on posterior y*).
+        I_n = np.eye(n)
+        Zb = beta_f @ Z.T  # (s, n)
+        mu = np.empty((s, n), dtype=np.float64)
+        for i in range(s):
+            mu[i] = np.linalg.solve(I_n - rho_f[i] * W, Zb[i])
 
         # Tobit pointwise log-likelihood
         ll = np.empty((s, n), dtype=np.float64)

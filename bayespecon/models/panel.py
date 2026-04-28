@@ -6,6 +6,7 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
 import xarray as xr
+from pytensor import sparse as pts
 
 from .panel_base import SpatialPanelModel
 
@@ -359,7 +360,7 @@ class SEMPanelFE(SpatialPanelModel):
 
         logdet_fn = self._logdet_pytensor_fn
 
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -367,7 +368,7 @@ class SEMPanelFE(SpatialPanelModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             resid = self._y - pt.dot(self._X, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]
@@ -766,7 +767,7 @@ class SDEMPanelFE(SpatialPanelModel):
 
         logdet_fn = self._logdet_pytensor_fn
 
-        W_pt = pt.as_tensor_variable(self._W_dense)
+        W_pt = self._W_pt_sparse
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform("lam", lower=lam_lower, upper=lam_upper)
@@ -774,7 +775,7 @@ class SDEMPanelFE(SpatialPanelModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
 
             resid = self._y - pt.dot(Z, beta)
-            eps = resid - lam * pt.dot(W_pt, resid)
+            eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
                 self._add_nu_prior(model)
                 nu = model["nu"]

@@ -35,6 +35,9 @@ def ensure_rng(
 def row_standardize(W: np.ndarray) -> np.ndarray:
     """Row-standardize a dense weights matrix.
 
+    Each row of *W* is divided by its row sum so that
+    ``W[i, :].sum() == 1`` for every isolated-free unit *i*.
+
     Parameters
     ----------
     W : np.ndarray
@@ -44,6 +47,18 @@ def row_standardize(W: np.ndarray) -> np.ndarray:
     -------
     np.ndarray
         Row-standardized matrix, with zero-sum rows left unchanged.
+
+    Notes
+    -----
+    Rows whose sum is exactly ``0`` (typically *isolates* — units with
+    no neighbours) are returned untouched: dividing by zero would
+    introduce ``NaN`` entries that propagate through every subsequent
+    spatial product.  This means the returned matrix is row-stochastic
+    on the **non-isolated** rows only; the isolate rows remain rows of
+    zeros.  Downstream consumers that rely on every eigenvalue of the
+    row-standardised weight matrix being ``≤ 1`` (e.g. the SAR stability
+    domain ``ρ ∈ (-1, 1)``) should drop or reconnect isolates beforehand
+    rather than rely on this routine to do so.
     """
     W = np.asarray(W, dtype=float)
     rs = W.sum(axis=1, keepdims=True)

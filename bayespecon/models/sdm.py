@@ -320,6 +320,14 @@ class SDM(SpatialModel):
             ``(direct_samples, indirect_samples, total_samples)``, each
             of shape ``(G, k_wx)`` where *G* is the total number of posterior
             draws and *k_wx* is the number of spatially lagged covariates.
+
+        References
+        ----------
+        LeSage, J.P. & Pace, R.K. (2009). *Introduction to Spatial
+        Econometrics*. Chapman & Hall/CRC.  Sections 2.7 and 5.6 derive
+        the SDM impact decomposition above; the lagged-covariate term
+        :math:`\\beta_2 W` enters because :math:`WX` is included as a
+        regressor block in the SDM design.
         """
         from ..diagnostics.bayesian_lmtests import _get_posterior_draws
 

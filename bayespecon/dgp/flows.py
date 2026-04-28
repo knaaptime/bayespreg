@@ -10,6 +10,7 @@ Simulates origin-destination flow data from the SAR flow model:
 
 from __future__ import annotations
 
+import warnings
 from typing import Optional, Union
 
 import numpy as np
@@ -143,6 +144,21 @@ def generate_flow_data(
     Ww = wms["network"]
     I_N = sp.eye(N, format="csr", dtype=np.float64)
     A = I_N - rho_d * Wd - rho_o * Wo - rho_w * Ww
+
+    # Joint stability check: for row-standardised W_d/W_o/W_w each has
+    # spectral radius 1, so |rho_d| + |rho_o| + |rho_w| < 1 is sufficient
+    # (and necessary for guaranteed invertibility of A across all valid
+    # weight inputs). A tighter eigenvalue check would require an O(N^3)
+    # solve on N = n^2; we use the sufficient bound here.
+    rho_sum = abs(rho_d) + abs(rho_o) + abs(rho_w)
+    if rho_sum >= 1.0:
+        warnings.warn(
+            f"|rho_d|+|rho_o|+|rho_w| = {rho_sum:g} >= 1; the flow filter "
+            "(I_N - rho_d W_d - rho_o W_o - rho_w W_w) may be singular or "
+            "numerically unstable. Reduce parameters to satisfy the "
+            "sufficient stability bound |rho_d|+|rho_o|+|rho_w| < 1.",
+            stacklevel=2,
+        )
 
     # Build deterministic component: X_design @ beta_extended
     # beta_extended layout: [alpha, 0, beta_d..., beta_o..., 0...(intra), (0 for dist)]

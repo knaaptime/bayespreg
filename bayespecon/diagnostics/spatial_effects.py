@@ -1,10 +1,15 @@
 """Bayesian inference for spatial impact measures.
 
-Computes direct, indirect, and total effects for each posterior draw,
-then summarises the posterior distribution with means, credible intervals,
-and Bayesian p-values.  This is the fully Bayesian analog of the
-simulation-based approach in :cite:t:`lesage2009IntroductionSpatial` and
-the asymptotic variance formulas in :cite:t:`arbia2020TestingImpact`.
+This module provides **post-processing helpers** that convert posterior
+draws of model parameters into posterior distributions of direct,
+indirect, and total impacts.  The actual *computation* of the impact
+matrices :math:`(I-\\rho W)^{-1}(\\beta_{1k} I + \\beta_{2k} W)` lives
+in the model classes (e.g. ``SAR._compute_spatial_effects_posterior``,
+``SDM._compute_spatial_effects_posterior``); this module summarises
+those draws with means, credible intervals, and Bayesian p-values.
+This is the fully Bayesian analog of the simulation-based approach in
+:cite:t:`lesage2009IntroductionSpatial` and the asymptotic variance
+formulas in :cite:t:`arbia2020TestingImpact`.
 
 The key idea is that for each MCMC draw :math:`g = 1, \\dots, G`, we
 compute the impact measures from the parameter values
