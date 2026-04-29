@@ -57,9 +57,7 @@ def bayesian_panel_lm_wx_sem_test(
     resid = y[None, :] - fitted  # (draws, n)
 
     # For RE models, also subtract alpha
-    if hasattr(model, "_unit_idx") and "alpha" in idata.posterior:
-        alpha_draws = _get_posterior_draws(idata, "alpha")  # (draws, N)
-        resid = resid - alpha_draws[:, model._unit_idx]
+    resid = _maybe_subtract_alpha(model, idata, resid)
 
     # Score: g_gamma = WX' @ e for each draw → (draws, k_wx)
     g_gamma = resid @ WX  # (draws, k_wx)
@@ -72,25 +70,12 @@ def bayesian_panel_lm_wx_sem_test(
     J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (panel WX-SEM)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
-    df = k_wx
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_wx_sem",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx, "N": N, "T": T},
+        df=k_wx,
+        details={"k_wx": k_wx, "N": N, "T": T},
     )
-
-
-# ...existing code...
 
 
 def bayesian_lm_wx_sem_test(
@@ -171,21 +156,11 @@ def bayesian_lm_wx_sem_test(
     J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (LM-WX-SEM)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
-    df = k_wx
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_lm_wx_sem",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx},
+        df=k_wx,
+        details={"k_wx": k_wx},
     )
 
 
@@ -201,11 +176,44 @@ information-matrix adjustment (T multiplier, Wb'MWb term).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import arviz as az
 import numpy as np
 from scipy import stats as sp_stats
+
+
+def _finalize_lm(
+    LM: np.ndarray,
+    *,
+    test_type: str,
+    df: int,
+    details: Optional[Dict[str, Any]] = None,
+) -> "BayesianLMTestResult":
+    """Build a :class:`BayesianLMTestResult` from per-draw LM samples.
+
+    Centralises the boilerplate (mean / median / 95% CI / Bayesian p-value
+    against ``chi2(df)``) shared by every Bayesian LM test in this module.
+    The ``n_draws`` entry is added to ``details`` automatically.
+    """
+    LM = np.asarray(LM)
+    mean = float(np.mean(LM))
+    median = float(np.median(LM))
+    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
+    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
+    merged: Dict[str, Any] = {"n_draws": int(LM.shape[0])}
+    if details:
+        merged.update(details)
+    return BayesianLMTestResult(
+        lm_samples=LM,
+        mean=mean,
+        median=median,
+        credible_interval=ci,
+        bayes_pvalue=bayes_pvalue,
+        test_type=test_type,
+        df=df,
+        details=merged,
+    )
 
 
 def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
@@ -245,6 +253,81 @@ def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
         )
         return np.linalg.pinv(M)
     return np.linalg.inv(M_reg)
+
+
+def _resolve_X_for_beta(model, beta_draws: np.ndarray) -> np.ndarray:
+    """Return ``model._X`` augmented with ``model._WX`` iff ``beta`` covers both blocks.
+
+    Centralises the auto-detect-WX hstack pattern used by the cross-sectional
+    LM-lag/LM-error tests where the same code path must accept residuals from
+    OLS, SLX, SDM and SDEM posteriors.
+    """
+    k_beta = beta_draws.shape[1]
+    if (
+        hasattr(model, "_WX")
+        and model._WX.shape[1] > 0
+        and k_beta == model._X.shape[1] + model._WX.shape[1]
+    ):
+        return np.hstack([model._X, model._WX])
+    return model._X
+
+
+def _maybe_subtract_alpha(model, idata, resid: np.ndarray) -> np.ndarray:
+    """Subtract per-unit random-effect ``alpha[unit_idx]`` from ``resid`` if present.
+
+    Used by panel LM tests so that the cross-sectional residual formulas
+    transparently work for both pooled and random-effects fits.
+    """
+    if hasattr(model, "_unit_idx") and "alpha" in idata.posterior:
+        alpha_draws = _get_posterior_draws(idata, "alpha")
+        resid = resid - alpha_draws[:, model._unit_idx]
+    return resid
+
+
+def _neyman_adjust_scalar(
+    g_t: np.ndarray,
+    g_n: np.ndarray,
+    J_tt: float,
+    J_tn: np.ndarray,
+    J_nn: np.ndarray,
+    *,
+    label: str,
+):
+    """Apply the Neyman-orthogonal score correction for a scalar target parameter.
+
+    Computes ``g_t* = g_t - J_{tn} J_{nn}^{-1} g_n`` and the adjusted variance
+    ``V* = J_{tt} - J_{tn} J_{nn}^{-1} J_{nt}``. If the nuisance block is empty
+    (``g_n.shape[1] == 0``) the unadjusted score and variance are returned.
+
+    Parameters
+    ----------
+    g_t : np.ndarray, shape (draws,)
+        Score samples for the scalar target parameter.
+    g_n : np.ndarray, shape (draws, m)
+        Score samples for the nuisance block.
+    J_tt : float
+        Information for the target parameter.
+    J_tn : np.ndarray, shape (m,)
+        Cross-information between target and nuisance.
+    J_nn : np.ndarray, shape (m, m)
+        Information for the nuisance block.
+    label : str
+        Label passed to :func:`_safe_inv` for diagnostic warnings.
+
+    Returns
+    -------
+    g_t_star : np.ndarray, shape (draws,)
+    V_star : float
+    """
+    g_n = np.atleast_2d(g_n)
+    if g_n.shape[1] == 0:
+        return g_t, float(J_tt)
+    J_nn_inv = _safe_inv(np.atleast_2d(J_nn), label)
+    J_tn_arr = np.atleast_1d(J_tn)
+    coef = J_tn_arr @ J_nn_inv  # (m,)
+    g_t_star = g_t - g_n @ coef
+    V_star = float(J_tt) - float(coef @ J_tn_arr)
+    return g_t_star, V_star
 
 
 @dataclass
@@ -381,15 +464,7 @@ def bayesian_lm_lag_test(
     beta_draws = _get_posterior_draws(idata, "beta")  # (draws, k)
     # Only include WX in X if the model's beta covers WX columns
     # (e.g., SLX, SDM). For OLS, beta only covers X.
-    k_beta = beta_draws.shape[1]
-    if (
-        hasattr(model, "_WX")
-        and model._WX.shape[1] > 0
-        and k_beta == model._X.shape[1] + model._WX.shape[1]
-    ):
-        X = np.hstack([model._X, model._WX])
-    else:
-        X = model._X
+    X = _resolve_X_for_beta(model, beta_draws)
     # Wy is pre-computed and stored as a dense array — no need to materialize W
     Wy = model._Wy
     sigma_draws = _get_posterior_draws(idata, "sigma")  # (draws,)
@@ -403,20 +478,7 @@ def bayesian_lm_lag_test(
     # Variance: V = T_ww * sigma2_mean + ||Wy||^2  (Fisher information denominator)
     V = T_ww * sigma2_mean + float(np.dot(Wy, Wy))
     LM = S**2 / (V + 1e-12)
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, 1))
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
-        test_type="bayesian_lm_lag",
-        df=1,
-        details={"n_draws": LM.shape[0]},
-    )
+    return _finalize_lm(LM, test_type="bayesian_lm_lag", df=1)
 
 
 def bayesian_lm_error_test(
@@ -470,15 +532,7 @@ def bayesian_lm_error_test(
     idata = model.inference_data
     beta_draws = _get_posterior_draws(idata, "beta")  # (draws, k)
     # Only include WX in X if the model's beta covers WX columns
-    k_beta = beta_draws.shape[1]
-    if (
-        hasattr(model, "_WX")
-        and model._WX.shape[1] > 0
-        and k_beta == model._X.shape[1] + model._WX.shape[1]
-    ):
-        X = np.hstack([model._X, model._WX])
-    else:
-        X = model._X
+    X = _resolve_X_for_beta(model, beta_draws)
     fitted = beta_draws @ X.T  # (draws, n)
     resid = y[None, :] - fitted  # (draws, n)
     # sparse matmul: (draws, n) @ (n, n)^T = (draws, n)
@@ -493,20 +547,7 @@ def bayesian_lm_error_test(
     # Variance: V = T_ww * sigma2_mean  (Fisher information denominator)
     V = T_ww * sigma2_mean
     LM = S**2 / (V + 1e-12)
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, 1))
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
-        test_type="bayesian_lm_error",
-        df=1,
-        details={"n_draws": LM.shape[0]},
-    )
+    return _finalize_lm(LM, test_type="bayesian_lm_error", df=1)
 
 
 def bayesian_lm_wx_test(
@@ -594,21 +635,11 @@ def bayesian_lm_wx_test(
     J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
-    df = k_wx
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_lm_wx",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx},
+        df=k_wx,
+        details={"k_wx": k_wx},
     )
 
 
@@ -706,21 +737,11 @@ def bayesian_lm_sdm_joint_test(
     J_inv = _safe_inv(J, "J (SDM joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
-    df = p
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_lm_sdm_joint",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx},
+        df=p,
+        details={"k_wx": k_wx},
     )
 
 
@@ -820,21 +841,11 @@ def bayesian_lm_slx_error_joint_test(
     J_inv = _safe_inv(J, "J (SLX-error joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
-    df = p
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_lm_slx_error_joint",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx},
+        df=p,
+        details={"k_wx": k_wx},
     )
 
 
@@ -1088,39 +1099,23 @@ def bayesian_robust_lm_lag_sdm_test(
     J_gamma_gamma = info["J_gamma_gamma"]  # (k_wx, k_wx)
 
     # Neyman adjustment: g_rho* = g_rho - J_{ργ·σ} J_{γγ·σ}^{-1} g_gamma
-    if k_wx > 0:
-        J_gamma_gamma_inv = _safe_inv(
-            J_gamma_gamma, "J_gamma_gamma (robust LM-lag-SDM)"
-        )
-        neyman_coef = J_rho_gamma @ J_gamma_gamma_inv  # (k_wx,)
-        adjustment = g_gamma @ neyman_coef  # (draws,)
-        g_rho_star = g_rho - adjustment
-
-        # Adjusted variance: V* = J_{ρρ·σ} - J_{ργ·σ} J_{γγ·σ}^{-1} J_{γρ·σ}
-        V_star = J_rho_rho - neyman_coef @ J_rho_gamma
-    else:
-        # No WX columns: no adjustment needed
-        g_rho_star = g_rho
-        V_star = J_rho_rho
+    g_rho_star, V_star = _neyman_adjust_scalar(
+        g_rho,
+        g_gamma,
+        J_rho_rho,
+        J_rho_gamma,
+        J_gamma_gamma,
+        label="J_gamma_gamma (robust LM-lag-SDM)",
+    )
 
     # Robust LM = (g_rho*)² / V*
     LM = g_rho_star**2 / (V_star + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_robust_lm_lag_sdm",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx},
+        df=1,
+        details={"k_wx": k_wx},
     )
 
 
@@ -1265,21 +1260,11 @@ def bayesian_robust_lm_wx_test(
     C_star_inv = _safe_inv(C_star, "C_star (robust LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma_star, C_star_inv, g_gamma_star)
 
-    df = k_wx
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_robust_lm_wx",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx},
+        df=k_wx,
+        details={"k_wx": k_wx},
     )
 
 
@@ -1370,38 +1355,23 @@ def bayesian_robust_lm_error_sdem_test(
     J_gamma_gamma = info["J_gamma_gamma"]  # (k_wx, k_wx)
 
     # Neyman adjustment: g_lambda* = g_lambda - J_{λγ·σ} J_{γγ·σ}^{-1} g_gamma
-    if k_wx > 0:
-        J_gamma_gamma_inv = _safe_inv(
-            J_gamma_gamma, "J_gamma_gamma (robust LM-error-SDEM)"
-        )
-        neyman_coef = J_lam_gamma @ J_gamma_gamma_inv  # (k_wx,)
-        adjustment = g_gamma @ neyman_coef  # (draws,)
-        g_lambda_star = g_lambda - adjustment
-
-        # Adjusted variance: V* = J_{λλ·σ} - J_{λγ·σ} J_{γγ·σ}^{-1} J_{γλ·σ}
-        V_star = J_lam_lam - neyman_coef @ J_lam_gamma
-    else:
-        g_lambda_star = g_lambda
-        V_star = J_lam_lam
+    g_lambda_star, V_star = _neyman_adjust_scalar(
+        g_lambda,
+        g_gamma,
+        J_lam_lam,
+        J_lam_gamma,
+        J_gamma_gamma,
+        label="J_gamma_gamma (robust LM-error-SDEM)",
+    )
 
     # Robust LM = (g_lambda*)² / V*
     LM = g_lambda_star**2 / (V_star + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_robust_lm_error_sdem",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx},
+        df=1,
+        details={"k_wx": k_wx},
     )
 
 
@@ -1439,11 +1409,7 @@ def _panel_residuals(model, beta_draws: np.ndarray) -> np.ndarray:
     resid = y[None, :] - fitted  # (draws, n)
 
     # RE models: subtract random effects alpha[unit_idx]
-    if hasattr(model, "_unit_idx") and "alpha" in model.inference_data.posterior:
-        alpha_draws = _get_posterior_draws(model.inference_data, "alpha")  # (draws, N)
-        unit_idx = model._unit_idx
-        # alpha_draws[:, unit_idx] → (draws, n)
-        resid = resid - alpha_draws[:, unit_idx]
+    resid = _maybe_subtract_alpha(model, model.inference_data, resid)
 
     return resid
 
@@ -1716,21 +1682,11 @@ def bayesian_panel_lm_lag_test(
     sigma2_draws = sigma_draws**2  # (draws,)
     LM = S**2 / (sigma2_draws * J_val + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_lag",
-        df=df,
-        details={"n_draws": LM.shape[0], "N": N, "T": T},
+        df=1,
+        details={"N": N, "T": T},
     )
 
 
@@ -1801,21 +1757,11 @@ def bayesian_panel_lm_error_test(
     # LM = S² / V
     LM = S**2 / (V + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_error",
-        df=df,
-        details={"n_draws": LM.shape[0], "N": N, "T": T},
+        df=1,
+        details={"N": N, "T": T},
     )
 
 
@@ -1893,21 +1839,11 @@ def bayesian_panel_robust_lm_lag_test(
 
     LM = robust_score**2 / (abs(denom) + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_robust_lm_lag",
-        df=df,
-        details={"n_draws": LM.shape[0], "N": N, "T": T},
+        df=1,
+        details={"N": N, "T": T},
     )
 
 
@@ -1992,21 +1928,11 @@ def bayesian_panel_robust_lm_error_test(
 
     LM = robust_score**2 / (abs(denom) + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_robust_lm_error",
-        df=df,
-        details={"n_draws": LM.shape[0], "N": N, "T": T},
+        df=1,
+        details={"N": N, "T": T},
     )
 
 
@@ -2085,9 +2011,7 @@ def bayesian_panel_lm_wx_test(
     resid = y[None, :] - fitted  # (draws, n)
 
     # For RE models, also subtract alpha
-    if hasattr(model, "_unit_idx") and "alpha" in idata.posterior:
-        alpha_draws = _get_posterior_draws(idata, "alpha")  # (draws, N)
-        resid = resid - alpha_draws[:, model._unit_idx]
+    resid = _maybe_subtract_alpha(model, idata, resid)
 
     # Score: g_gamma = WX' @ e for each draw → (draws, k_wx)
     g_gamma = resid @ WX  # (draws, k_wx)
@@ -2100,21 +2024,11 @@ def bayesian_panel_lm_wx_test(
     J_inv = _safe_inv(J_gamma_gamma, "J_gamma_gamma (panel LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma, J_inv, g_gamma)
 
-    df = k_wx
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_wx",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx, "N": N, "T": T},
+        df=k_wx,
+        details={"k_wx": k_wx, "N": N, "T": T},
     )
 
 
@@ -2207,21 +2121,11 @@ def bayesian_panel_lm_sdm_joint_test(
     J_inv = _safe_inv(J, "J (panel SDM joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
-    df = p
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_sdm_joint",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx, "N": N, "T": T},
+        df=p,
+        details={"k_wx": k_wx, "N": N, "T": T},
     )
 
 
@@ -2301,21 +2205,11 @@ def bayesian_panel_lm_slx_error_joint_test(
     J_inv = _safe_inv(J, "J (panel SLX-error joint)")
     LM = np.einsum("di,ij,dj->d", g, J_inv, g)
 
-    df = p
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_slx_error_joint",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx, "N": N, "T": T},
+        df=p,
+        details={"k_wx": k_wx, "N": N, "T": T},
     )
 
 
@@ -2403,36 +2297,22 @@ def bayesian_panel_robust_lm_lag_sdm_test(
     J_gamma_gamma = info["J_gamma_gamma"]  # (k_wx, k_wx)
 
     # Neyman adjustment
-    if k_wx > 0:
-        J_gamma_gamma_inv = _safe_inv(
-            J_gamma_gamma, "J_gamma_gamma (panel robust LM-lag-SDM)"
-        )
-        neyman_coef = J_rho_gamma @ J_gamma_gamma_inv  # (k_wx,)
-        adjustment = g_gamma @ neyman_coef  # (draws,)
-        g_rho_star = g_rho - adjustment
-
-        V_star = J_rho_rho - neyman_coef @ J_rho_gamma
-    else:
-        g_rho_star = g_rho
-        V_star = J_rho_rho
+    g_rho_star, V_star = _neyman_adjust_scalar(
+        g_rho,
+        g_gamma,
+        J_rho_rho,
+        J_rho_gamma,
+        J_gamma_gamma,
+        label="J_gamma_gamma (panel robust LM-lag-SDM)",
+    )
 
     LM = g_rho_star**2 / (V_star + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_robust_lm_lag_sdm",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx, "N": N, "T": T},
+        df=1,
+        details={"k_wx": k_wx, "N": N, "T": T},
     )
 
 
@@ -2495,9 +2375,7 @@ def bayesian_panel_robust_lm_wx_test(
     resid = y[None, :] - fitted
 
     # For RE models, also subtract alpha
-    if hasattr(model, "_unit_idx") and "alpha" in idata.posterior:
-        alpha_draws = _get_posterior_draws(idata, "alpha")
-        resid = resid - alpha_draws[:, model._unit_idx]
+    resid = _maybe_subtract_alpha(model, idata, resid)
 
     # Unadjusted scores
     g_rho = np.dot(resid, Wy)  # (draws,)
@@ -2551,21 +2429,11 @@ def bayesian_panel_robust_lm_wx_test(
     C_star_inv = _safe_inv(C_star, "C_star (panel robust LM-WX)")
     LM = np.einsum("di,ij,dj->d", g_gamma_star, C_star_inv, g_gamma_star)
 
-    df = k_wx
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_robust_lm_wx",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx, "N": N, "T": T},
+        df=k_wx,
+        details={"k_wx": k_wx, "N": N, "T": T},
     )
 
 
@@ -2640,36 +2508,22 @@ def bayesian_panel_robust_lm_error_sdem_test(
     J_gamma_gamma = (WX.T @ WX) / sigma2_mean
 
     # Neyman adjustment (no-op since J_lam_gamma = 0)
-    if k_wx > 0:
-        J_gamma_gamma_inv = _safe_inv(
-            J_gamma_gamma, "J_gamma_gamma (panel robust LM-error-SDEM)"
-        )
-        neyman_coef = J_lam_gamma @ J_gamma_gamma_inv  # zeros
-        adjustment = g_gamma @ neyman_coef  # zeros
-        g_lambda_star = g_lambda - adjustment
-
-        V_star = J_lam_lam - neyman_coef @ J_lam_gamma
-    else:
-        g_lambda_star = g_lambda
-        V_star = J_lam_lam
+    g_lambda_star, V_star = _neyman_adjust_scalar(
+        g_lambda,
+        g_gamma,
+        J_lam_lam,
+        J_lam_gamma,
+        J_gamma_gamma,
+        label="J_gamma_gamma (panel robust LM-error-SDEM)",
+    )
 
     LM = g_lambda_star**2 / (V_star + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_robust_lm_error_sdem",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_wx": k_wx, "N": N, "T": T},
+        df=1,
+        details={"k_wx": k_wx, "N": N, "T": T},
     )
 
 
@@ -2753,22 +2607,11 @@ def _flow_marginal_lm(model, key: str, test_type: str) -> BayesianLMTestResult:
     s = G[:, 0]
     v = float(J[0, 0])
     LM = s**2 / (v + 1e-12)
-
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type=test_type,
-        df=df,
-        details={"n_draws": LM.shape[0], "direction": key},
+        df=1,
+        details={"direction": key},
     )
 
 
@@ -2827,23 +2670,7 @@ def bayesian_lm_flow_joint_test(model) -> BayesianLMTestResult:
     G, J = _flow_score_info(model, restrict_keys=("d", "o", "w"))
     J_inv = _safe_inv(J, "J (flow joint LM)")
     LM = np.einsum("di,ij,dj->d", G, J_inv, G)
-
-    df = 3
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
-        test_type="bayesian_lm_flow_joint",
-        df=df,
-        details={"n_draws": LM.shape[0]},
-    )
+    return _finalize_lm(LM, test_type="bayesian_lm_flow_joint", df=3)
 
 
 # ---------------------------------------------------------------------
@@ -2906,29 +2733,23 @@ def _flow_robust_marginal_lm(
     J_tn = J[target, nuisance]  # (2,)
     J_nn = J[np.ix_(nuisance, nuisance)]  # (2, 2)
 
-    J_nn_inv = _safe_inv(J_nn, f"J_nuisance (flow robust {test_type})")
     # adjusted score: g_t* = g_t - J_{t,n} J_{n,n}^{-1} g_n
-    adj = g_n @ (J_nn_inv @ J_tn)
-    g_star = g_t - adj
-    V_star = J_tt - float(J_tn @ J_nn_inv @ J_tn)
+    g_star, V_star = _neyman_adjust_scalar(
+        g_t,
+        g_n,
+        J_tt,
+        J_tn,
+        J_nn,
+        label=f"J_nuisance (flow robust {test_type})",
+    )
     LM = g_star**2 / (V_star + 1e-12)
 
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
     direction = {0: "d", 1: "o", 2: "w"}[target]
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type=test_type,
-        df=df,
-        details={"n_draws": LM.shape[0], "direction": direction},
+        df=1,
+        details={"direction": direction},
     )
 
 
@@ -3012,21 +2833,11 @@ def bayesian_lm_flow_intra_test(model) -> BayesianLMTestResult:
     V_inv = _safe_inv(V, "V_intra (flow intra LM)")
     LM = np.einsum("di,ij,dj->d", G, V_inv, G)
 
-    df = k_intra
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_lm_flow_intra",
-        df=df,
-        details={"n_draws": LM.shape[0], "k_intra": k_intra},
+        df=k_intra,
+        details={"k_intra": k_intra},
     )
 
 
@@ -3077,24 +2888,11 @@ def _flow_panel_marginal_lm(model, key: str, test_type: str) -> BayesianLMTestRe
     s = G[:, 0]
     v = float(J[0, 0])
     LM = s**2 / (v + 1e-12)
-    df = 1
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type=test_type,
-        df=df,
-        details={
-            "n_draws": LM.shape[0],
-            "direction": key,
-            "T": int(getattr(model, "_T", 1)),
-        },
+        df=1,
+        details={"direction": key, "T": int(getattr(model, "_T", 1))},
     )
 
 
@@ -3125,20 +2923,11 @@ def bayesian_panel_lm_flow_joint_test(model) -> BayesianLMTestResult:
     G, J = _flow_panel_score_info(model, restrict_keys=("d", "o", "w"))
     J_inv = _safe_inv(J, "J (panel flow joint LM)")
     LM = np.einsum("di,ij,dj->d", G, J_inv, G)
-    df = 3
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_flow_joint",
-        df=df,
-        details={"n_draws": LM.shape[0], "T": int(getattr(model, "_T", 1))},
+        df=3,
+        details={"T": int(getattr(model, "_T", 1))},
     )
 
 
@@ -3171,23 +2960,9 @@ def bayesian_panel_lm_flow_intra_test(model) -> BayesianLMTestResult:
     V_inv = _safe_inv(V, "V_intra (panel flow intra LM)")
     LM = np.einsum("di,ij,dj->d", G, V_inv, G)
 
-    df = k_intra
-    mean = float(np.mean(LM))
-    median = float(np.median(LM))
-    ci = (float(np.percentile(LM, 2.5)), float(np.percentile(LM, 97.5)))
-    bayes_pvalue = float(1 - sp_stats.chi2.cdf(mean, df))
-
-    return BayesianLMTestResult(
-        lm_samples=LM,
-        mean=mean,
-        median=median,
-        credible_interval=ci,
-        bayes_pvalue=bayes_pvalue,
+    return _finalize_lm(
+        LM,
         test_type="bayesian_panel_lm_flow_intra",
-        df=df,
-        details={
-            "n_draws": LM.shape[0],
-            "k_intra": k_intra,
-            "T": int(getattr(model, "_T", 1)),
-        },
+        df=k_intra,
+        details={"k_intra": k_intra, "T": int(getattr(model, "_T", 1))},
     )
