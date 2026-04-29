@@ -1,0 +1,6 @@
+﻿bayespecon.dgp.simulate\_panel\_sar\_dynamic\_fe
+================================================
+
+.. currentmodule:: bayespecon.dgp
+
+.. autofunction:: simulate_panel_sar_dynamic_fe

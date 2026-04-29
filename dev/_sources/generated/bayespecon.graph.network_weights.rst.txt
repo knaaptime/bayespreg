@@ -1,0 +1,6 @@
+﻿bayespecon.graph.network\_weights
+=================================
+
+.. currentmodule:: bayespecon.graph
+
+.. autofunction:: network_weights

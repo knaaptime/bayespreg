@@ -1,0 +1,2360 @@
+
+
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="installation.html">
+      
+      
+        <link rel="next" href="user-guide/pedagogical_spatial_models.html">
+      
+      
+      <link rel="icon" href="_static/pysal_favicon.ico">
+    
+    
+      
+        <title>Supported Models - bayespecon</title>
+      
+    
+    
+      
+        
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+        <link rel="stylesheet" type="text/css" href="_static/sphinx_immaterial_theme.74c816e3f9967dd6e.min.css?v=6cfe2491" />
+        <link rel="stylesheet" type="text/css" href="_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+        <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+        <link rel="stylesheet" type="text/css" href="_static/custom.css?v=93c5fc88" />
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cross-sectional-models" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="index.html" title="bayespecon" class="md-header__button md-logo" aria-label="bayespecon" data-md-component="logo">
+      <img src="_static/pysal_logo.svg" alt="logo">
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            bayespecon
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Supported Models
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="red"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7M9 21v-1h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1m3-17a5 5 0 0 0-5 5c0 2.05 1.23 3.81 3 4.58V16h4v-2.42c1.77-.77 3-2.53 3-4.58a5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pysal/bayespecon/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pysal/bayespecon
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="index.html" title="bayespecon" class="md-nav__button md-logo" aria-label="bayespecon" data-md-component="logo">
+      <img src="_static/pysal_logo.svg" alt="logo">
+    </a>
+    bayespecon
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pysal/bayespecon/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pysal/bayespecon
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Home</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Installation</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    <span>Models</span>
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            <span>Models</span>
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    <span>Supported Models</span>
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="#" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Supported Models</span>
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary">
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cross-sectional-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Cross Sectional Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cross Sectional Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ols" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLS</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slx" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLX</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sar" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SAR</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEM</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdm" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDM</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEM</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#panel-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Panel Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ols-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLS panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sar-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SAR panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sem-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEM panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdm-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDM panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdem-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEM panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slx-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLX panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ols-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLS panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sar-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SAR panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sem-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEM panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdem-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEM panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-panel-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Dynamic Panel Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dynamic Panel Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#olspaneldynamic-dynamic-linear-model" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLSPanel<wbr>Dynamic <wbr>(Dynamic Linear Model)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdmrpaneldynamic-dynamic-restricted-spatial-durbin" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDMRPanel<wbr>Dynamic <wbr>(Dynamic Restricted Spatial Durbin)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdmupaneldynamic-dynamic-unrestricted-spatial-durbin" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDMUPanel<wbr>Dynamic <wbr>(Dynamic Unrestricted Spatial Durbin)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarpaneldynamic-dynamic-sar" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARPanel<wbr>Dynamic <wbr>(Dynamic SAR)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sempaneldynamic-dynamic-sem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMPanel<wbr>Dynamic <wbr>(Dynamic SEM)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdempaneldynamic-dynamic-sdem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEMPanel<wbr>Dynamic <wbr>(Dynamic SDEM)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slxpaneldynamic-dynamic-slx" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLXPanel<wbr>Dynamic <wbr>(Dynamic SLX)</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-linear-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Non-<wbr>Linear Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Non-Linear Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#spatial-probit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Spatial Probit</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tobit-sar-tobit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Tobit <wbr>(SAR Tobit)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tobit-sem-tobit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Tobit <wbr>(SEM Tobit)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tobit-sdm-tobit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Tobit <wbr>(SDM Tobit)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#panel-tobit-sar" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Tobit <wbr>(SAR)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#panel-tobit-sem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Tobit <wbr>(SEM)</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flow-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Flow Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flow Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#olsflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLSFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>Flow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflowseparable" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow<wbr>Separable</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflowseparable" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow<wbr>Separable</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflowseparable" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow<wbr>Separable</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#panel-flow-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Flow Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Panel Flow Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#olsflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLSFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>Flow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflowseparablepanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow<wbr>Separable<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflowseparablepanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow<wbr>Separable<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflowseparablepanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow<wbr>Separable<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    <span>User Guide</span>
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            <span>User Guide</span>
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/pedagogical_spatial_models.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Cross Sectional Models</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/pedagogical_panel_models.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Panel Models</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/nonlinear_models.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Nonlinear Models</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/nonlinear_panel_models.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Nonlinear Panel Models</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/flow_models.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Flow Models</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/panel_flow_models.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Panel Flow Models</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/bayesian_lmtests.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Bayesian Spatial Diagnostics</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/cross_sectional_spreg_comparison.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Comparing bayespecon vs spreg</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/faithfulness_bayespecon.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Recovering Parameters</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/jgsy2024_replication_bayespecon.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Replicating Elhorst et al 2024</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/logdet_profiling.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Log-<wbr>Determinant Methods</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/sampling_backend_profiling.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Sampling Backends</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    <span>API</span>
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            <span>API</span>
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>API reference</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    <span>References</span>
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            <span>References</span>
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="references.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>References</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    <span>For contributors</span>
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            <span>For contributors</span>
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/pysal/bayespecon" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Git<wbr>Hub</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/pysal/bayespecon/releases" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Changelog</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cross-sectional-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Cross Sectional Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cross Sectional Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ols" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLS</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slx" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLX</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sar" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SAR</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEM</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdm" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDM</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEM</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#panel-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Panel Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ols-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLS panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sar-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SAR panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sem-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEM panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdm-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDM panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdem-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEM panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slx-panel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLX panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ols-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLS panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sar-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SAR panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sem-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEM panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdem-panel-random-effects" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEM panel <wbr>(Random Effects)</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-panel-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Dynamic Panel Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dynamic Panel Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#olspaneldynamic-dynamic-linear-model" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLSPanel<wbr>Dynamic <wbr>(Dynamic Linear Model)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdmrpaneldynamic-dynamic-restricted-spatial-durbin" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDMRPanel<wbr>Dynamic <wbr>(Dynamic Restricted Spatial Durbin)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdmupaneldynamic-dynamic-unrestricted-spatial-durbin" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDMUPanel<wbr>Dynamic <wbr>(Dynamic Unrestricted Spatial Durbin)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarpaneldynamic-dynamic-sar" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARPanel<wbr>Dynamic <wbr>(Dynamic SAR)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sempaneldynamic-dynamic-sem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMPanel<wbr>Dynamic <wbr>(Dynamic SEM)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdempaneldynamic-dynamic-sdem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SDEMPanel<wbr>Dynamic <wbr>(Dynamic SDEM)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slxpaneldynamic-dynamic-slx" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SLXPanel<wbr>Dynamic <wbr>(Dynamic SLX)</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-linear-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Non-<wbr>Linear Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Non-Linear Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#spatial-probit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Spatial Probit</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tobit-sar-tobit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Tobit <wbr>(SAR Tobit)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tobit-sem-tobit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Tobit <wbr>(SEM Tobit)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tobit-sdm-tobit" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Tobit <wbr>(SDM Tobit)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#panel-tobit-sar" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Tobit <wbr>(SAR)</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#panel-tobit-sem" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Tobit <wbr>(SEM)</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flow-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Flow Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flow Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#olsflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLSFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>Flow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflowseparable" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow<wbr>Separable</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflowseparable" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow<wbr>Separable</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflow" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflowseparable" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow<wbr>Separable</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#panel-flow-models" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Panel Flow Models</span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Panel Flow Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#olsflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>OLSFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>Flow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sarflowseparablepanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SARFlow<wbr>Separable<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissonsarflowseparablepanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>Poisson<wbr>SARFlow<wbr>Separable<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflowpanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#semflowseparablepanel" class="md-nav__link">
+    
+    <span class="md-ellipsis">
+      <span>SEMFlow<wbr>Separable<wbr>Panel</span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset" role="main">
+                
+                
+                  
+
+
+  
+    <a href="https://github.com/pysal/bayespecon/blob/main/docs/models.md" title="Edit this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 9h5.5L13 3.5zM6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4c0-1.11.89-2 2-2m.12 13.5 3.74 3.74 1.42-1.41-2.33-2.33 2.33-2.33-1.42-1.41zm11.16 0-3.74-3.74-1.42 1.41 2.33 2.33-2.33 2.33 1.42 1.41z"/></svg>
+    </a>
+  
+  
+
+<h1 id="supported-models">Supported Models<a class="headerlink" href="#supported-models" title="Link to this heading">¶</a></h1>
+<h2 id="cross-sectional-models">Cross Sectional Models<a class="headerlink" href="#cross-sectional-models" title="Link to this heading">¶</a></h2>
+<h3 id="ols">OLS<a class="headerlink" href="#ols" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = X\beta + \epsilon\]</div>
+<h3 id="slx">SLX<a class="headerlink" href="#slx" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = X\beta + WX\theta + \epsilon\]</div>
+<h3 id="sar">SAR<a class="headerlink" href="#sar" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = \rho Wy + X\beta + \epsilon\]</div>
+<h3 id="sem">SEM<a class="headerlink" href="#sem" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = X\beta + u, \quad u = \lambda Wu + \epsilon\]</div>
+<h3 id="sdm">SDM<a class="headerlink" href="#sdm" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = \rho Wy + X\beta + WX\theta + \epsilon\]</div>
+<h3 id="sdem">SDEM<a class="headerlink" href="#sdem" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = X\beta + WX\theta + u, \quad u = \lambda Wu + \epsilon\]</div>
+<h2 id="panel-models">Panel Models<a class="headerlink" href="#panel-models" title="Link to this heading">¶</a></h2>
+<h3 id="ols-panel">OLS panel<a class="headerlink" href="#ols-panel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}' \beta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="sar-panel">SAR panel<a class="headerlink" href="#sar-panel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \rho Wy_{it} + x_{it}' \beta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="sem-panel">SEM panel<a class="headerlink" href="#sem-panel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}' \beta + a_i + \tau_t + u_{it}, \quad u_{it} = \lambda Wu_{it} + \epsilon_{it}\]</div>
+<h3 id="sdm-panel">SDM panel<a class="headerlink" href="#sdm-panel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \rho Wy_{it} + x_{it}' \beta + Wx_{it}' \theta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="sdem-panel">SDEM panel<a class="headerlink" href="#sdem-panel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}' \beta + Wx_{it}' \theta + a_i + \tau_t + u_{it}, \quad u_{it} = \lambda Wu_{it} + \epsilon_{it}\]</div>
+<h3 id="slx-panel">SLX panel<a class="headerlink" href="#slx-panel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}' \beta + Wx_{it}' \theta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="ols-panel-random-effects">OLS panel (Random Effects)<a class="headerlink" href="#ols-panel-random-effects" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}' \beta + \alpha_i + \tau_t + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)\]</div>
+<h3 id="sar-panel-random-effects">SAR panel (Random Effects)<a class="headerlink" href="#sar-panel-random-effects" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \rho W y_{it} + x_{it}' \beta + \alpha_i + \tau_t + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)\]</div>
+<h3 id="sem-panel-random-effects">SEM panel (Random Effects)<a class="headerlink" href="#sem-panel-random-effects" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}' \beta + \alpha_i + \tau_t + u_{it}, \quad u_{it} = \lambda W u_{it} + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)\]</div>
+<h3 id="sdem-panel-random-effects">SDEM panel (Random Effects)<a class="headerlink" href="#sdem-panel-random-effects" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = x_{it}' \beta + W x_{it}' \theta + \alpha_i + u_{it}, \quad u_{it} = \lambda W u_{it} + \epsilon_{it}, \quad \alpha_i \sim N(0, \sigma_\alpha^2)\]</div>
+<h2 id="dynamic-panel-models">Dynamic Panel Models<a class="headerlink" href="#dynamic-panel-models" title="Link to this heading">¶</a></h2>
+<h3 id="olspaneldynamic-dynamic-linear-model">OLSPanelDynamic (Dynamic Linear Model)<a class="headerlink" href="#olspaneldynamic-dynamic-linear-model" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i,t-1} + x_{it}' \beta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="sdmrpaneldynamic-dynamic-restricted-spatial-durbin">SDMRPanelDynamic (Dynamic Restricted Spatial Durbin)<a class="headerlink" href="#sdmrpaneldynamic-dynamic-restricted-spatial-durbin" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i,t-1} + \rho W y_{it} - \rho \phi W y_{i,t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="sdmupaneldynamic-dynamic-unrestricted-spatial-durbin">SDMUPanelDynamic (Dynamic Unrestricted Spatial Durbin)<a class="headerlink" href="#sdmupaneldynamic-dynamic-unrestricted-spatial-durbin" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i,t-1} + \rho W y_{it} + \theta W y_{i,t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="sarpaneldynamic-dynamic-sar">SARPanelDynamic (Dynamic SAR)<a class="headerlink" href="#sarpaneldynamic-dynamic-sar" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i,t-1} + \rho W y_{it} + x_{it}' \beta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h3 id="sempaneldynamic-dynamic-sem">SEMPanelDynamic (Dynamic SEM)<a class="headerlink" href="#sempaneldynamic-dynamic-sem" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i,t-1} + x_{it}' \beta + a_i + \tau_t + u_{it}, \quad u_{it} = \lambda W u_{it} + \epsilon_{it}\]</div>
+<h3 id="sdempaneldynamic-dynamic-sdem">SDEMPanelDynamic (Dynamic SDEM)<a class="headerlink" href="#sdempaneldynamic-dynamic-sdem" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i,t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + u_{it}, \quad u_{it} = \lambda W u_{it} + \epsilon_{it}\]</div>
+<h3 id="slxpaneldynamic-dynamic-slx">SLXPanelDynamic (Dynamic SLX)<a class="headerlink" href="#slxpaneldynamic-dynamic-slx" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \phi y_{i,t-1} + x_{it}' \beta + W x_{it}' \theta + a_i + \tau_t + \epsilon_{it}\]</div>
+<h2 id="non-linear-models">Non-Linear Models<a class="headerlink" href="#non-linear-models" title="Link to this heading">¶</a></h2>
+<h3 id="spatial-probit">Spatial Probit<a class="headerlink" href="#spatial-probit" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y^* = \rho W y^* + X\beta + a + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, I), \quad y_i = \mathbf{1}[y_i^* &gt; 0]\]</div>
+<h3 id="tobit-sar-tobit">Tobit (SAR Tobit)<a class="headerlink" href="#tobit-sar-tobit" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_i = \max(c, y_i^*), \quad y^* = \rho W y^* + X\beta + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2 I)\]</div>
+<h3 id="tobit-sem-tobit">Tobit (SEM Tobit)<a class="headerlink" href="#tobit-sem-tobit" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_i = \max(c, y_i^*), \quad y^* = X\beta + u, \quad u = \lambda Wu + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2 I)\]</div>
+<h3 id="tobit-sdm-tobit">Tobit (SDM Tobit)<a class="headerlink" href="#tobit-sdm-tobit" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_i = \max(c, y_i^*), \quad y^* = \rho W y^* + X\beta + WX\theta + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2 I)\]</div>
+<h3 id="panel-tobit-sar">Panel Tobit (SAR)<a class="headerlink" href="#panel-tobit-sar" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \max(c, y_{it}^*), \quad y_t^* = \rho W y_t^* + X_t\beta + \varepsilon_t\]</div>
+<h3 id="panel-tobit-sem">Panel Tobit (SEM)<a class="headerlink" href="#panel-tobit-sem" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{it} = \max(c, y_{it}^*), \quad y_t^* = X_t\beta + u_t, \quad u_t = \lambda W u_t + \varepsilon_t\]</div>
+<h2 id="flow-models">Flow Models<a class="headerlink" href="#flow-models" title="Link to this heading">¶</a></h2>
+<p>Vectorize the origin-destination flow matrix to <span class="math notranslate nohighlight">\(y \in \mathbb{R}^{N}\)</span> with <span class="math notranslate nohighlight">\(N = n^2\)</span>, and define destination, origin, and network weight matrices as <span class="math notranslate nohighlight">\(W_d\)</span>, <span class="math notranslate nohighlight">\(W_o\)</span>, and <span class="math notranslate nohighlight">\(W_w\)</span>.</p>
+<h3 id="olsflow">OLSFlow<a class="headerlink" href="#olsflow" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = X\beta + \varepsilon\]</div>
+<h3 id="poissonflow">PoissonFlow<a class="headerlink" href="#poissonflow" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{ij} \sim \operatorname{Poisson}(\lambda_{ij}), \quad \log \boldsymbol{\lambda} = X\beta\]</div>
+<h3 id="sarflow">SARFlow<a class="headerlink" href="#sarflow" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = \rho_d W_d y + \rho_o W_o y + \rho_w W_w y + X\beta + \varepsilon\]</div>
+<h3 id="sarflowseparable">SARFlowSeparable<a class="headerlink" href="#sarflowseparable" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = \rho_d W_d y + \rho_o W_o y - \rho_d \rho_o W_w y + X\beta + \varepsilon\]</div>
+<h3 id="poissonsarflow">PoissonSARFlow<a class="headerlink" href="#poissonsarflow" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{ij} \sim \operatorname{Poisson}(\lambda_{ij}), \quad \log \boldsymbol{\lambda} = A(\boldsymbol{\rho})^{-1} X\beta\]</div>
+<h3 id="poissonsarflowseparable">PoissonSARFlowSeparable<a class="headerlink" href="#poissonsarflowseparable" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{ij} \sim \operatorname{Poisson}(\lambda_{ij}), \quad \log \boldsymbol{\lambda} = A(\boldsymbol{\rho})^{-1} X\beta, \quad \rho_w = -\rho_d \rho_o\]</div>
+<h3 id="semflow">SEMFlow<a class="headerlink" href="#semflow" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = X\beta + u, \quad u = \lambda_d W_d u + \lambda_o W_o u + \lambda_w W_w u + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2 I)\]</div>
+<h3 id="semflowseparable">SEMFlowSeparable<a class="headerlink" href="#semflowseparable" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y = X\beta + u, \quad u = \lambda_d W_d u + \lambda_o W_o u - \lambda_d \lambda_o W_w u + \varepsilon, \quad \varepsilon \sim \mathcal{N}(0, \sigma^2 I)\]</div>
+<h2 id="panel-flow-models">Panel Flow Models<a class="headerlink" href="#panel-flow-models" title="Link to this heading">¶</a></h2>
+<p>Stack the flow models above across <span class="math notranslate nohighlight">\(T\)</span> periods in time-first order. The Poisson panel variants currently operate in pooled mode.</p>
+<h3 id="olsflowpanel">OLSFlowPanel<a class="headerlink" href="#olsflowpanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_t = X_t\beta + \varepsilon_t, \quad \varepsilon_t \sim \mathcal{N}(0, \sigma^2 I_N)\]</div>
+<h3 id="poissonflowpanel">PoissonFlowPanel<a class="headerlink" href="#poissonflowpanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{ij,t} \sim \operatorname{Poisson}(\lambda_{ij,t}), \quad \log \boldsymbol{\lambda}_t = X_t\beta\]</div>
+<h3 id="sarflowpanel">SARFlowPanel<a class="headerlink" href="#sarflowpanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_t = \rho_d W_d y_t + \rho_o W_o y_t + \rho_w W_w y_t + X_t\beta + \varepsilon_t\]</div>
+<h3 id="sarflowseparablepanel">SARFlowSeparablePanel<a class="headerlink" href="#sarflowseparablepanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_t = \rho_d W_d y_t + \rho_o W_o y_t - \rho_d \rho_o W_w y_t + X_t\beta + \varepsilon_t\]</div>
+<h3 id="poissonsarflowpanel">PoissonSARFlowPanel<a class="headerlink" href="#poissonsarflowpanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{ij,t} \sim \operatorname{Poisson}(\lambda_{ij,t}), \quad \log \boldsymbol{\lambda}_t = A(\boldsymbol{\rho})^{-1} X_t\beta\]</div>
+<h3 id="poissonsarflowseparablepanel">PoissonSARFlowSeparablePanel<a class="headerlink" href="#poissonsarflowseparablepanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_{ij,t} \sim \operatorname{Poisson}(\lambda_{ij,t}), \quad \log \boldsymbol{\lambda}_t = A(\boldsymbol{\rho})^{-1} X_t\beta, \quad \rho_w = -\rho_d \rho_o\]</div>
+<h3 id="semflowpanel">SEMFlowPanel<a class="headerlink" href="#semflowpanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_t = X_t\beta + u_t, \quad u_t = \lambda_d W_d u_t + \lambda_o W_o u_t + \lambda_w W_w u_t + \varepsilon_t, \quad \varepsilon_t \sim \mathcal{N}(0, \sigma^2 I_N)\]</div>
+<h3 id="semflowseparablepanel">SEMFlowSeparablePanel<a class="headerlink" href="#semflowseparablepanel" title="Link to this heading">¶</a></h3>
+<div class="math notranslate nohighlight">
+\[y_t = X_t\beta + u_t, \quad u_t = \lambda_d W_d u_t + \lambda_o W_o u_t - \lambda_d \lambda_o W_w u_t + \varepsilon_t, \quad \varepsilon_t \sim \mathcal{N}(0, \sigma^2 I_N)\]</div>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  
+  
+  <div class="md-footer-meta md-typeset">
+    
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-footer-copyright__highlight">
+        &#169; Copyright 2018-, pysal developers.
+        
+    </div>
+  
+    Created using
+    <a href="https://www.sphinx-doc.org/" target="_blank" rel="noopener">Sphinx</a>
+    8.2.3.
+     and
+    <a href="https://github.com/jbms/sphinx-immaterial/" target="_blank" rel="noopener">Sphinx-Immaterial</a>
+  
+</div>
+      
+    </div>
+    
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": ".", "features": ["navigation.sections", "navigation.top", "search.share", "search.suggest", "toc.follow", "toc.sticky", "content.code.copy", "content.action.edit"], "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike", "staticVersions": null, "versionPath": "https://pysal.org/bayespecon/versions.json"}}</script>
+    
+      
+        <script src="_static/sphinx_immaterial_theme.32136f45f91ae6956.min.js?v=a7a9472a"></script>
+        <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+        <script src="_static/copybutton.js?v=f281be69"></script>
+        <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+        <script id="MathJax-script" src="_static/mathjax/tex-mml-chtml.js"></script>
+    
+  </body>
+</html>
