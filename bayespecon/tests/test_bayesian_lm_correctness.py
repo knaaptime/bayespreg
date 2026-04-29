@@ -445,9 +445,7 @@ class TestNeymanAdjustScalar:
         J_tn = np.array([1.0, 0.0])
         J_nn = np.diag([2.0, 1.0])
 
-        g_star, V_star = _neyman_adjust_scalar(
-            g_t, g_n, J_tt, J_tn, J_nn, label="test"
-        )
+        g_star, V_star = _neyman_adjust_scalar(g_t, g_n, J_tt, J_tn, J_nn, label="test")
         # coef = J_nn^-1 @ J_tn = [0.5, 0]; adjustment = g_n @ coef = 0.5 * g_n[:,0]
         expected_g = g_t - 0.5 * g_n[:, 0]
         expected_V = J_tt - 0.5  # J_tn @ coef = 0.5
@@ -554,9 +552,7 @@ class TestFlowScoreInfo:
         model._Ww_y = np.asarray(W_w @ y)
         model._T_flow_traces = T_flow
         beta_draws = np.tile(beta, (draws, 1))
-        model.inference_data = _idata(
-            beta=beta_draws, sigma=np.full(draws, 1.0)
-        )
+        model.inference_data = _idata(beta=beta_draws, sigma=np.full(draws, 1.0))
         return model
 
     def test_J_symmetric_pd_shape_for_full_block(self):
@@ -621,9 +617,7 @@ def _mock_panel_ols(y, X, WX, Wn_sp, T_ww, beta_hat, sigma_hat, N, T, draws=1):
     return model
 
 
-def _mock_panel_sar(
-    y, X, WX, Wn_sp, T_ww, beta_hat, rho_hat, sigma_hat, N, T, draws=1
-):
+def _mock_panel_sar(y, X, WX, Wn_sp, T_ww, beta_hat, rho_hat, sigma_hat, N, T, draws=1):
     Wy = _panel_spatial_lag(Wn_sp, np.asarray(y), N, T)
     model = MagicMock(spec=[])
     model._y = y
@@ -728,4 +722,3 @@ class TestPanelClosedForm:
 # into thinking one implementation is wrong. The Phase-1 hand-derivations
 # already verify that the bayespecon code matches the Doğan formula to
 # machine precision, which is the meaningful correctness check here.
-
