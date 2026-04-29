@@ -17,6 +17,7 @@
       ~SARFlow.fit
       ~SARFlow.fit_approx
       ~SARFlow.posterior_predictive
+      ~SARFlow.spatial_diagnostics
       ~SARFlow.spatial_effects
       ~SARFlow.summary
    

@@ -645,6 +645,30 @@
   
   
     <li class="md-nav__item">
+      <a href="../user-guide/spatial_diagnostics_recovery.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Spatial Diagnostics Recovery</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-guide/jgsy2024_replication_bayespecon.html" class="md-nav__link">
         
   
@@ -1274,7 +1298,7 @@
       <span aria-label="Python parameter" class="objinfo-icon objinfo-icon__sub-data" title="Python parameter">p</span>
     
     <span class="md-ellipsis">
-      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX model instance with inference_data attribute containing posterior draws for beta and sigma."><span>model</span></span>
+      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX model with inference_data containing posterior draws of beta (covering the stacked [X, WX] design) and sigma."><span>model</span></span>
     </span>
   </a>
   
@@ -1736,7 +1760,7 @@
       <span aria-label="Python parameter" class="objinfo-icon objinfo-icon__sub-data" title="Python parameter">p</span>
     
     <span class="md-ellipsis">
-      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX model instance with inference_data attribute containing posterior draws for beta and sigma."><span>model</span></span>
+      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX model with inference_data containing posterior draws of beta (covering the stacked [X, WX] design) and sigma."><span>model</span></span>
     </span>
   </a>
   
@@ -1799,45 +1823,56 @@
 <h1 id="bayespecon-diagnostics-bayesian-lmtests-bayesian-robust-lm-lag-sdm-test">bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test<a class="headerlink" href="#bayespecon-diagnostics-bayesian-lmtests-bayesian-robust-lm-lag-sdm-test" title="Link to this heading">¶</a></h1>
 <dl class="py function objdesc">
 <dt class="sig sig-object highlight sig-wrap py" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test">
-<span class="sig-prename descclassname"><span class="pre">bayespecon.diagnostics.bayesian_lmtests.</span></span><span class="sig-name descname"><span class="pre">bayesian_robust_lm_lag_sdm_test</span></span><span class="sig-paren">(</span><span class="sig-param-decl"><em class="sig-param"><a class="n reference internal" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model" title="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX model instance with inference_data attribute containing posterior draws for beta and sigma."><span class="n"><span class="pre">model</span></span></a></em></span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/pysal/bayespecon/blob/main/bayespecon/diagnostics/bayesian_lmtests.py#L995-L1124"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">bayespecon.diagnostics.bayesian_lmtests.</span></span><span class="sig-name descname"><span class="pre">bayesian_robust_lm_lag_sdm_test</span></span><span class="sig-paren">(</span><span class="sig-param-decl"><em class="sig-param"><a class="n reference internal" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model" title="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX model with inference_data containing posterior draws of beta (covering the stacked [X, WX] design) and sigma."><span class="n"><span class="pre">model</span></span></a></em></span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/pysal/bayespecon/blob/main/bayespecon/diagnostics/bayesian_lmtests.py#L1064-L1160"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test" title="Link to this definition">¶</a></dt>
 <dd><p>Bayesian robust LM-Lag test in SDM context (H₀: ρ = 0, robust to γ).</p>
 <p>Tests the null hypothesis that the spatial lag coefficient is zero,
 robust to the local presence of WX effects (γ). Uses the Neyman
 orthogonal score adjustment from <span id="id1">Doğan <em>et al.</em> [<a class="reference internal" href="../references.html#id11" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">2021</a>]</span>, Proposition 3,
 which is the Bayesian analogue of the robust LM-Lag-SDM test in
 <span id="id2">Koley and Bera [<a class="reference internal" href="../references.html#id18" title="Malabika Koley and Anil K. Bera. To use, or not to use the spatial Durbin model? – that is the question. Spatial Economic Analysis, 19(1):30–56, 2024. URL: https://doi.org/10.1080/17421772.2023.2256810 (visited on 2025-05-21), doi:10.1080/17421772.2023.2256810.">2024</a>]</span>.</p>
-<p>The alternative model is SLX (includes γ but not ρ). For each
-posterior draw from the SLX model, residuals are:</p>
+<p>The alternative model is SAR (the SDM relaxation that adds
+<span class="math notranslate nohighlight">\(\rho\)</span>); the null model used to draw posteriors is <strong>SLX</strong>, in
+which <span class="math notranslate nohighlight">\(\gamma\)</span> is a free parameter and has already been
+absorbed into the residuals.  For each posterior draw of
+<span class="math notranslate nohighlight">\((\beta, \gamma, \sigma^2)\)</span> from the SLX fit, residuals are</p>
 <div class="math notranslate nohighlight">
-\[\mathbf{e} = \mathbf{y} - X\beta_1 - WX\beta_2\]</div>
-<p>The unadjusted scores are:</p>
+\[\mathbf{e} = \mathbf{y} - X\beta - WX\gamma,\]</div>
+<p>and the raw score for <span class="math notranslate nohighlight">\(\rho\)</span> is
+<span class="math notranslate nohighlight">\(g_\rho = \mathbf{e}^\top W \mathbf{y}\)</span>.  The companion score
+for <span class="math notranslate nohighlight">\(\gamma\)</span>, <span class="math notranslate nohighlight">\(\mathbf{g}_\gamma = (WX)^\top \mathbf{e}\)</span>,
+is identically zero by the OLS normal equations of the SLX fit, so
+the Doğan Neyman-orthogonal adjustment
+(<span id="id3">[<a class="reference internal" href="../references.html#id11" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">Doğan <em>et al.</em>, 2021</a>]</span>, Proposition 3) reduces to a
+no-op and the test simplifies to a Schur-concentrated lag LM.</p>
+<p>Concentrating both <span class="math notranslate nohighlight">\(\beta\)</span> and <span class="math notranslate nohighlight">\(\gamma\)</span> out of the SDM
+information matrix at <span class="math notranslate nohighlight">\(\theta^\star = (\bar{\beta}, \bar{\gamma},
+\bar{\sigma}^2)\)</span> (<span id="id4">[<a class="reference internal" href="../references.html#id4" title="Luc Anselin, Anil Bera, Raymond J G M Florax, and M Yoon. Simple diagnostic tests for spatial dependence. Regional Science and Urban Economics, 26:77–104, 1996. doi:10.1016/0166-0462(95)02111-6.">Anselin <em>et al.</em>, 1996</a>]</span>, eq. 13;
+<span id="id5">[<a class="reference internal" href="../references.html#id18" title="Malabika Koley and Anil K. Bera. To use, or not to use the spatial Durbin model? – that is the question. Spatial Economic Analysis, 19(1):30–56, 2024. URL: https://doi.org/10.1080/17421772.2023.2256810 (visited on 2025-05-21), doi:10.1080/17421772.2023.2256810.">Koley and Bera, 2024</a>]</span>, Section 3) gives the variance of the raw
+score under <span class="math notranslate nohighlight">\(H_0\)</span>:</p>
 <div class="math notranslate nohighlight">
-\[\begin{split}g_\rho &amp;= \mathbf{e}^\top W \mathbf{y} \\
-\boldsymbol{g}_\gamma &amp;= (WX)^\top \mathbf{e}\end{split}\]</div>
-<p>The Neyman-adjusted score for ρ is:</p>
+\[V_{\rho \cdot \beta, \gamma} = \bar{\sigma}^4 \, T_{WW}
+    + \bar{\sigma}^2 \,
+      \| M_Z\, W (X \bar{\beta} + W X \bar{\gamma}) \|^2,\]</div>
+<p>where <span class="math notranslate nohighlight">\(Z = [X, WX]\)</span> is the SLX design and
+<span class="math notranslate nohighlight">\(M_Z = I - Z(Z^\top Z)^{-1} Z^\top\)</span> is the SLX OLS annihilator.
+The per-draw robust LM statistic is</p>
 <div class="math notranslate nohighlight">
-\[g_\rho^* = g_\rho - J_{\rho\gamma \cdot \sigma}
-J_{\gamma\gamma \cdot \sigma}^{-1} \boldsymbol{g}_\gamma\]</div>
-<p>The adjusted variance is:</p>
-<div class="math notranslate nohighlight">
-\[V^* = J_{\rho\rho \cdot \sigma} - J_{\rho\gamma \cdot \sigma}
-J_{\gamma\gamma \cdot \sigma}^{-1} J_{\gamma\rho \cdot \sigma}\]</div>
-<p>The robust LM statistic for each draw is:</p>
-<div class="math notranslate nohighlight">
-\[\mathrm{LM}_R = \frac{(g_\rho^*)^2}{V^*}\]</div>
-<p>which is distributed as <span class="math notranslate nohighlight">\(\chi^2_1\)</span> under H₀, irrespective of
-local misspecification in γ (<span id="id3">[<a class="reference internal" href="../references.html#id11" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">Doğan <em>et al.</em>, 2021</a>]</span>, Proposition 3).</p>
+\[\mathrm{LM}_R^{(d)} = \frac{\bigl(g_\rho^{(d)}\bigr)^2}
+                           {V_{\rho \cdot \beta, \gamma}}
+\;\xrightarrow{d}\; \chi^2_1
+\quad \text{under } H_0,\]</div>
+<p>independent of local misspecification in <span class="math notranslate nohighlight">\(\gamma\)</span>.</p>
 <dl class="field-list simple">
 <dt class="field-odd" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-parameters">Parameters<span class="colon">:</span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-parameters" title="Permalink to this headline">¶</a></dt>
 <dd class="field-odd"><dl class="simple api-field highlight">
-<dt id="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model"><span class="sig-name descname">model</span><span class="p"> : </span><span class="desctype"><span class="desctype"><a class="reference internal" href="bayespecon.models.SLX.html#bayespecon.models.SLX" title="bayespecon.models.SLX (Python class) — Bayesian SLX (Spatial Lag X) model.">SLX</a></span></span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model" title="Permalink to this definition">¶</a></dt><dd><p>Fitted SLX model instance with <code class="docutils literal notranslate"><span class="pre">inference_data</span></code> attribute
-containing posterior draws for <code class="docutils literal notranslate"><span class="pre">beta</span></code> and <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.</p>
+<dt id="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model"><span class="sig-name descname">model</span><span class="p"> : </span><span class="desctype"><span class="desctype"><a class="reference internal" href="bayespecon.models.SLX.html#bayespecon.models.SLX" title="bayespecon.models.SLX (Python class) — Bayesian SLX (Spatial Lag X) model.">SLX</a></span></span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test.model" title="Permalink to this definition">¶</a></dt><dd><p>Fitted SLX model with <code class="docutils literal notranslate"><span class="pre">inference_data</span></code> containing posterior
+draws of <code class="docutils literal notranslate"><span class="pre">beta</span></code> (covering the stacked <code class="docutils literal notranslate"><span class="pre">[X,</span> <span class="pre">WX]</span></code> design) and
+<code class="docutils literal notranslate"><span class="pre">sigma</span></code>.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-returns">Returns<span class="colon">:</span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-returns" title="Permalink to this headline">¶</a></dt>
-<dd class="field-even"><p>Dataclass containing LM samples, summary statistics, and metadata.
-The <code class="docutils literal notranslate"><span class="pre">df</span></code> field is set to 1.</p>
+<dd class="field-even"><p>Per-draw LM samples, summary statistics, <code class="docutils literal notranslate"><span class="pre">df</span> <span class="pre">=</span> <span class="pre">1</span></code> and metadata.</p>
 </dd>
 <dt class="field-odd" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-return-type">Return type<span class="colon">:</span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_robust_lm_lag_sdm_test-return-type" title="Permalink to this headline">¶</a></dt>
 <dd class="field-odd"><p><a class="reference internal" href="bayespecon.diagnostics.bayesian_lmtests.BayesianLMTestResult.html#bayespecon.diagnostics.bayesian_lmtests.BayesianLMTestResult" title="bayespecon.diagnostics.bayesian_lmtests.BayesianLMTestResult (Python class) — Container for Bayesian LM test results.">BayesianLMTestResult</a></p>

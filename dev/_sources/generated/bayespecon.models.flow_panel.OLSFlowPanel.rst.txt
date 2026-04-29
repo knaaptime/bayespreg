@@ -17,6 +17,7 @@
       ~OLSFlowPanel.fit
       ~OLSFlowPanel.fit_approx
       ~OLSFlowPanel.posterior_predictive
+      ~OLSFlowPanel.spatial_diagnostics
       ~OLSFlowPanel.spatial_effects
       ~OLSFlowPanel.summary
    

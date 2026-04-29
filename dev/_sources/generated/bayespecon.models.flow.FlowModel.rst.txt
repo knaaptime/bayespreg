@@ -17,6 +17,7 @@
       ~FlowModel.fit
       ~FlowModel.fit_approx
       ~FlowModel.posterior_predictive
+      ~FlowModel.spatial_diagnostics
       ~FlowModel.spatial_effects
       ~FlowModel.summary
    

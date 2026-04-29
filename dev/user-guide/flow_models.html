@@ -916,6 +916,30 @@
   
   
     <li class="md-nav__item">
+      <a href="spatial_diagnostics_recovery.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Spatial Diagnostics Recovery</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="jgsy2024_replication_bayespecon.html" class="md-nav__link">
         
   
@@ -1578,6 +1602,12 @@ A = (I_n - \rho_d W) \otimes (I_n - \rho_o W)
 </code></pre></div>
 </div>
 </div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+  from .autonotebook import tqdm as notebook_tqdm
+</code></pre></div>
+</div>
+</div>
 </div>
 <h2 id="simulated-data">1  Simulated Data<a class="headerlink" href="#simulated-data" title="Link to this heading">¶</a></h2>
 <p>We simulate flow data on <span class="math notranslate nohighlight">\(n = 12\)</span> spatial units, giving <span class="math notranslate nohighlight">\(N = 144\)</span> O-D pairs.
@@ -1659,12 +1689,12 @@ Design: k_d=2, k_o=2
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="n">y_obs</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;y_vec&quot;</span><span class="p">]</span>              <span class="c1"># observed (positive) flows</span>
-<span class="n">y_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">y_obs</span><span class="p">)</span>              <span class="c1"># latent SAR scale (DGP default is lognormal)</span>
-<span class="n">X</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span>              <span class="c1"># (N, p) design matrix (incl. log_distance column)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="n">y_obs</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;y_vec&quot;</span><span class="p">]</span>  <span class="c1"># observed (positive) flows</span>
+<span class="n">y_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">y_obs</span><span class="p">)</span>  <span class="c1"># latent SAR scale (DGP default is lognormal)</span>
+<span class="n">X</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span>  <span class="c1"># (N, p) design matrix (incl. log_distance column)</span>
 <span class="n">col_names</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">]</span>
-<span class="n">G</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;G&quot;</span><span class="p">]</span>              <span class="c1"># row-standardised KNN graph synthesised by the DGP</span>
-<span class="n">gdf</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;gdf&quot;</span><span class="p">]</span>          <span class="c1"># synthetic point GeoDataFrame</span>
+<span class="n">G</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;G&quot;</span><span class="p">]</span>  <span class="c1"># row-standardised KNN graph synthesised by the DGP</span>
+<span class="n">gdf</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;gdf&quot;</span><span class="p">]</span>  <span class="c1"># synthetic point GeoDataFrame</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flow observations: N = </span><span class="si">{</span><span class="n">N</span><span class="si">}</span><span class="s2">  (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">×</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Design matrix shape: </span><span class="si">{</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -1750,14 +1780,178 @@ the latent scale, so we fit on <code class="docutils literal notranslate"><span 
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
-Multiprocess sampling (4 chains in 2 jobs)
-NUTS: [rho_simplex, beta, sigma]
-Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws total) took 51 seconds.
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Running window adaptation
 </code></pre></div>
 </div>
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div></div>
+<div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div></div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
@@ -1774,9 +1968,9 @@ Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws 
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlow: spatial autoregressive parameters ===
         mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  r_hat
-rho_d  0.129  0.086   0.000    0.277      0.002    0.001    2403.0    1642.0    1.0
-rho_o  0.121  0.082   0.000    0.265      0.002    0.001    2364.0    1668.0    1.0
-rho_w  0.304  0.147   0.007    0.541      0.002    0.002    3308.0    2054.0    1.0
+rho_d  0.125  0.084   0.000    0.273      0.002    0.001    1700.0    1038.0    1.0
+rho_o  0.123  0.083   0.000    0.267      0.002    0.001    2323.0    1527.0    1.0
+rho_w  0.308  0.147   0.034    0.569      0.002    0.002    3383.0    2221.0    1.0
 
 True values:  rho_d=0.35  rho_o=0.25  rho_w=0.1
 </code></pre></div>
@@ -1795,16 +1989,16 @@ True values:  rho_d=0.35  rho_o=0.25  rho_w=0.1
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlow: regression coefficients ===
                         mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  r_hat
-beta[intercept]       -0.161  0.332  -0.790    0.440      0.006    0.005    2857.0    2845.0    1.0
-beta[intra_indicator]  0.097  0.465  -0.677    1.062      0.009    0.007    2790.0    2286.0    1.0
-beta[dest_x0]          1.126  0.157   0.831    1.418      0.003    0.003    2815.0    2620.0    1.0
-beta[dest_x1]         -0.354  0.131  -0.595   -0.105      0.002    0.002    3254.0    3060.0    1.0
-beta[orig_x0]          0.811  0.143   0.543    1.083      0.003    0.002    2944.0    2514.0    1.0
-beta[orig_x1]          0.368  0.131   0.105    0.595      0.002    0.002    3371.0    2800.0    1.0
-beta[intra_x0]        -0.397  0.437  -1.240    0.392      0.008    0.007    3205.0    2829.0    1.0
-beta[intra_x1]        -0.184  0.434  -1.015    0.588      0.007    0.006    3486.0    2989.0    1.0
-beta[log_distance]    -0.540  0.350  -1.157    0.157      0.007    0.005    2484.0    2471.0    1.0
-sigma                  0.929  0.058   0.832    1.047      0.001    0.001    4356.0    2704.0    1.0
+beta[intercept]       -0.161  0.345  -0.806    0.477      0.007    0.006    2123.0    2068.0    1.0
+beta[intra_indicator]  0.095  0.484  -0.802    1.040      0.010    0.008    2310.0    2550.0    1.0
+beta[dest_x0]          1.123  0.155   0.845    1.429      0.003    0.002    2476.0    2542.0    1.0
+beta[dest_x1]         -0.349  0.132  -0.593   -0.109      0.002    0.002    2844.0    2896.0    1.0
+beta[orig_x0]          0.817  0.141   0.553    1.081      0.003    0.002    2819.0    2723.0    1.0
+beta[orig_x1]          0.369  0.129   0.123    0.609      0.002    0.002    3166.0    3097.0    1.0
+beta[intra_x0]        -0.395  0.442  -1.233    0.414      0.008    0.006    3128.0    2936.0    1.0
+beta[intra_x1]        -0.193  0.425  -0.953    0.623      0.008    0.006    3074.0    3088.0    1.0
+beta[log_distance]    -0.538  0.360  -1.244    0.127      0.008    0.006    1801.0    2259.0    1.0
+sigma                  0.929  0.057   0.827    1.037      0.001    0.001    4419.0    2944.0    1.0
 </code></pre></div>
 </div>
 </div>
@@ -1824,7 +2018,7 @@ sigma                  0.929  0.058   0.832    1.047      0.001    0.001    4356
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/6e791f03e9bd36bf071f2fba0324c88a30317a1b27db933016beccd2fc02cf1a.png" src="../_images/6e791f03e9bd36bf071f2fba0324c88a30317a1b27db933016beccd2fc02cf1a.png" />
+<img alt="../_images/f31ded72eabc4e0c38ccb39f8ac6e8c0f76c2512df80237d902a011bc57c0d52.png" src="../_images/f31ded72eabc4e0c38ccb39f8ac6e8c0f76c2512df80237d902a011bc57c0d52.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -1850,7 +2044,7 @@ sigma                  0.929  0.058   0.832    1.047      0.001    0.001    4356
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/d7a945d2ba34d50453926ffc48911a13590a30f7c39a8ca0713a2ea752759b3f.png" src="../_images/d7a945d2ba34d50453926ffc48911a13590a30f7c39a8ca0713a2ea752759b3f.png" />
+<img alt="../_images/dbbd20e0b3d0bae1345e8a116bb2e02e450dfed75a100558efc23470614af898.png" src="../_images/dbbd20e0b3d0bae1345e8a116bb2e02e450dfed75a100558efc23470614af898.png" />
 </div>
 </div>
 <h2 id="sarflowseparable-constrained-model">3  <code class="docutils literal notranslate"><span class="pre">SARFlowSeparable</span></code>: Constrained model<a class="headerlink" href="#sarflowseparable-constrained-model" title="Link to this heading">¶</a></h2>
@@ -1925,14 +2119,178 @@ y_sep summary:  min=-8.22  mean=-3.04  max=1.45
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
-Multiprocess sampling (4 chains in 2 jobs)
-NUTS: [rho_d, rho_o, beta, sigma]
-Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws total) took 19 seconds.
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Running window adaptation
 </code></pre></div>
 </div>
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div></div>
+<div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div></div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
@@ -1949,8 +2307,8 @@ Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws 
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlowSeparable: spatial autoregressive parameters ===
         mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  r_hat
-rho_d  0.174  0.106  -0.035    0.368      0.002    0.002    2965.0    2628.0    1.0
-rho_o  0.314  0.098   0.143    0.509      0.002    0.002    2430.0    2454.0    1.0
+rho_d  0.167  0.113  -0.039    0.383      0.002    0.002    2134.0    2278.0    1.0
+rho_o  0.311  0.095   0.128    0.481      0.002    0.001    2196.0    2410.0    1.0
 
 True values:  rho_d=0.4  rho_o=0.3  (rho_w = -rho_d*rho_o = -0.1200 is derived)
 </code></pre></div>
@@ -1971,7 +2329,7 @@ True values:  rho_d=0.4  rho_o=0.3  (rho_w = -rho_d*rho_o = -0.1200 is derived)
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/0d8e51dc0c286869ef1a65075b160b5ef50fb58dcfaa54bd530fb7a55e847422.png" src="../_images/0d8e51dc0c286869ef1a65075b160b5ef50fb58dcfaa54bd530fb7a55e847422.png" />
+<img alt="../_images/5d4dd825b46036e532b725034e48189a69787ab3e8bb3c96998047212eeabbf5.png" src="../_images/5d4dd825b46036e532b725034e48189a69787ab3e8bb3c96998047212eeabbf5.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -1990,7 +2348,7 @@ True values:  rho_d=0.4  rho_o=0.3  (rho_w = -rho_d*rho_o = -0.1200 is derived)
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/bf7ab9bfe17e66450b908f7b41b6e04e55d5c8e19f96042e3171128885da66ed.png" src="../_images/bf7ab9bfe17e66450b908f7b41b6e04e55d5c8e19f96042e3171128885da66ed.png" />
+<img alt="../_images/de18bc7f15758b502089969579d7ed0bf989a6ec769ea9728b6ce19e2d587ee3.png" src="../_images/de18bc7f15758b502089969579d7ed0bf989a6ec769ea9728b6ce19e2d587ee3.png" />
 </div>
 </div>
 <h2 id="design-matrix-details">4  Design Matrix Details<a class="headerlink" href="#design-matrix-details" title="Link to this heading">¶</a></h2>
@@ -2252,91 +2610,91 @@ Three modes are supported:</p>
       <th>x0</th>
       <th>combined</th>
       <th>origin</th>
-      <td>1.0503</td>
-      <td>0.6952</td>
-      <td>1.5691</td>
+      <td>1.0582</td>
+      <td>0.6909</td>
+      <td>1.6362</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>origin</th>
-      <td>0.3848</td>
-      <td>0.0985</td>
-      <td>0.6795</td>
-      <td>0.0120</td>
+      <td>0.3851</td>
+      <td>0.1016</td>
+      <td>0.6950</td>
+      <td>0.0070</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>destination</th>
-      <td>1.3697</td>
+      <td>1.3744</td>
       <td>1.0426</td>
-      <td>1.8541</td>
+      <td>1.8890</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>destination</th>
-      <td>-0.3645</td>
-      <td>-0.6499</td>
-      <td>-0.0598</td>
-      <td>0.0245</td>
+      <td>-0.3600</td>
+      <td>-0.6406</td>
+      <td>-0.0630</td>
+      <td>0.0235</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>intra</th>
-      <td>0.1684</td>
-      <td>0.0958</td>
-      <td>0.2441</td>
+      <td>0.1693</td>
+      <td>0.0987</td>
+      <td>0.2491</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>intra</th>
-      <td>-0.0137</td>
-      <td>-0.0794</td>
-      <td>0.0549</td>
-      <td>0.6860</td>
+      <td>-0.0140</td>
+      <td>-0.0792</td>
+      <td>0.0528</td>
+      <td>0.6580</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>network</th>
-      <td>2.2972</td>
-      <td>0.4723</td>
-      <td>6.7456</td>
+      <td>2.3448</td>
+      <td>0.4983</td>
+      <td>7.1471</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>network</th>
-      <td>0.0436</td>
-      <td>-0.4727</td>
-      <td>0.7376</td>
-      <td>0.9995</td>
+      <td>0.0494</td>
+      <td>-0.4667</td>
+      <td>0.7940</td>
+      <td>0.9770</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>total</th>
-      <td>4.8856</td>
-      <td>2.5974</td>
-      <td>10.2205</td>
+      <td>4.9468</td>
+      <td>2.6383</td>
+      <td>10.9252</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>total</th>
-      <td>0.0503</td>
-      <td>-0.8938</td>
-      <td>1.2163</td>
-      <td>0.9835</td>
+      <td>0.0605</td>
+      <td>-0.8751</td>
+      <td>1.2953</td>
+      <td>0.9975</td>
     </tr>
   </tbody>
 </table>
@@ -2345,8 +2703,9 @@ Three modes are supported:</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="c1"># Small sampler settings used for the demo fits below.</span>
-<span class="n">SAMPLE_KWARGS_DEMO</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">draws</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">tune</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">chains</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-                          <span class="n">random_seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">progressbar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">SAMPLE_KWARGS_DEMO</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+    <span class="n">draws</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">tune</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">chains</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">progressbar</span><span class="o">=</span><span class="kc">False</span>
+<span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
@@ -2362,17 +2721,22 @@ Three modes are supported:</p>
 <span class="c1"># Asymmetric: 2 destination attributes, 1 origin attribute</span>
 <span class="n">data_asym</span> <span class="o">=</span> <span class="n">generate_flow_data</span><span class="p">(</span>
     <span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
-    <span class="n">rho_d</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">rho_o</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span> <span class="n">rho_w</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
-    <span class="n">beta_d</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.5</span><span class="p">],</span>   <span class="c1"># k_d = 2</span>
-    <span class="n">beta_o</span><span class="o">=</span><span class="p">[</span><span class="mf">0.5</span><span class="p">],</span>          <span class="c1"># k_o = 1</span>
-    <span class="n">sigma</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">11</span><span class="p">,</span>
+    <span class="n">rho_d</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+    <span class="n">rho_o</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span>
+    <span class="n">rho_w</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+    <span class="n">beta_d</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.5</span><span class="p">],</span>  <span class="c1"># k_d = 2</span>
+    <span class="n">beta_o</span><span class="o">=</span><span class="p">[</span><span class="mf">0.5</span><span class="p">],</span>  <span class="c1"># k_o = 1</span>
+    <span class="n">sigma</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="mi">11</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="n">G_asym</span> <span class="o">=</span> <span class="n">data_asym</span><span class="p">[</span><span class="s2">&quot;G&quot;</span><span class="p">]</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;k_d=</span><span class="si">{</span><span class="n">data_asym</span><span class="p">[</span><span class="s1">&#39;design&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">k_d</span><span class="si">}</span><span class="s2">, k_o=</span><span class="si">{</span><span class="n">data_asym</span><span class="p">[</span><span class="s1">&#39;design&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">k_o</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Columns: </span><span class="si">{</span><span class="n">data_asym</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 <span class="n">model_asym</span> <span class="o">=</span> <span class="n">SARFlow</span><span class="p">(</span>
-    <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">data_asym</span><span class="p">[</span><span class="s2">&quot;y_vec&quot;</span><span class="p">]),</span> <span class="n">G_asym</span><span class="p">,</span> <span class="n">data_asym</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">],</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">data_asym</span><span class="p">[</span><span class="s2">&quot;y_vec&quot;</span><span class="p">]),</span>
+    <span class="n">G_asym</span><span class="p">,</span>
+    <span class="n">data_asym</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">],</span>
     <span class="n">col_names</span><span class="o">=</span><span class="n">data_asym</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
 <span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;symmetric_xo_xd =&quot;</span><span class="p">,</span> <span class="n">model_asym</span><span class="o">.</span><span class="n">_symmetric_xo_xd</span><span class="p">)</span>
@@ -2387,11 +2751,7 @@ Columns: [&#39;intercept&#39;, &#39;intra_indicator&#39;, &#39;dest_x0&#39;, &#3
 symmetric_xo_xd = False
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
-Multiprocess sampling (2 chains in 2 jobs)
-NUTS: [rho_simplex, beta, sigma]
-Sampling 2 chains for 200 tune and 200 draw iterations (400 + 400 draws total) took 18 seconds.
-We recommend running at least 4 chains for robust computation of convergence diagnostics
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
 </code></pre></div>
@@ -2436,128 +2796,128 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
       <th>x0</th>
       <th>dest</th>
       <th>origin</th>
-      <td>0.4821</td>
-      <td>0.0205</td>
-      <td>2.1100</td>
-      <td>0.000</td>
+      <td>0.4524</td>
+      <td>0.0364</td>
+      <td>1.8742</td>
+      <td>0.005</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>origin</th>
-      <td>-0.2589</td>
-      <td>-1.1976</td>
-      <td>-0.0098</td>
-      <td>0.000</td>
+      <td>-0.2244</td>
+      <td>-1.0437</td>
+      <td>-0.0174</td>
+      <td>0.005</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>destination</th>
-      <td>1.2029</td>
-      <td>0.5060</td>
-      <td>2.7569</td>
-      <td>0.000</td>
+      <td>1.1771</td>
+      <td>0.4614</td>
+      <td>2.8172</td>
+      <td>0.005</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>destination</th>
-      <td>-0.7665</td>
-      <td>-1.7403</td>
-      <td>-0.4156</td>
+      <td>-0.7294</td>
+      <td>-1.5503</td>
+      <td>-0.3680</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>intra</th>
-      <td>0.3384</td>
-      <td>0.1113</td>
-      <td>0.7707</td>
+      <td>0.3301</td>
+      <td>0.1328</td>
+      <td>0.7182</td>
       <td>0.005</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>intra</th>
-      <td>-0.1362</td>
-      <td>-0.3784</td>
-      <td>-0.0168</td>
-      <td>0.020</td>
+      <td>-0.1254</td>
+      <td>-0.3501</td>
+      <td>-0.0139</td>
+      <td>0.030</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>network</th>
-      <td>1.8624</td>
-      <td>0.0868</td>
-      <td>8.3674</td>
-      <td>0.000</td>
+      <td>1.7544</td>
+      <td>0.1330</td>
+      <td>7.7426</td>
+      <td>0.005</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>network</th>
-      <td>-1.1366</td>
-      <td>-4.9222</td>
-      <td>-0.0589</td>
+      <td>-1.0037</td>
+      <td>-4.2846</td>
+      <td>-0.0917</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>total</th>
-      <td>3.8859</td>
-      <td>0.9522</td>
-      <td>14.1595</td>
-      <td>0.000</td>
+      <td>3.7140</td>
+      <td>0.9236</td>
+      <td>13.1321</td>
+      <td>0.005</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>total</th>
-      <td>-2.2982</td>
-      <td>-8.2249</td>
-      <td>-0.6393</td>
+      <td>-2.0829</td>
+      <td>-7.2300</td>
+      <td>-0.6230</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">y0</th>
       <th rowspan="5" valign="top">orig</th>
       <th>origin</th>
-      <td>0.7337</td>
-      <td>0.2069</td>
-      <td>1.4377</td>
-      <td>0.010</td>
+      <td>0.6935</td>
+      <td>0.2596</td>
+      <td>1.4244</td>
+      <td>0.000</td>
     </tr>
     <tr>
       <th>destination</th>
-      <td>0.1827</td>
-      <td>0.0069</td>
-      <td>0.7493</td>
-      <td>0.010</td>
+      <td>0.1589</td>
+      <td>0.0092</td>
+      <td>0.7202</td>
+      <td>0.000</td>
     </tr>
     <tr>
       <th>intra</th>
-      <td>0.1834</td>
-      <td>0.0517</td>
-      <td>0.3594</td>
-      <td>0.010</td>
+      <td>0.1734</td>
+      <td>0.0649</td>
+      <td>0.3561</td>
+      <td>0.000</td>
     </tr>
     <tr>
       <th>network</th>
-      <td>0.7309</td>
-      <td>0.0277</td>
-      <td>2.9970</td>
-      <td>0.010</td>
+      <td>0.6354</td>
+      <td>0.0370</td>
+      <td>2.8807</td>
+      <td>0.000</td>
     </tr>
     <tr>
       <th>total</th>
-      <td>1.8308</td>
-      <td>0.3347</td>
-      <td>5.3013</td>
-      <td>0.010</td>
+      <td>1.6611</td>
+      <td>0.3912</td>
+      <td>5.2869</td>
+      <td>0.000</td>
     </tr>
   </tbody>
 </table>
@@ -2613,13 +2973,7 @@ expressions in Table 83.1 (with <span class="math notranslate nohighlight">\(A =
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
-Multiprocess sampling (2 chains in 2 jobs)
-NUTS: [beta, sigma]
-Sampling 2 chains for 200 tune and 200 draw iterations (400 + 400 draws total) took 5 seconds.
-We recommend running at least 4 chains for robust computation of convergence diagnostics
-The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
-The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>We recommend running at least 4 chains for robust computation of convergence diagnostics
 </code></pre></div>
 </div>
 <div class="output text_html"><div>
@@ -2662,55 +3016,55 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
       <th>x0</th>
       <th>combined</th>
       <th>origin</th>
-      <td>0.8135</td>
-      <td>0.5986</td>
-      <td>1.0445</td>
+      <td>0.7929</td>
+      <td>0.5566</td>
+      <td>1.0201</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>origin</th>
-      <td>0.2887</td>
-      <td>0.0519</td>
-      <td>0.5308</td>
+      <td>0.2968</td>
+      <td>0.0890</td>
+      <td>0.5380</td>
       <td>0.010</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>destination</th>
-      <td>1.2213</td>
-      <td>1.0018</td>
-      <td>1.4380</td>
+      <td>1.2075</td>
+      <td>0.9734</td>
+      <td>1.4391</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>destination</th>
-      <td>-0.4622</td>
-      <td>-0.7067</td>
-      <td>-0.2168</td>
+      <td>-0.4499</td>
+      <td>-0.6628</td>
+      <td>-0.2338</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>intra</th>
-      <td>0.1431</td>
-      <td>0.0657</td>
-      <td>0.2103</td>
+      <td>0.1438</td>
+      <td>0.0706</td>
+      <td>0.2162</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>intra</th>
-      <td>-0.0229</td>
-      <td>-0.0840</td>
-      <td>0.0452</td>
-      <td>0.495</td>
+      <td>-0.0230</td>
+      <td>-0.0890</td>
+      <td>0.0476</td>
+      <td>0.475</td>
     </tr>
     <tr>
       <th>x0</th>
@@ -2734,19 +3088,19 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
       <th>x0</th>
       <th>combined</th>
       <th>total</th>
-      <td>2.1779</td>
-      <td>1.8483</td>
-      <td>2.4992</td>
+      <td>2.1441</td>
+      <td>1.7748</td>
+      <td>2.5250</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>total</th>
-      <td>-0.1964</td>
-      <td>-0.5958</td>
-      <td>0.1888</td>
-      <td>0.310</td>
+      <td>-0.1760</td>
+      <td>-0.5463</td>
+      <td>0.2072</td>
+      <td>0.295</td>
     </tr>
   </tbody>
 </table>
@@ -2769,13 +3123,13 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>SARFlow                    r_hat&lt;1.01: True   ess_bulk&gt;400: True
         mean     sd  hdi_3%  hdi_97%  ess_bulk  r_hat
-rho_d  0.129  0.086     0.0    0.277    2403.0    1.0
-rho_o  0.121  0.082     0.0    0.265    2364.0    1.0
+rho_d  0.125  0.084     0.0    0.273    1700.0    1.0
+rho_o  0.123  0.083     0.0    0.267    2323.0    1.0
 
 SARFlowSeparable           r_hat&lt;1.01: True   ess_bulk&gt;400: True
         mean     sd  hdi_3%  hdi_97%  ess_bulk  r_hat
-rho_d  0.174  0.106  -0.035    0.368    2965.0    1.0
-rho_o  0.314  0.098   0.143    0.509    2430.0    1.0
+rho_d  0.167  0.113  -0.039    0.383    2134.0    1.0
+rho_o  0.311  0.095   0.128    0.481    2196.0    1.0
 </code></pre></div>
 </div>
 </div>
@@ -2835,32 +3189,32 @@ ESS, sampler yield, <span class="math notranslate nohighlight">\(\hat{R}\)</span
   <tbody>
     <tr>
       <th>rho_d</th>
-      <td>2403.301734</td>
-      <td>1642.150753</td>
-      <td>1.001299</td>
-      <td>0.001630</td>
-      <td>60.082543</td>
-      <td>4.102400</td>
+      <td>1700.398781</td>
+      <td>1038.037642</td>
+      <td>1.000341</td>
+      <td>0.001733</td>
+      <td>42.509970</td>
+      <td>0.973108</td>
       <td>True</td>
     </tr>
     <tr>
       <th>rho_o</th>
-      <td>2364.052318</td>
-      <td>1668.068665</td>
-      <td>1.001046</td>
-      <td>0.001575</td>
-      <td>59.101308</td>
-      <td>4.132537</td>
+      <td>2322.986188</td>
+      <td>1526.519425</td>
+      <td>1.000374</td>
+      <td>0.001585</td>
+      <td>58.074655</td>
+      <td>0.495051</td>
       <td>True</td>
     </tr>
     <tr>
       <th>rho_w</th>
-      <td>3308.179383</td>
-      <td>2053.519490</td>
-      <td>1.000170</td>
-      <td>0.002483</td>
-      <td>82.704485</td>
-      <td>3.997955</td>
+      <td>3383.027530</td>
+      <td>2220.529249</td>
+      <td>1.000701</td>
+      <td>0.002461</td>
+      <td>84.575688</td>
+      <td>3.126113</td>
       <td>True</td>
     </tr>
   </tbody>
@@ -2881,7 +3235,7 @@ ESS, sampler yield, <span class="math notranslate nohighlight">\(\hat{R}\)</span
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/838c377c3dbb9c5aa5c1d82ced1bf3f44fc2e8dc0be421966ebcfce7cf0f5fe5.png" src="../_images/838c377c3dbb9c5aa5c1d82ced1bf3f44fc2e8dc0be421966ebcfce7cf0f5fe5.png" />
+<img alt="../_images/9cccbceea9676cf46a07c859429b3f826792e95b3129183c1aa425ec4894e154.png" src="../_images/9cccbceea9676cf46a07c859429b3f826792e95b3129183c1aa425ec4894e154.png" />
 </div>
 </div>
 <h2 id="model-comparison">7  Model Comparison<a class="headerlink" href="#model-comparison" title="Link to this heading">¶</a></h2>
@@ -2913,14 +3267,178 @@ ESS, sampler yield, <span class="math notranslate nohighlight">\(\hat{R}\)</span
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
-Multiprocess sampling (4 chains in 2 jobs)
-NUTS: [rho_simplex, beta, sigma]
-Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws total) took 92 seconds.
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Running window adaptation
 </code></pre></div>
 </div>
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div></div>
+<div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div></div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
@@ -2946,8 +3464,8 @@ Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws 
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>LOO-CV model comparison:
                     elpd_loo      p_loo  elpd_diff  weight        se  warning
-SARFlowSeparable -195.044604  11.321569   0.000000     1.0  8.482200    False
-SARFlow (3 ρ)    -195.511241  11.185733   0.466637     0.0  8.521106    False
+SARFlowSeparable -195.167876  11.376472   0.000000     1.0  8.489140    False
+SARFlow (3 ρ)    -195.629833  11.318773   0.461957     0.0  8.532195     True
 </code></pre></div>
 </div>
 </div>
@@ -2984,29 +3502,193 @@ SARFlow (3 ρ)    -195.511241  11.185733   0.466637     0.0  8.521106    False
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
-Multiprocess sampling (4 chains in 2 jobs)
-NUTS: [rho_d, rho_o, rho_w, beta, sigma]
-Sampling 4 chains for 1_000 tune and 800 draw iterations (4_000 + 3_200 draws total) took 48 seconds.
-There were 2 divergences after tuning. Increase `target_accept` or reparameterize.
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Running window adaptation
+=== SARFlow (restrict_positive=False) ===
+                        mean     sd  hdi_3%  hdi_97%  r_hat
+beta[intercept]       -0.163  0.344  -0.793    0.480    1.0
+beta[intra_indicator]  0.060  0.489  -0.765    1.075    1.0
+beta[dest_x0]          1.197  0.189   0.838    1.545    1.0
+beta[dest_x1]         -0.380  0.135  -0.619   -0.115    1.0
+beta[orig_x0]          0.849  0.161   0.552    1.156    1.0
+beta[orig_x1]          0.382  0.142   0.103    0.638    1.0
+beta[intra_x0]        -0.412  0.437  -1.186    0.454    1.0
+beta[intra_x1]        -0.175  0.441  -1.013    0.627    1.0
+beta[log_distance]    -0.592  0.364  -1.279    0.078    1.0
+rho_d                  0.084  0.120  -0.152    0.299    1.0
+rho_o                  0.062  0.127  -0.171    0.294    1.0
+rho_w                  0.358  0.179   0.036    0.716    1.0
+sigma                  0.933  0.058   0.827    1.041    1.0
 </code></pre></div>
 </div>
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlow (restrict_positive=False) ===
-                        mean     sd  hdi_3%  hdi_97%  r_hat
-rho_d                  0.087  0.123  -0.127    0.333    1.0
-rho_o                  0.056  0.126  -0.184    0.283    1.0
-rho_w                  0.365  0.182   0.025    0.716    1.0
-beta[intercept]       -0.167  0.345  -0.812    0.478    1.0
-beta[intra_indicator]  0.057  0.471  -0.836    0.911    1.0
-beta[dest_x0]          1.201  0.187   0.866    1.553    1.0
-beta[dest_x1]         -0.377  0.134  -0.635   -0.137    1.0
-beta[orig_x0]          0.843  0.166   0.522    1.146    1.0
-beta[orig_x1]          0.382  0.140   0.114    0.645    1.0
-beta[intra_x0]        -0.404  0.447  -1.218    0.466    1.0
-beta[intra_x1]        -0.195  0.439  -1.029    0.610    1.0
-beta[log_distance]    -0.584  0.363  -1.196    0.140    1.0
-sigma                  0.933  0.057   0.825    1.037    1.0
+<div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+    <div>
+      <progress value='1000' class='' max='1000' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [1000/1000 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='800' class='' max='800' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [800/800 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='800' class='' max='800' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [800/800 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='800' class='' max='800' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [800/800 00:00&lt;?]
+    </div>
+    </div><div class="output text_html">
+<style>
+    /* Turns off some styling */
+    progress {
+        /* gets rid of default border in Firefox and Opera. */
+        border: none;
+        /* Needs to be in here for Safari polyfill so background images work as expected. */
+        background-size: auto;
+    }
+    progress:not([value]), progress:not([value])::-webkit-progress-bar {
+        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px);
+    }
+    .progress-bar-interrupted, .progress-bar-interrupted::-webkit-progress-bar {
+        background: #F44336;
+    }
+</style>
+</div><div class="output text_html">
+    <div>
+      <progress value='800' class='' max='800' style='width:300px; height:20px; vertical-align: middle;'></progress>
+      100.00% [800/800 00:00&lt;?]
+    </div>
+    </div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>There were 3 divergences after tuning. Increase `target_accept` or reparameterize.
 </code></pre></div>
 </div>
 </div>
@@ -3040,22 +3722,23 @@ joint statistic is <span class="math notranslate nohighlight">\(g_g^\top J^{-1} 
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">bayespecon</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">bayesian_lm_flow_dest_test</span><span class="p">,</span>
-    <span class="n">bayesian_lm_flow_orig_test</span><span class="p">,</span>
-    <span class="n">bayesian_lm_flow_network_test</span><span class="p">,</span>
-    <span class="n">bayesian_lm_flow_joint_test</span><span class="p">,</span>
     <span class="n">bayesian_lm_flow_intra_test</span><span class="p">,</span>
+    <span class="n">bayesian_lm_flow_joint_test</span><span class="p">,</span>
+    <span class="n">bayesian_lm_flow_network_test</span><span class="p">,</span>
+    <span class="n">bayesian_lm_flow_orig_test</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># All marginal + joint + intra tests, evaluated at the OLSFlow null draws.</span>
 <span class="n">flow_lm_tests</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;rho_d (dest)&quot;</span><span class="p">:</span>     <span class="n">bayesian_lm_flow_dest_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
-    <span class="s2">&quot;rho_o (orig)&quot;</span><span class="p">:</span>     <span class="n">bayesian_lm_flow_orig_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
-    <span class="s2">&quot;rho_w (network)&quot;</span><span class="p">:</span>  <span class="n">bayesian_lm_flow_network_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
-    <span class="s2">&quot;joint (d,o,w)&quot;</span><span class="p">:</span>    <span class="n">bayesian_lm_flow_joint_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
-    <span class="s2">&quot;intra block&quot;</span><span class="p">:</span>      <span class="n">bayesian_lm_flow_intra_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
+    <span class="s2">&quot;rho_d (dest)&quot;</span><span class="p">:</span> <span class="n">bayesian_lm_flow_dest_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
+    <span class="s2">&quot;rho_o (orig)&quot;</span><span class="p">:</span> <span class="n">bayesian_lm_flow_orig_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
+    <span class="s2">&quot;rho_w (network)&quot;</span><span class="p">:</span> <span class="n">bayesian_lm_flow_network_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
+    <span class="s2">&quot;joint (d,o,w)&quot;</span><span class="p">:</span> <span class="n">bayesian_lm_flow_joint_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
+    <span class="s2">&quot;intra block&quot;</span><span class="p">:</span> <span class="n">bayesian_lm_flow_intra_test</span><span class="p">(</span><span class="n">ols_flow</span><span class="p">),</span>
 <span class="p">}</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
 <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
     <span class="p">[(</span><span class="n">k</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">df</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">bayes_pvalue</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">flow_lm_tests</span><span class="o">.</span><span class="n">items</span><span class="p">()],</span>
     <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="s2">&quot;df&quot;</span><span class="p">,</span> <span class="s2">&quot;LM mean&quot;</span><span class="p">,</span> <span class="s2">&quot;Bayes p&quot;</span><span class="p">],</span>
@@ -3093,36 +3776,36 @@ joint statistic is <span class="math notranslate nohighlight">\(g_g^\top J^{-1} 
       <th>0</th>
       <td>rho_d (dest)</td>
       <td>1</td>
-      <td>1.3262</td>
-      <td>0.2495</td>
+      <td>1.5943</td>
+      <td>0.2067</td>
     </tr>
     <tr>
       <th>1</th>
       <td>rho_o (orig)</td>
       <td>1</td>
-      <td>1.1684</td>
-      <td>0.2797</td>
+      <td>1.2164</td>
+      <td>0.2701</td>
     </tr>
     <tr>
       <th>2</th>
       <td>rho_w (network)</td>
       <td>1</td>
-      <td>2.9788</td>
-      <td>0.0844</td>
+      <td>2.9573</td>
+      <td>0.0855</td>
     </tr>
     <tr>
       <th>3</th>
       <td>joint (d,o,w)</td>
       <td>3</td>
-      <td>3.9794</td>
-      <td>0.2637</td>
+      <td>4.1182</td>
+      <td>0.2490</td>
     </tr>
     <tr>
       <th>4</th>
       <td>intra block</td>
       <td>3</td>
-      <td>2.6648</td>
-      <td>0.4462</td>
+      <td>2.6436</td>
+      <td>0.4499</td>
     </tr>
   </tbody>
 </table>
@@ -3146,8 +3829,8 @@ Proposition 3).</p>
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">bayespecon</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">bayesian_robust_lm_flow_dest_test</span><span class="p">,</span>
-    <span class="n">bayesian_robust_lm_flow_orig_test</span><span class="p">,</span>
     <span class="n">bayesian_robust_lm_flow_network_test</span><span class="p">,</span>
+    <span class="n">bayesian_robust_lm_flow_orig_test</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">robust_tests</span> <span class="o">=</span> <span class="p">{</span>
@@ -3191,14 +3874,14 @@ Proposition 3).</p>
     <tr>
       <th>0</th>
       <td>rho_d | (rho_o, rho_w)</td>
-      <td>0.5422</td>
-      <td>0.4615</td>
+      <td>0.5429</td>
+      <td>0.4613</td>
     </tr>
     <tr>
       <th>1</th>
       <td>rho_o | (rho_d, rho_w)</td>
-      <td>0.4449</td>
-      <td>0.5047</td>
+      <td>0.4350</td>
+      <td>0.5095</td>
     </tr>
     <tr>
       <th>2</th>

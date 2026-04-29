@@ -706,6 +706,30 @@
   
   
     <li class="md-nav__item">
+      <a href="spatial_diagnostics_recovery.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Spatial Diagnostics Recovery</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="jgsy2024_replication_bayespecon.html" class="md-nav__link">
         
   
@@ -1117,9 +1141,15 @@
     <span class="n">generate_panel_poisson_flow_data_separable</span><span class="p">,</span>
 <span class="p">)</span>
 
-<span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s1">&#39;ignore&#39;</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="ne">FutureWarning</span><span class="p">)</span>
+<span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="ne">FutureWarning</span><span class="p">)</span>
 <span class="n">np</span><span class="o">.</span><span class="n">set_printoptions</span><span class="p">(</span><span class="n">precision</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">suppress</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">pd</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">display</span><span class="o">.</span><span class="n">float_format</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">{:.3f}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span>
+<span class="n">pd</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">display</span><span class="o">.</span><span class="n">float_format</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{:.3f}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span>
+</code></pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+  from .autonotebook import tqdm as notebook_tqdm
 </code></pre></div>
 </div>
 </div>
@@ -1180,14 +1210,34 @@
 
 <span class="c1"># All four DGPs synthesise the same geometry from `n=4`, so any of the</span>
 <span class="c1"># returned graphs is fine to share with the model constructors below.</span>
-<span class="n">G</span> <span class="o">=</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s1">&#39;G&#39;</span><span class="p">]</span>
+<span class="n">G</span> <span class="o">=</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s2">&quot;G&quot;</span><span class="p">]</span>
 
 <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
     <span class="p">[</span>
-        <span class="p">{</span><span class="s1">&#39;dataset&#39;</span><span class="p">:</span> <span class="s1">&#39;Gaussian unrestricted&#39;</span><span class="p">,</span> <span class="s1">&#39;y_shape&#39;</span><span class="p">:</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;X_shape&#39;</span><span class="p">:</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;features&#39;</span><span class="p">:</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">]},</span>
-        <span class="p">{</span><span class="s1">&#39;dataset&#39;</span><span class="p">:</span> <span class="s1">&#39;Gaussian separable&#39;</span><span class="p">,</span> <span class="s1">&#39;y_shape&#39;</span><span class="p">:</span> <span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;X_shape&#39;</span><span class="p">:</span> <span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;features&#39;</span><span class="p">:</span> <span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">]},</span>
-        <span class="p">{</span><span class="s1">&#39;dataset&#39;</span><span class="p">:</span> <span class="s1">&#39;Poisson unrestricted&#39;</span><span class="p">,</span> <span class="s1">&#39;y_shape&#39;</span><span class="p">:</span> <span class="n">poisson_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;X_shape&#39;</span><span class="p">:</span> <span class="n">poisson_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;features&#39;</span><span class="p">:</span> <span class="n">poisson_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">]},</span>
-        <span class="p">{</span><span class="s1">&#39;dataset&#39;</span><span class="p">:</span> <span class="s1">&#39;Poisson separable&#39;</span><span class="p">,</span> <span class="s1">&#39;y_shape&#39;</span><span class="p">:</span> <span class="n">poisson_sep_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;X_shape&#39;</span><span class="p">:</span> <span class="n">poisson_sep_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="s1">&#39;features&#39;</span><span class="p">:</span> <span class="n">poisson_sep_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">]},</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;dataset&quot;</span><span class="p">:</span> <span class="s2">&quot;Gaussian unrestricted&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;y_shape&quot;</span><span class="p">:</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;X_shape&quot;</span><span class="p">:</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;features&quot;</span><span class="p">:</span> <span class="n">gaussian_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;dataset&quot;</span><span class="p">:</span> <span class="s2">&quot;Gaussian separable&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;y_shape&quot;</span><span class="p">:</span> <span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;X_shape&quot;</span><span class="p">:</span> <span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;features&quot;</span><span class="p">:</span> <span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;dataset&quot;</span><span class="p">:</span> <span class="s2">&quot;Poisson unrestricted&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;y_shape&quot;</span><span class="p">:</span> <span class="n">poisson_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;X_shape&quot;</span><span class="p">:</span> <span class="n">poisson_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;features&quot;</span><span class="p">:</span> <span class="n">poisson_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;dataset&quot;</span><span class="p">:</span> <span class="s2">&quot;Poisson separable&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;y_shape&quot;</span><span class="p">:</span> <span class="n">poisson_sep_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;X_shape&quot;</span><span class="p">:</span> <span class="n">poisson_sep_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="s2">&quot;features&quot;</span><span class="p">:</span> <span class="n">poisson_sep_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
+        <span class="p">},</span>
     <span class="p">]</span>
 <span class="p">)</span>
 </code></pre></div>
@@ -1278,21 +1328,21 @@ The Poisson-likelihood models are unchanged (their DGPs always emit non-negative
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="n">gaussian_model</span> <span class="o">=</span> <span class="n">SARFlowPanel</span><span class="p">(</span>
-    <span class="n">y</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">gaussian_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]),</span>  <span class="c1"># latent SAR scale (lognormal default)</span>
+    <span class="n">y</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">gaussian_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]),</span>  <span class="c1"># latent SAR scale (lognormal default)</span>
     <span class="n">G</span><span class="o">=</span><span class="n">G</span><span class="p">,</span>
-    <span class="n">X</span><span class="o">=</span><span class="n">gaussian_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">],</span>
+    <span class="n">X</span><span class="o">=</span><span class="n">gaussian_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">],</span>
     <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-    <span class="n">col_names</span><span class="o">=</span><span class="n">gaussian_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">],</span>
+    <span class="n">col_names</span><span class="o">=</span><span class="n">gaussian_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
     <span class="n">model</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="n">miter</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">titer</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
     <span class="n">trace_seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">gaussian_idata</span> <span class="o">=</span> <span class="n">gaussian_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;advi&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span><span class="p">)</span>
+<span class="n">gaussian_idata</span> <span class="o">=</span> <span class="n">gaussian_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;advi&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span><span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">gaussian_model</span><span class="o">.</span><span class="n">approximation</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">gaussian_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span>
-<span class="n">gaussian_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;rho_d&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_o&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_w&#39;</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">gaussian_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;rho_d&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_o&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_w&quot;</span><span class="p">,</span> <span class="s2">&quot;sigma&quot;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
@@ -1301,7 +1351,7 @@ The Poisson-likelihood models are unchanged (their DGPs always emit non-negative
 [&#39;beta&#39;, &#39;rho_d&#39;, &#39;rho_o&#39;, &#39;rho_simplex&#39;, &#39;rho_w&#39;, &#39;sigma&#39;]
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Finished [100%]: Average Loss = 188.42
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Finished [100%]: Average Loss = 188.54
 arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: (chains=2, draws=4)
 </code></pre></div>
 </div>
@@ -1337,13 +1387,13 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: 
   <tbody>
     <tr>
       <th>rho_d</th>
-      <td>0.241</td>
+      <td>0.240</td>
       <td>0.157</td>
       <td>0.031</td>
       <td>0.556</td>
       <td>0.017</td>
       <td>0.013</td>
-      <td>71.161</td>
+      <td>71.138</td>
       <td>92.072</td>
       <td>NaN</td>
     </tr>
@@ -1351,11 +1401,11 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: 
       <th>rho_o</th>
       <td>0.216</td>
       <td>0.124</td>
-      <td>0.014</td>
+      <td>0.013</td>
       <td>0.445</td>
       <td>0.019</td>
       <td>0.011</td>
-      <td>46.559</td>
+      <td>46.588</td>
       <td>71.660</td>
       <td>NaN</td>
     </tr>
@@ -1367,7 +1417,7 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: 
       <td>0.552</td>
       <td>0.022</td>
       <td>0.011</td>
-      <td>31.136</td>
+      <td>31.128</td>
       <td>33.037</td>
       <td>NaN</td>
     </tr>
@@ -1390,25 +1440,28 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: 
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="n">gaussian_sep_model</span> <span class="o">=</span> <span class="n">SARFlowSeparablePanel</span><span class="p">(</span>
-    <span class="n">y</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]),</span>  <span class="c1"># latent SAR scale (lognormal default)</span>
+    <span class="n">y</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]),</span>  <span class="c1"># latent SAR scale (lognormal default)</span>
     <span class="n">G</span><span class="o">=</span><span class="n">G</span><span class="p">,</span>
-    <span class="n">X</span><span class="o">=</span><span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">],</span>
+    <span class="n">X</span><span class="o">=</span><span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">],</span>
     <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-    <span class="n">col_names</span><span class="o">=</span><span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">],</span>
+    <span class="n">col_names</span><span class="o">=</span><span class="n">gaussian_sep_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
     <span class="n">model</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="n">trace_seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">gaussian_sep_idata</span> <span class="o">=</span> <span class="n">gaussian_sep_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;fullrank_advi&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span><span class="p">)</span>
+<span class="n">gaussian_sep_idata</span> <span class="o">=</span> <span class="n">gaussian_sep_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span>
+    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;fullrank_advi&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span>
+<span class="p">)</span>
 
 <span class="n">sep_identity_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span>
     <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span>
-        <span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="p">[</span><span class="s1">&#39;rho_w&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
-        <span class="o">+</span> <span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="p">[</span><span class="s1">&#39;rho_d&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span> <span class="o">*</span> <span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="p">[</span><span class="s1">&#39;rho_o&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+        <span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="p">[</span><span class="s2">&quot;rho_w&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+        <span class="o">+</span> <span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="p">[</span><span class="s2">&quot;rho_d&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+        <span class="o">*</span> <span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="p">[</span><span class="s2">&quot;rho_o&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
     <span class="p">)</span>
 <span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;max |rho_w + rho_d * rho_o| = </span><span class="si">{</span><span class="n">sep_identity_error</span><span class="si">:</span><span class="s1">.3e</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
-<span class="n">gaussian_sep_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;rho_d&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_o&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_w&#39;</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;max |rho_w + rho_d * rho_o| = </span><span class="si">{</span><span class="n">sep_identity_error</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">gaussian_sep_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;rho_d&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_o&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_w&quot;</span><span class="p">,</span> <span class="s2">&quot;sigma&quot;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
@@ -1508,21 +1561,21 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: 
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="n">poisson_model</span> <span class="o">=</span> <span class="n">PoissonSARFlowPanel</span><span class="p">(</span>
-    <span class="n">y</span><span class="o">=</span><span class="n">poisson_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">],</span>
+    <span class="n">y</span><span class="o">=</span><span class="n">poisson_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">],</span>
     <span class="n">G</span><span class="o">=</span><span class="n">G</span><span class="p">,</span>
-    <span class="n">X</span><span class="o">=</span><span class="n">poisson_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">],</span>
+    <span class="n">X</span><span class="o">=</span><span class="n">poisson_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">],</span>
     <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-    <span class="n">col_names</span><span class="o">=</span><span class="n">poisson_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">],</span>
+    <span class="n">col_names</span><span class="o">=</span><span class="n">poisson_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
     <span class="n">model</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="n">miter</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">titer</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
     <span class="n">trace_seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">poisson_idata</span> <span class="o">=</span> <span class="n">poisson_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;advi&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span><span class="p">)</span>
+<span class="n">poisson_idata</span> <span class="o">=</span> <span class="n">poisson_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;advi&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span><span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">poisson_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span> <span class="ow">in</span> <span class="n">poisson_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)</span>
-<span class="n">poisson_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;rho_d&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_o&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_w&#39;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;lambda&quot;</span> <span class="ow">in</span> <span class="n">poisson_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)</span>
+<span class="n">poisson_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;rho_d&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_o&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_w&quot;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
@@ -1531,7 +1584,7 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: 
 False
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Finished [100%]: Average Loss = 2.7173e+16
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Finished [100%]: Average Loss = 2.717e+16
 arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: (chains=2, draws=4)
 </code></pre></div>
 </div>
@@ -1608,43 +1661,45 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 80), minimum_shape: 
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><code><span class="n">poisson_sep_model</span> <span class="o">=</span> <span class="n">PoissonSARFlowSeparablePanel</span><span class="p">(</span>
-    <span class="n">y</span><span class="o">=</span><span class="n">poisson_sep_data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">],</span>
+    <span class="n">y</span><span class="o">=</span><span class="n">poisson_sep_data</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">],</span>
     <span class="n">G</span><span class="o">=</span><span class="n">G</span><span class="p">,</span>
-    <span class="n">X</span><span class="o">=</span><span class="n">poisson_sep_data</span><span class="p">[</span><span class="s1">&#39;X&#39;</span><span class="p">],</span>
+    <span class="n">X</span><span class="o">=</span><span class="n">poisson_sep_data</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">],</span>
     <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-    <span class="n">col_names</span><span class="o">=</span><span class="n">poisson_sep_data</span><span class="p">[</span><span class="s1">&#39;col_names&#39;</span><span class="p">],</span>
+    <span class="n">col_names</span><span class="o">=</span><span class="n">poisson_sep_data</span><span class="p">[</span><span class="s2">&quot;col_names&quot;</span><span class="p">],</span>
     <span class="n">model</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="n">trace_seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">poisson_sep_idata</span> <span class="o">=</span> <span class="n">poisson_sep_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;fullrank_advi&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span><span class="p">)</span>
+<span class="n">poisson_sep_idata</span> <span class="o">=</span> <span class="n">poisson_sep_model</span><span class="o">.</span><span class="n">fit_approx</span><span class="p">(</span>
+    <span class="n">method</span><span class="o">=</span><span class="s2">&quot;fullrank_advi&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">FIT_APPROX_KW</span>
+<span class="p">)</span>
 
 <span class="n">comparison</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
     <span class="p">[</span>
         <span class="p">{</span>
-            <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;SARFlowPanel&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;advi&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;posterior_vars&#39;</span><span class="p">:</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">gaussian_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
+            <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;SARFlowPanel&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;advi&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;posterior_vars&quot;</span><span class="p">:</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">gaussian_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
         <span class="p">},</span>
         <span class="p">{</span>
-            <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;SARFlowSeparablePanel&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;fullrank_advi&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;posterior_vars&#39;</span><span class="p">:</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
+            <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;SARFlowSeparablePanel&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;fullrank_advi&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;posterior_vars&quot;</span><span class="p">:</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">gaussian_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
         <span class="p">},</span>
         <span class="p">{</span>
-            <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;PoissonSARFlowPanel&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;advi&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;posterior_vars&#39;</span><span class="p">:</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">poisson_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
+            <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;PoissonSARFlowPanel&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;advi&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;posterior_vars&quot;</span><span class="p">:</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">poisson_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
         <span class="p">},</span>
         <span class="p">{</span>
-            <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;PoissonSARFlowSeparablePanel&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;fullrank_advi&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;posterior_vars&#39;</span><span class="p">:</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">poisson_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
+            <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;PoissonSARFlowSeparablePanel&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;fullrank_advi&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;posterior_vars&quot;</span><span class="p">:</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">poisson_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)),</span>
         <span class="p">},</span>
     <span class="p">]</span>
 <span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">poisson_sep_idata</span><span class="o">.</span><span class="n">posterior</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span>
-<span class="n">poisson_sep_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;rho_d&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_o&#39;</span><span class="p">,</span> <span class="s1">&#39;rho_w&#39;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">poisson_sep_model</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">var_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;rho_d&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_o&quot;</span><span class="p">,</span> <span class="s2">&quot;rho_w&quot;</span><span class="p">],</span> <span class="n">round_to</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 
 <span class="n">comparison</span>
 </code></pre></div>

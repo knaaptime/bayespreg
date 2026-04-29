@@ -645,6 +645,30 @@
   
   
     <li class="md-nav__item">
+      <a href="../user-guide/spatial_diagnostics_recovery.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    <span>Spatial Diagnostics Recovery</span>
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-guide/jgsy2024_replication_bayespecon.html" class="md-nav__link">
         
   
@@ -1537,7 +1561,7 @@
       <span aria-label="Python function" class="objinfo-icon objinfo-icon__procedure" title="Python function">F</span>
     
     <span class="md-ellipsis">
-      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test (Python function) — Bayesian panel robust LM-Lag test in SDM context (H₀: ρ = 0, robust to γ)."><span>bayespecon.<wbr>diagnostics.<wbr>bayesian_<wbr>lmtests.<wbr>bayesian_<wbr>panel_<wbr>robust_<wbr>lm_<wbr>lag_<wbr>sdm_<wbr>test</span></span>
+      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test (Python function) — Bayesian panel robust LM-Lag in SDM context (H₀: ρ = 0 | SLX panel)."><span>bayespecon.<wbr>diagnostics.<wbr>bayesian_<wbr>lmtests.<wbr>bayesian_<wbr>panel_<wbr>robust_<wbr>lm_<wbr>lag_<wbr>sdm_<wbr>test</span></span>
     </span>
   </a>
   
@@ -1561,7 +1585,7 @@
       <span aria-label="Python parameter" class="objinfo-icon objinfo-icon__sub-data" title="Python parameter">p</span>
     
     <span class="md-ellipsis">
-      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX panel model with inference_data containing posterior draws for beta and sigma."><span>model</span></span>
+      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX panel model with inference_data containing posterior draws for beta and sigma (beta covers the full SLX design [X, WX])."><span>model</span></span>
     </span>
   </a>
   
@@ -2008,7 +2032,7 @@
       <span aria-label="Python function" class="objinfo-icon objinfo-icon__procedure" title="Python function">F</span>
     
     <span class="md-ellipsis">
-      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test (Python function) — Bayesian panel robust LM-Lag test in SDM context (H₀: ρ = 0, robust to γ)."><span>bayespecon.<wbr>diagnostics.<wbr>bayesian_<wbr>lmtests.<wbr>bayesian_<wbr>panel_<wbr>robust_<wbr>lm_<wbr>lag_<wbr>sdm_<wbr>test</span></span>
+      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test (Python function) — Bayesian panel robust LM-Lag in SDM context (H₀: ρ = 0 | SLX panel)."><span>bayespecon.<wbr>diagnostics.<wbr>bayesian_<wbr>lmtests.<wbr>bayesian_<wbr>panel_<wbr>robust_<wbr>lm_<wbr>lag_<wbr>sdm_<wbr>test</span></span>
     </span>
   </a>
   
@@ -2032,7 +2056,7 @@
       <span aria-label="Python parameter" class="objinfo-icon objinfo-icon__sub-data" title="Python parameter">p</span>
     
     <span class="md-ellipsis">
-      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX panel model with inference_data containing posterior draws for beta and sigma."><span>model</span></span>
+      <span title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX panel model with inference_data containing posterior draws for beta and sigma (beta covers the full SLX design [X, WX])."><span>model</span></span>
     </span>
   </a>
   
@@ -2095,30 +2119,39 @@
 <h1 id="bayespecon-diagnostics-bayesian-lmtests-bayesian-panel-robust-lm-lag-sdm-test">bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test<a class="headerlink" href="#bayespecon-diagnostics-bayesian-lmtests-bayesian-panel-robust-lm-lag-sdm-test" title="Link to this heading">¶</a></h1>
 <dl class="py function objdesc">
 <dt class="sig sig-object highlight sig-wrap py" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test">
-<span class="sig-prename descclassname"><span class="pre">bayespecon.diagnostics.bayesian_lmtests.</span></span><span class="sig-name descname"><span class="pre">bayesian_panel_robust_lm_lag_sdm_test</span></span><span class="sig-paren">(</span><span class="sig-param-decl"><em class="sig-param"><a class="n reference internal" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model" title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX panel model with inference_data containing posterior draws for beta and sigma."><span class="n"><span class="pre">model</span></span></a></em></span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/pysal/bayespecon/blob/main/bayespecon/diagnostics/bayesian_lmtests.py#L2327-L2436"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test" title="Link to this definition">¶</a></dt>
-<dd><p>Bayesian panel robust LM-Lag test in SDM context (H₀: ρ = 0, robust to γ).</p>
-<p>Tests the null hypothesis that the spatial lag coefficient is zero,
-robust to the local presence of WX effects (γ). Uses the Neyman
-orthogonal score adjustment from <span id="id1">Doğan <em>et al.</em> [<a class="reference internal" href="../references.html#id11" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">2021</a>]</span>, Proposition 3.</p>
-<p>The alternative model is SLX panel (includes γ but not ρ). For each
-posterior draw from the SLX model, residuals are:</p>
+<span class="sig-prename descclassname"><span class="pre">bayespecon.diagnostics.bayesian_lmtests.</span></span><span class="sig-name descname"><span class="pre">bayesian_panel_robust_lm_lag_sdm_test</span></span><span class="sig-paren">(</span><span class="sig-param-decl"><em class="sig-param"><a class="n reference internal" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model" title="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model (Python parameter) — Fitted SLX panel model with inference_data containing posterior draws for beta and sigma (beta covers the full SLX design [X, WX])."><span class="n"><span class="pre">model</span></span></a></em></span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/pysal/bayespecon/blob/main/bayespecon/diagnostics/bayesian_lmtests.py#L2202-L2282"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test" title="Link to this definition">¶</a></dt>
+<dd><p>Bayesian panel robust LM-Lag in SDM context (H₀: ρ = 0 | SLX panel).</p>
+<p>Tests <span class="math notranslate nohighlight">\(H_0: \rho = 0\)</span> using the <strong>SLX panel as the restricted
+null model</strong>.  Because the SLX OLS normal equations imply
+<span class="math notranslate nohighlight">\((WX)^\top \mathbf{e}_{slx} = \mathbf{0}\)</span> exactly, the Neyman
+orthogonal score adjustment for the WX nuisance direction is a no-op
+(<span id="id1">[<a class="reference internal" href="../references.html#id11" title="Osman Doğan, Süleyman Taşpınar, and Anil K. Bera. A Bayesian robust chi-squared test for testing simple hypotheses. Journal of Econometrics, 222(2):933–958, 2021. URL: https://www.sciencedirect.com/science/article/pii/S0304407620303018 (visited on 2026-04-21), doi:10.1016/j.jeconom.2020.07.046.">Doğan <em>et al.</em>, 2021</a>]</span>, Proposition 3) and the LM
+statistic reduces to the direct quadratic form</p>
 <div class="math notranslate nohighlight">
-\[\mathbf{e} = \mathbf{y} - X\beta_1 - WX\beta_2\]</div>
-<p>The Neyman-adjusted score for ρ is:</p>
-<div class="math notranslate nohighlight">
-\[g_\rho^* = g_\rho - J_{\rho\gamma \cdot \sigma}
-J_{\gamma\gamma \cdot \sigma}^{-1} \boldsymbol{g}_\gamma\]</div>
-<p>The robust LM statistic is <span class="math notranslate nohighlight">\(\chi^2_1\)</span> under H₀.</p>
+\[\mathrm{LM}^{(d)} =
+\frac{(\mathbf{e}^{(d)\,\top} W_{NT} \mathbf{y})^2}{
+    \bar{\sigma}^4\, T \cdot \mathrm{tr}(W'W + W^2)
+  + \bar{\sigma}^2\, \| M_Z W_{NT} \hat{\mathbf{y}}_{slx} \|^2},\]</div>
+<p>where <span class="math notranslate nohighlight">\(Z = [X,\;WX]\)</span> is the full SLX design matrix,
+<span class="math notranslate nohighlight">\(M_Z = I - Z(Z^\top Z)^{-1} Z^\top\)</span>, and
+<span class="math notranslate nohighlight">\(\hat{\mathbf{y}}_{slx} = Z \bar{\beta}_{slx}\)</span> uses the
+posterior mean.  Under <span class="math notranslate nohighlight">\(H_0\)</span> the statistic is asymptotically
+<span class="math notranslate nohighlight">\(\chi^2_1\)</span>.</p>
+<p>Note: this null model differs from the spreg-style algebraic
+subtraction (joint SDM minus LM-WX), which uses an OLS null and
+enforces orthogonality through information-matrix algebra.  The two
+statistics target the same hypothesis but are not numerically equal.</p>
 <dl class="field-list simple">
 <dt class="field-odd" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test-parameters">Parameters<span class="colon">:</span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test-parameters" title="Permalink to this headline">¶</a></dt>
 <dd class="field-odd"><dl class="simple api-field highlight">
 <dt id="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model"><span class="sig-name descname">model</span><span class="p"> : </span><span class="desctype"><span class="desctype"><a class="reference internal" href="bayespecon.models.SLXPanelFE.html#bayespecon.models.SLXPanelFE" title="bayespecon.models.SLXPanelFE (Python class) — Bayesian SLX panel regression.">SLXPanelFE</a> or SLX-like panel model</span></span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test.model" title="Permalink to this definition">¶</a></dt><dd><p>Fitted SLX panel model with <code class="docutils literal notranslate"><span class="pre">inference_data</span></code> containing
-posterior draws for <code class="docutils literal notranslate"><span class="pre">beta</span></code> and <code class="docutils literal notranslate"><span class="pre">sigma</span></code>.</p>
+posterior draws for <code class="docutils literal notranslate"><span class="pre">beta</span></code> and <code class="docutils literal notranslate"><span class="pre">sigma</span></code> (<code class="docutils literal notranslate"><span class="pre">beta</span></code> covers the
+full SLX design <code class="docutils literal notranslate"><span class="pre">[X,</span> <span class="pre">WX]</span></code>).</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test-returns">Returns<span class="colon">:</span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test-returns" title="Permalink to this headline">¶</a></dt>
-<dd class="field-even"><p>Dataclass containing LM samples, summary statistics, and metadata.</p>
+<dd class="field-even"><p>Per-draw LM samples, summary statistics and <code class="docutils literal notranslate"><span class="pre">df</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p>
 </dd>
 <dt class="field-odd" id="bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test-return-type">Return type<span class="colon">:</span><a class="headerlink" href="#bayespecon.diagnostics.bayesian_lmtests.bayesian_panel_robust_lm_lag_sdm_test-return-type" title="Permalink to this headline">¶</a></dt>
 <dd class="field-odd"><p><a class="reference internal" href="bayespecon.diagnostics.bayesian_lmtests.BayesianLMTestResult.html#bayespecon.diagnostics.bayesian_lmtests.BayesianLMTestResult" title="bayespecon.diagnostics.bayesian_lmtests.BayesianLMTestResult (Python class) — Container for Bayesian LM test results.">BayesianLMTestResult</a></p>

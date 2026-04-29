@@ -17,6 +17,7 @@
       ~PoissonFlow.fit
       ~PoissonFlow.fit_approx
       ~PoissonFlow.posterior_predictive
+      ~PoissonFlow.spatial_diagnostics
       ~PoissonFlow.spatial_effects
       ~PoissonFlow.summary
    

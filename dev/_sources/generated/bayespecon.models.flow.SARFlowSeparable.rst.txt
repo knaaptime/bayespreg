@@ -17,6 +17,7 @@
       ~SARFlowSeparable.fit
       ~SARFlowSeparable.fit_approx
       ~SARFlowSeparable.posterior_predictive
+      ~SARFlowSeparable.spatial_diagnostics
       ~SARFlowSeparable.spatial_effects
       ~SARFlowSeparable.summary
    
