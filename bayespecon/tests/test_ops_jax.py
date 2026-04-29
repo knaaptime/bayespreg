@@ -175,7 +175,7 @@ def test_sparse_flow_matrix_vjp_parity(kron_matrices):
 
 def test_sampler_resolution_with_jax_present():
     """When JAX is importable, requires_c_backend should not force a downgrade."""
-    from bayespecon.models._sampler import resolve_sampler, _jax_dispatches_available
+    from bayespecon.models._sampler import _jax_dispatches_available, resolve_sampler
 
     assert _jax_dispatches_available() is True
     assert (

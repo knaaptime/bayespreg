@@ -44,21 +44,21 @@ def register_jax_dispatch() -> bool:
     if not _jax_available():
         return False
 
-    import numpy as np
     import jax
     import jax.numpy as jnp
     import jax.scipy.linalg as jsla
+    import numpy as np
     from pytensor.link.jax.dispatch import jax_funcify
 
     from .ops import (
-        SparseFlowSolveOp,
-        SparseFlowSolveMatrixOp,
-        KroneckerFlowSolveOp,
         KroneckerFlowSolveMatrixOp,
-        _SparseFlowVJPOp,
-        _SparseFlowVJPMatrixOp,
-        _KroneckerFlowVJPOp,
+        KroneckerFlowSolveOp,
+        SparseFlowSolveMatrixOp,
+        SparseFlowSolveOp,
         _KroneckerFlowVJPMatrixOp,
+        _KroneckerFlowVJPOp,
+        _SparseFlowVJPMatrixOp,
+        _SparseFlowVJPOp,
     )
 
     # ------------------------------------------------------------------

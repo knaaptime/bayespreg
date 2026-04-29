@@ -20,7 +20,6 @@ import os
 # convergence diagnostics are calibrated against the C backend.  Users
 # still get the blackjax default in normal usage.
 # os.environ.setdefault("BAYESPECON_SAMPLER", "pymc")
-
 import numpy as np
 import pytest
 from libpysal.graph import Graph

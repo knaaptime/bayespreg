@@ -11,7 +11,6 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.interpolate import CubicSpline
 
-
 # Largest n for which `_build_logdet_grid` uses a single eigendecomposition
 # rather than a per-rho slogdet loop.  Above this threshold the O(n^3) eigvals
 # cost dominates and the iterative slogdet path is more memory-friendly.
