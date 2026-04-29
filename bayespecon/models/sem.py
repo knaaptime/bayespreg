@@ -14,8 +14,8 @@ import arviz as az
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
-from pytensor import sparse as pts
 import xarray as xr
+from pytensor import sparse as pts
 
 from .base import SpatialModel
 
