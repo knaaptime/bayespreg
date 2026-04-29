@@ -42,7 +42,6 @@ from bayespecon.diagnostics.bayesian_lmtests import (
     bayesian_robust_lm_wx_test,
 )
 
-
 # ---------------------------------------------------------------------------
 # Tiny deterministic data + W
 # ---------------------------------------------------------------------------
