@@ -64,9 +64,9 @@ class SDEM(SpatialModel):
         (
             lambda m: __import__(
                 "bayespecon.diagnostics.bayesian_lmtests",
-                fromlist=["bayesian_lm_lag_test"],
-            ).bayesian_lm_lag_test(m),
-            "LM-Lag",
+                fromlist=["bayesian_lm_lag_sdem_test"],
+            ).bayesian_lm_lag_sdem_test(m),
+            "LM-Lag-SDEM",
         ),
     ]
 

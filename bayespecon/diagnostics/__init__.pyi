@@ -14,6 +14,9 @@ from .bayesian_lmtests import (
     BayesianLMTestResult as BayesianLMTestResult,
 )
 from .bayesian_lmtests import (
+    bayesian_lm_error_sdm_test as bayesian_lm_error_sdm_test,
+)
+from .bayesian_lmtests import (
     bayesian_lm_error_test as bayesian_lm_error_test,
 )
 from .bayesian_lmtests import (
@@ -32,6 +35,9 @@ from .bayesian_lmtests import (
     bayesian_lm_flow_orig_test as bayesian_lm_flow_orig_test,
 )
 from .bayesian_lmtests import (
+    bayesian_lm_lag_sdem_test as bayesian_lm_lag_sdem_test,
+)
+from .bayesian_lmtests import (
     bayesian_lm_lag_test as bayesian_lm_lag_test,
 )
 from .bayesian_lmtests import (
@@ -41,7 +47,13 @@ from .bayesian_lmtests import (
     bayesian_lm_slx_error_joint_test as bayesian_lm_slx_error_joint_test,
 )
 from .bayesian_lmtests import (
+    bayesian_lm_wx_sem_test as bayesian_lm_wx_sem_test,
+)
+from .bayesian_lmtests import (
     bayesian_lm_wx_test as bayesian_lm_wx_test,
+)
+from .bayesian_lmtests import (
+    bayesian_panel_lm_error_sdm_test as bayesian_panel_lm_error_sdm_test,
 )
 from .bayesian_lmtests import (
     bayesian_panel_lm_error_test as bayesian_panel_lm_error_test,
@@ -60,6 +72,9 @@ from .bayesian_lmtests import (
 )
 from .bayesian_lmtests import (
     bayesian_panel_lm_flow_orig_test as bayesian_panel_lm_flow_orig_test,
+)
+from .bayesian_lmtests import (
+    bayesian_panel_lm_lag_sdem_test as bayesian_panel_lm_lag_sdem_test,
 )
 from .bayesian_lmtests import (
     bayesian_panel_lm_lag_test as bayesian_panel_lm_lag_test,
@@ -95,6 +110,9 @@ from .bayesian_lmtests import (
     bayesian_robust_lm_error_sdem_test as bayesian_robust_lm_error_sdem_test,
 )
 from .bayesian_lmtests import (
+    bayesian_robust_lm_error_test as bayesian_robust_lm_error_test,
+)
+from .bayesian_lmtests import (
     bayesian_robust_lm_flow_dest_test as bayesian_robust_lm_flow_dest_test,
 )
 from .bayesian_lmtests import (
@@ -105,6 +123,9 @@ from .bayesian_lmtests import (
 )
 from .bayesian_lmtests import (
     bayesian_robust_lm_lag_sdm_test as bayesian_robust_lm_lag_sdm_test,
+)
+from .bayesian_lmtests import (
+    bayesian_robust_lm_lag_test as bayesian_robust_lm_lag_test,
 )
 from .bayesian_lmtests import (
     bayesian_robust_lm_wx_test as bayesian_robust_lm_wx_test,

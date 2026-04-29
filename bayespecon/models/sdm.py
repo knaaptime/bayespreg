@@ -60,9 +60,9 @@ class SDM(SpatialModel):
         (
             lambda m: __import__(
                 "bayespecon.diagnostics.bayesian_lmtests",
-                fromlist=["bayesian_lm_error_test"],
-            ).bayesian_lm_error_test(m),
-            "LM-Error",
+                fromlist=["bayesian_lm_error_sdm_test"],
+            ).bayesian_lm_error_sdm_test(m),
+            "LM-Error-SDM",
         ),
     ]
 

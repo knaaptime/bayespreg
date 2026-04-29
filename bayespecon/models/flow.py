@@ -691,6 +691,31 @@ class FlowModel(ABC):
             raise RuntimeError("Model has not been fit yet.  Call fit() first.")
         return az.summary(self._idata, var_names=var_names, **kwargs)
 
+    # ------------------------------------------------------------------
+    # Class-level registry of applicable Bayesian LM specification tests.
+    # Mirrors the SpatialModel pattern; subclasses populate this list.
+    # ------------------------------------------------------------------
+    _spatial_diagnostics_tests: list[tuple] = []
+
+    def spatial_diagnostics(self) -> pd.DataFrame:
+        """Run Bayesian LM specification tests for flow models.
+
+        Iterates over the class-level ``_spatial_diagnostics_tests`` registry
+        and returns a tidy DataFrame with one row per test.  See
+        :meth:`bayespecon.models.base.SpatialModel.spatial_diagnostics` for
+        the column schema.
+
+        Raises
+        ------
+        RuntimeError
+            If the model has not been fit yet.
+        """
+        from .base import SpatialModel
+
+        if self._idata is None:
+            raise RuntimeError("Model has not been fit yet.  Call fit() first.")
+        return SpatialModel._run_lm_diagnostics(self, self._spatial_diagnostics_tests)
+
     def _model_coords(self, extra: Optional[dict] = None) -> dict:
         """Return PyMC coordinate labels for named dimensions."""
         coords: dict = {"coefficient": self._feature_names}
@@ -1022,6 +1047,30 @@ class SARFlow(FlowModel):
       ``pm.Uniform`` priors on each ρ (only used when
       ``restrict_positive=False``).
     """
+
+    _spatial_diagnostics_tests = [
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_robust_lm_flow_dest_test"],
+            ).bayesian_robust_lm_flow_dest_test(m),
+            "Robust-LM-Flow-Dest",
+        ),
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_robust_lm_flow_orig_test"],
+            ).bayesian_robust_lm_flow_orig_test(m),
+            "Robust-LM-Flow-Orig",
+        ),
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_robust_lm_flow_network_test"],
+            ).bayesian_robust_lm_flow_network_test(m),
+            "Robust-LM-Flow-Network",
+        ),
+    ]
 
     def _build_pymc_model(self) -> pm.Model:
         beta_mu = self.priors.get("beta_mu", 0.0)
@@ -1687,6 +1736,44 @@ class OLSFlow(FlowModel):
     The ``priors`` dict supports ``beta_mu``, ``beta_sigma``, ``sigma_sigma``;
     spatial keys (``rho_*``) are ignored.
     """
+
+    _spatial_diagnostics_tests = [
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_lm_flow_dest_test"],
+            ).bayesian_lm_flow_dest_test(m),
+            "LM-Flow-Dest",
+        ),
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_lm_flow_orig_test"],
+            ).bayesian_lm_flow_orig_test(m),
+            "LM-Flow-Orig",
+        ),
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_lm_flow_network_test"],
+            ).bayesian_lm_flow_network_test(m),
+            "LM-Flow-Network",
+        ),
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_lm_flow_joint_test"],
+            ).bayesian_lm_flow_joint_test(m),
+            "LM-Flow-Joint",
+        ),
+        (
+            lambda m: __import__(
+                "bayespecon.diagnostics.bayesian_lmtests",
+                fromlist=["bayesian_lm_flow_intra_test"],
+            ).bayesian_lm_flow_intra_test(m),
+            "LM-Flow-Intra",
+        ),
+    ]
 
     def __init__(self, y, G, X, **kwargs):
         # Skip log-determinant precomputation: A = I_N has |A| = 1.

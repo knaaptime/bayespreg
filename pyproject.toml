@@ -22,6 +22,9 @@ dependencies = [
     "pandas",
 ]
 
+[project.optional-dependencies]
+viz = ["graphviz"]
+
 
 [tool.setuptools.packages.find]
 include = ["bayespecon", "bayespecon.*"]

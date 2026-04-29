@@ -162,55 +162,66 @@ class TestClosedFormLagError:
     """LM-lag and LM-error reduce to (S^2 / V) at the OLS estimate."""
 
     def test_lm_lag_matches_closed_form(self):
+        # Anselin (1996) eq. 13: LM = (e'Wy)^2 / (sigma^4 * T_ww + sigma^2 * ||M_X W X beta||^2)
         y, X, _WX, _Wd, W_sp, T_ww = _make_data(n=20, k_wx=0)
         WX_empty = np.empty((y.size, 0))
         beta_hat = np.linalg.lstsq(X, y, rcond=None)[0]
-        sigma_hat = 1.234  # arbitrary; the formula uses sigma**2 mean
+        sigma_hat = 1.234  # non-unity to catch sigma-scaling bugs
         model = _mock_ols(y, X, WX_empty, W_sp, T_ww, beta_hat, sigma_hat=sigma_hat)
 
         e = y - X @ beta_hat
         Wy = np.asarray(W_sp @ y)
+        WXb = np.asarray(W_sp @ (X @ beta_hat))
+        # ||M_X v||^2 = v'v - v'X(X'X)^{-1}X'v
+        XtWXb = X.T @ WXb
+        proj = float(XtWXb @ np.linalg.solve(X.T @ X, XtWXb))
+        mx_quad = float(WXb @ WXb) - proj
         S = float(e @ Wy)
-        V = T_ww * sigma_hat**2 + float(Wy @ Wy)
+        V = sigma_hat**4 * T_ww + sigma_hat**2 * mx_quad
         expected = S * S / V
 
         result = bayesian_lm_lag_test(model)
         assert result.lm_samples.shape == (1,)
-        assert result.lm_samples[0] == pytest.approx(expected, rel=1e-12, abs=1e-12)
+        assert result.lm_samples[0] == pytest.approx(expected, rel=1e-10, abs=1e-12)
 
     def test_lm_error_matches_closed_form(self):
+        # Anselin (1996) eq. 9: LM = (e'We)^2 / (sigma^4 * T_ww)
         y, X, _WX, _Wd, W_sp, T_ww = _make_data(n=20, k_wx=0)
         WX_empty = np.empty((y.size, 0))
         beta_hat = np.linalg.lstsq(X, y, rcond=None)[0]
-        sigma_hat = 0.7
+        sigma_hat = 0.7  # non-unity to catch sigma-scaling bugs
         model = _mock_ols(y, X, WX_empty, W_sp, T_ww, beta_hat, sigma_hat=sigma_hat)
 
         e = y - X @ beta_hat
         We = np.asarray(W_sp @ e)
         S = float(e @ We)
-        V = T_ww * sigma_hat**2
+        V = sigma_hat**4 * T_ww
         expected = S * S / V
 
         result = bayesian_lm_error_test(model)
-        assert result.lm_samples[0] == pytest.approx(expected, rel=1e-12, abs=1e-12)
+        assert result.lm_samples[0] == pytest.approx(expected, rel=1e-10, abs=1e-12)
 
 
 class TestClosedFormWX:
     """LM-WX (SAR null) reduces to a quadratic form at the SAR point estimate."""
 
     def test_lm_wx_matches_closed_form(self):
+        # Koley-Bera (2024): LM_WX = g_gamma' V_gamma_gamma^{-1} g_gamma
+        # with V_gamma_gamma = sigma^2 * (WX)' M_X (WX)
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=24, k_wx=3)
         Wy = np.asarray(W_sp @ y)
-        # Use beta_OLS and rho=0 so e = y - X@beta_OLS exactly.
         beta_hat = np.linalg.lstsq(X, y, rcond=None)[0]
         rho_hat = 0.0
-        sigma_hat = 0.9
+        sigma_hat = 0.9  # non-unity to catch sigma-scaling bugs
         model = _mock_sar(y, X, WX, W_sp, T_ww, beta_hat, rho_hat, sigma_hat)
 
         e = y - rho_hat * Wy - X @ beta_hat
         g = WX.T @ e  # (k_wx,)
-        J = (WX.T @ WX) / sigma_hat**2
-        expected = float(g @ np.linalg.solve(J, g))
+        # M_X-projected raw-score variance
+        XtWX = X.T @ WX
+        mx_proj = (WX.T @ WX) - XtWX.T @ np.linalg.solve(X.T @ X, XtWX)
+        V = sigma_hat**2 * mx_proj
+        expected = float(g @ np.linalg.solve(V, g))
 
         result = bayesian_lm_wx_test(model)
         assert result.df == WX.shape[1]
@@ -226,8 +237,11 @@ class TestClosedFormWX:
 
         e = y - X @ beta_hat
         g = WX.T @ e
-        J = (WX.T @ WX) / sigma_hat**2
-        expected = float(g @ np.linalg.solve(J, g))
+        # Same Koley-Bera formula (independent of error structure under H0)
+        XtWX = X.T @ WX
+        mx_proj = (WX.T @ WX) - XtWX.T @ np.linalg.solve(X.T @ X, XtWX)
+        V = sigma_hat**2 * mx_proj
+        expected = float(g @ np.linalg.solve(V, g))
 
         result = bayesian_lm_wx_sem_test(model)
         assert result.df == WX.shape[1]
@@ -238,32 +252,44 @@ class TestClosedFormJoint:
     """Joint SDM and SDEM reduce to g' J^{-1} g at the OLS point estimate."""
 
     def test_lm_sdm_joint_matches_closed_form(self):
+        # Koley-Bera (2024): joint SDM with M_X-projected info matrix.
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=24, k_wx=2)
         Wy = np.asarray(W_sp @ y)
         beta_hat = np.linalg.lstsq(X, y, rcond=None)[0]
-        sigma_hat = 1.0
+        sigma_hat = 1.3  # non-unity to catch sigma-scaling bugs
         model = _mock_ols(y, X, WX, W_sp, T_ww, beta_hat, sigma_hat=sigma_hat)
 
         e = y - X @ beta_hat
+        WXb = np.asarray(W_sp @ (X @ beta_hat))
         g_rho = float(e @ Wy)
         g_gamma = WX.T @ e
         g = np.concatenate([[g_rho], g_gamma])
         p = 1 + WX.shape[1]
-        J = np.zeros((p, p))
-        J[0, 0] = float(Wy @ Wy) / sigma_hat**2
-        J[0, 1:] = (Wy @ WX) / sigma_hat**2
-        J[1:, 0] = (WX.T @ Wy) / sigma_hat**2
-        J[1:, 1:] = (WX.T @ WX) / sigma_hat**2
-        expected = float(g @ np.linalg.solve(J, g))
+
+        # M_X-projected raw-score variance
+        XtX = X.T @ X
+        XtWXb = X.T @ WXb
+        XtWX = X.T @ WX
+        mx_quad = float(WXb @ WXb) - float(XtWXb @ np.linalg.solve(XtX, XtWXb))
+        mx_cross = (WXb @ WX) - XtWXb @ np.linalg.solve(XtX, XtWX)
+        mx_gg = (WX.T @ WX) - XtWX.T @ np.linalg.solve(XtX, XtWX)
+
+        V = np.zeros((p, p))
+        V[0, 0] = sigma_hat**4 * T_ww + sigma_hat**2 * mx_quad
+        V[0, 1:] = sigma_hat**2 * np.asarray(mx_cross).ravel()
+        V[1:, 0] = sigma_hat**2 * np.asarray(mx_cross).ravel()
+        V[1:, 1:] = sigma_hat**2 * mx_gg
+        expected = float(g @ np.linalg.solve(V, g))
 
         result = bayesian_lm_sdm_joint_test(model)
         assert result.df == p
         assert result.lm_samples[0] == pytest.approx(expected, rel=1e-10, abs=1e-12)
 
     def test_lm_slx_error_joint_matches_closed_form(self):
+        # Koley-Bera (2024) lm_slxerr: block-diagonal V => LM = LM_err + LM_wx
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=24, k_wx=2)
         beta_hat = np.linalg.lstsq(X, y, rcond=None)[0]
-        sigma_hat = 1.0
+        sigma_hat = 0.85  # non-unity
         model = _mock_ols(y, X, WX, W_sp, T_ww, beta_hat, sigma_hat=sigma_hat)
 
         e = y - X @ beta_hat
@@ -271,14 +297,16 @@ class TestClosedFormJoint:
         g_lam = float(e @ We)
         g_gamma = WX.T @ e
 
-        p = 1 + WX.shape[1]
-        J = np.zeros((p, p))
-        J[0, 0] = T_ww  # block-diagonal under H0
-        J[1:, 1:] = (WX.T @ WX) / sigma_hat**2
+        XtWX = X.T @ WX
+        mx_gg = (WX.T @ WX) - XtWX.T @ np.linalg.solve(X.T @ X, XtWX)
 
-        # Block diagonality => LM_joint = LM_lambda + LM_gamma
-        lm_lambda = g_lam * g_lam / T_ww
-        lm_gamma = float(g_gamma @ np.linalg.solve(J[1:, 1:], g_gamma))
+        p = 1 + WX.shape[1]
+        V = np.zeros((p, p))
+        V[0, 0] = sigma_hat**4 * T_ww
+        V[1:, 1:] = sigma_hat**2 * mx_gg
+
+        lm_lambda = g_lam * g_lam / V[0, 0]
+        lm_gamma = float(g_gamma @ np.linalg.solve(V[1:, 1:], g_gamma))
         expected = lm_lambda + lm_gamma
 
         result = bayesian_lm_slx_error_joint_test(model)
@@ -294,29 +322,25 @@ class TestClosedFormRobust:
         return np.linalg.lstsq(Z, y, rcond=None)[0]
 
     def test_robust_lm_lag_sdm_matches_closed_form(self):
+        # SLX-null robust LM-Lag: LM = (e_slx' Wy)^2 / (sigma^4 T_ww + sigma^2 ||M_Z W y_hat||^2)
+        # where Z = [X, WX] is the SLX design (gamma already absorbed).
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=24, k_wx=2)
         Wy = np.asarray(W_sp @ y)
         beta_full = self._fit_slx_beta(X, WX, y)
-        sigma_hat = 1.0
+        sigma_hat = 1.4  # non-unity
         model = _mock_slx(y, X, WX, W_sp, T_ww, beta_full, sigma_hat=sigma_hat)
 
-        # Replicate the implementation
         Z = np.hstack([X, WX])
         e = y - Z @ beta_full
         g_rho = float(e @ Wy)
-        g_gamma = WX.T @ e
-        y_hat = Z @ beta_full
-        Wy_hat = np.asarray(W_sp @ y_hat)
-        info = _info_matrix_blocks_sdm(
-            X, WX, W_sp, sigma_hat**2, Wy_hat=Wy_hat, T_ww=T_ww
+        Wy_hat = np.asarray(W_sp @ (Z @ beta_full))
+        # M_Z-projected quadratic
+        ZtWyhat = Z.T @ Wy_hat
+        mz_quad = float(Wy_hat @ Wy_hat) - float(
+            ZtWyhat @ np.linalg.solve(Z.T @ Z, ZtWyhat)
         )
-        J_rr = info["J_rho_rho"]
-        J_rg = info["J_rho_gamma"]
-        J_gg = info["J_gamma_gamma"]
-        coef = np.linalg.solve(J_gg, J_rg)
-        g_star = g_rho - float(g_gamma @ coef)
-        V_star = J_rr - float(J_rg @ coef)
-        expected = g_star * g_star / (V_star + 1e-12)
+        V = sigma_hat**4 * T_ww + sigma_hat**2 * mz_quad
+        expected = g_rho * g_rho / (V + 1e-12)
 
         result = bayesian_robust_lm_lag_sdm_test(model)
         assert result.lm_samples[0] == pytest.approx(expected, rel=1e-10, abs=1e-12)
@@ -339,25 +363,19 @@ class TestClosedFormRobust:
         assert result.lm_samples[0] >= 0.0
 
     def test_robust_lm_error_sdem_matches_closed_form(self):
+        # SLX-null robust LM-Err: LM = (e_slx' W e_slx)^2 / (sigma^4 T_ww)
+        # (Koley-Bera 2024: J_{lambda,gamma} = 0 under spherical errors.)
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=24, k_wx=2)
         beta_full = self._fit_slx_beta(X, WX, y)
-        sigma_hat = 1.0
+        sigma_hat = 0.6  # non-unity
         model = _mock_slx(y, X, WX, W_sp, T_ww, beta_full, sigma_hat=sigma_hat)
 
         Z = np.hstack([X, WX])
         e = y - Z @ beta_full
         We = np.asarray(W_sp @ e)
         g_lam = float(e @ We)
-        g_gamma = WX.T @ e
-        info = _info_matrix_blocks_sdem(X, WX, W_sp, sigma_hat**2, T_ww=T_ww)
-        J_ll = info["J_lam_lam"]
-        J_lg = info["J_lam_gamma"]
-        J_gg = info["J_gamma_gamma"]
-        # J_lg == 0 under H0, so g* == g and V* == J_ll
-        coef = np.linalg.solve(J_gg, J_lg)
-        g_star = g_lam - float(g_gamma @ coef)
-        V_star = J_ll - float(J_lg @ coef)
-        expected = g_star * g_star / (V_star + 1e-12)
+        V = sigma_hat**4 * T_ww
+        expected = g_lam * g_lam / (V + 1e-12)
 
         result = bayesian_robust_lm_error_sdem_test(model)
         assert result.lm_samples[0] == pytest.approx(expected, rel=1e-10, abs=1e-12)
@@ -412,21 +430,32 @@ class TestInfoMatrixBlocksSDM:
         assert np.all(eigs > -1e-10)
 
     def test_J_gamma_gamma_matches_formula(self):
+        # New semantics: raw-score variance with M_X projection (Koley-Bera 2024).
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=10, k_wx=2)
         beta = np.linalg.lstsq(X, y, rcond=None)[0]
         Wy_hat = np.asarray(W_sp @ (X @ beta))
         sigma2 = 0.5
         info = _info_matrix_blocks_sdm(X, WX, W_sp, sigma2, Wy_hat=Wy_hat, T_ww=T_ww)
-        np.testing.assert_allclose(info["J_gamma_gamma"], (WX.T @ WX) / sigma2)
-        np.testing.assert_allclose(info["J_rho_gamma"], (Wy_hat @ WX) / sigma2)
+        # V_gamma_gamma = sigma^2 * (WX)' M_X (WX)
+        XtWX = X.T @ WX
+        mx_gg = (WX.T @ WX) - XtWX.T @ np.linalg.solve(X.T @ X, XtWX)
+        np.testing.assert_allclose(info["J_gamma_gamma"], sigma2 * mx_gg)
+        # V_rho_gamma = sigma^2 * (Wy_hat)' M_X (WX)
+        XtWyhat = X.T @ Wy_hat
+        mx_cross = (Wy_hat @ WX) - XtWyhat @ np.linalg.solve(X.T @ X, XtWX)
+        np.testing.assert_allclose(
+            info["J_rho_gamma"], sigma2 * np.asarray(mx_cross).ravel()
+        )
 
 
 class TestInfoMatrixBlocksSDEM:
     def test_J_lam_gamma_is_zero_under_null(self):
+        # New semantics: V_lam_lam = sigma^4 * T_ww (raw-score scale).
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=12, k_wx=3)
-        info = _info_matrix_blocks_sdem(X, WX, W_sp, sigma2=1.0, T_ww=T_ww)
+        sigma2 = 1.7  # non-unity to catch sigma-scaling bugs
+        info = _info_matrix_blocks_sdem(X, WX, W_sp, sigma2=sigma2, T_ww=T_ww)
         np.testing.assert_allclose(info["J_lam_gamma"], np.zeros(WX.shape[1]))
-        assert info["J_lam_lam"] == pytest.approx(T_ww)
+        assert info["J_lam_lam"] == pytest.approx(sigma2**2 * T_ww)
 
     def test_blocks_symmetric_and_pd(self):
         y, X, WX, _Wd, W_sp, T_ww = _make_data(n=12, k_wx=3)
@@ -684,11 +713,13 @@ class TestPanelClosedForm:
         assert result.lm_samples[0] == pytest.approx(expected, rel=1e-10, abs=1e-12)
 
     def test_panel_lm_wx_matches_closed_form(self):
+        # Panel LM-WX (Koley-Bera 2024 + panel-T multiplier doesn't apply to
+        # WX terms): V_gamma_gamma = sigma^2 * (WX)' M_X (WX).
         N, T_per, k_wx = 5, 4, 2
         y, X, WX, Wn_sp, T_ww = _make_panel_data(N=N, T=T_per, k_wx=k_wx)
         beta_hat = np.linalg.lstsq(X, y, rcond=None)[0]
         rho_hat = 0.0
-        sigma_hat = 1.0
+        sigma_hat = 1.3  # non-unity to catch sigma-scaling bugs
         model = _mock_panel_sar(
             y, X, WX, Wn_sp, T_ww, beta_hat, rho_hat, sigma_hat, N, T_per
         )
@@ -696,8 +727,10 @@ class TestPanelClosedForm:
         Wy = _panel_spatial_lag(Wn_sp, np.asarray(y), N, T_per)
         e = y - rho_hat * Wy - X @ beta_hat
         g = WX.T @ e
-        J = (WX.T @ WX) / sigma_hat**2
-        expected = float(g @ np.linalg.solve(J, g))
+        XtWX = X.T @ WX
+        mx_gg = (WX.T @ WX) - XtWX.T @ np.linalg.solve(X.T @ X, XtWX)
+        V = sigma_hat**2 * mx_gg
+        expected = float(g @ np.linalg.solve(V, g))
 
         result = bayesian_panel_lm_wx_test(model)
         assert result.df == k_wx
