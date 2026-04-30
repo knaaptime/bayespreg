@@ -716,30 +716,6 @@
   
   
     <li class="md-nav__item">
-      <a href="spatial_diagnostics_recovery.html" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    <span>Spatial Diagnostics Recovery</span>
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="jgsy2024_replication_bayespecon.html" class="md-nav__link">
         
   
@@ -1205,9 +1181,11 @@
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-  from .autonotebook import tqdm as notebook_tqdm
-There were 12 divergences after tuning. Increase `target_accept` or reparameterize.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Multiprocess sampling (2 chains in 2 jobs)
+NUTS: [rho, beta, sigma_a, a_raw]
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
+There were 7 divergences after tuning. Increase `target_accept` or reparameterize.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
@@ -1245,51 +1223,51 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
   <tbody>
     <tr>
       <th>rho</th>
-      <td>0.172</td>
-      <td>0.352</td>
-      <td>-0.394</td>
-      <td>0.826</td>
-      <td>0.028</td>
-      <td>0.012</td>
-      <td>161.0</td>
-      <td>260.0</td>
-      <td>1.01</td>
-    </tr>
-    <tr>
-      <th>x0</th>
-      <td>0.345</td>
-      <td>0.991</td>
-      <td>-1.569</td>
-      <td>2.326</td>
-      <td>0.100</td>
-      <td>0.089</td>
-      <td>104.0</td>
-      <td>148.0</td>
-      <td>1.01</td>
-    </tr>
-    <tr>
-      <th>x1</th>
-      <td>1.013</td>
-      <td>0.207</td>
-      <td>0.633</td>
-      <td>1.387</td>
-      <td>0.011</td>
-      <td>0.008</td>
-      <td>383.0</td>
-      <td>369.0</td>
+      <td>0.167</td>
+      <td>0.360</td>
+      <td>-0.463</td>
+      <td>0.781</td>
+      <td>0.029</td>
+      <td>0.013</td>
+      <td>158.0</td>
+      <td>274.0</td>
       <td>1.00</td>
     </tr>
     <tr>
-      <th>sigma_a</th>
-      <td>1.813</td>
-      <td>0.626</td>
-      <td>0.854</td>
-      <td>2.915</td>
-      <td>0.053</td>
-      <td>0.048</td>
-      <td>136.0</td>
-      <td>222.0</td>
+      <th>x0</th>
+      <td>0.533</td>
+      <td>1.322</td>
+      <td>-2.520</td>
+      <td>2.922</td>
+      <td>0.216</td>
+      <td>0.260</td>
+      <td>65.0</td>
+      <td>26.0</td>
+      <td>1.03</td>
+    </tr>
+    <tr>
+      <th>x1</th>
+      <td>1.012</td>
+      <td>0.205</td>
+      <td>0.659</td>
+      <td>1.389</td>
+      <td>0.010</td>
+      <td>0.008</td>
+      <td>397.0</td>
+      <td>362.0</td>
       <td>1.01</td>
+    </tr>
+    <tr>
+      <th>sigma_a</th>
+      <td>1.906</td>
+      <td>0.627</td>
+      <td>0.850</td>
+      <td>3.057</td>
+      <td>0.044</td>
+      <td>0.027</td>
+      <td>187.0</td>
+      <td>327.0</td>
+      <td>1.00</td>
     </tr>
   </tbody>
 </table>
@@ -1356,33 +1334,43 @@ The effective sample size per chain is smaller than 100 for some parameters.  A 
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>We recommend running at least 4 chains for robust computation of convergence diagnostics
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Multiprocess sampling (2 chains in 2 jobs)
+NUTS: [rho, beta, sigma, y_cens_gap]
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
+We recommend running at least 4 chains for robust computation of convergence diagnostics
+The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
+The effective sample size per chain is smaller than 100 for some parameters.  A higher number is needed for reliable rhat and ess computation. See https://arxiv.org/abs/1903.08008 for details
+Initializing NUTS using jitter+adapt_diag...
+Multiprocess sampling (2 chains in 2 jobs)
+NUTS: [lam, beta, sigma, y_cens_gap]
+Sampling 2 chains for 300 tune and 300 draw iterations (600 + 600 draws total) took 6 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 </code></pre></div>
 </div>
 <div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>(        mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  \
- rho    0.461  0.082   0.321    0.630      0.004    0.004     413.0     383.0   
- x0     0.771  0.225   0.289    1.153      0.012    0.011     347.0     368.0   
- x1     1.649  0.181   1.349    2.033      0.010    0.007     341.0     274.0   
- sigma  0.814  0.146   0.575    1.076      0.008    0.009     353.0     384.0   
+ rho    0.451  0.084   0.285    0.596      0.004    0.003     438.0     432.0   
+ x0     0.777  0.227   0.360    1.195      0.014    0.009     276.0     312.0   
+ x1     1.672  0.182   1.379    2.047      0.015    0.009     157.0     313.0   
+ sigma  0.825  0.154   0.576    1.117      0.010    0.008     268.0     364.0   
  
         r_hat  
- rho      1.0  
- x0       1.0  
- x1       1.0  
- sigma    1.0  ,
-         mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  \
- lam    0.425  0.155   0.124    0.705      0.007    0.005     430.0     507.0   
- x0     1.443  0.218   1.102    1.900      0.010    0.016     456.0     287.0   
- x1     1.222  0.110   1.034    1.419      0.006    0.004     312.0     385.0   
- sigma  0.556  0.091   0.419    0.753      0.004    0.004     427.0     349.0   
- 
-        r_hat  
- lam     1.01  
+ rho     1.00  
  x0      1.00  
  x1      1.01  
- sigma   1.01  )
+ sigma   1.02  ,
+         mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  \
+ lam    0.450  0.146   0.167    0.702      0.007    0.006     382.0     341.0   
+ x0     1.416  0.219   0.995    1.791      0.015    0.018     235.0     169.0   
+ x1     1.215  0.098   1.040    1.422      0.005    0.005     377.0     293.0   
+ sigma  0.553  0.090   0.415    0.729      0.005    0.005     339.0     321.0   
+ 
+        r_hat  
+ lam     1.00  
+ x0      1.01  
+ x1      1.00  
+ sigma   1.00  )
 </code></pre></div>
 </div>
 </div>

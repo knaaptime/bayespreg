@@ -14,7 +14,7 @@
         <link rel="prev" href="cross_sectional_spreg_comparison.html">
       
       
-        <link rel="next" href="spatial_diagnostics_recovery.html">
+        <link rel="next" href="jgsy2024_replication_bayespecon.html">
       
       
       <link rel="icon" href="../_static/pysal_favicon.ico">
@@ -746,30 +746,6 @@
   
   
     <li class="md-nav__item">
-      <a href="spatial_diagnostics_recovery.html" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    <span>Spatial Diagnostics Recovery</span>
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="jgsy2024_replication_bayespecon.html" class="md-nav__link">
         
   
@@ -1299,8 +1275,10 @@
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-  from .autonotebook import tqdm as notebook_tqdm
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (1 chains in 1 job)
+NUTS: [lam, beta, sigma]
+Sampling 1 chain for 160 tune and 160 draw iterations (160 + 160 draws total) took 1 seconds.
 Only one chain was sampled, this makes it impossible to run some convergence checks
 arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape: (chains=2, draws=4)
 </code></pre></div>
@@ -1337,74 +1315,74 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
   <tbody>
     <tr>
       <th>x1</th>
-      <td>1.0018</td>
-      <td>0.0079</td>
-      <td>0.9868</td>
-      <td>1.0146</td>
-      <td>0.0006</td>
-      <td>0.0005</td>
-      <td>199.9201</td>
-      <td>181.1182</td>
+      <td>1.0012</td>
+      <td>0.0083</td>
+      <td>0.9887</td>
+      <td>1.0172</td>
+      <td>0.0007</td>
+      <td>0.0008</td>
+      <td>154.0511</td>
+      <td>135.6721</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x2</th>
-      <td>1.0134</td>
-      <td>0.0075</td>
-      <td>1.0015</td>
-      <td>1.0292</td>
-      <td>0.0009</td>
-      <td>0.0004</td>
-      <td>68.8115</td>
-      <td>45.5465</td>
+      <td>1.0128</td>
+      <td>0.0089</td>
+      <td>0.9969</td>
+      <td>1.0293</td>
+      <td>0.0008</td>
+      <td>0.0006</td>
+      <td>134.4166</td>
+      <td>138.4639</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x1</th>
-      <td>-0.9911</td>
-      <td>0.0236</td>
-      <td>-1.0324</td>
-      <td>-0.9373</td>
-      <td>0.0021</td>
-      <td>0.0024</td>
-      <td>133.1523</td>
-      <td>89.8917</td>
+      <td>-0.9934</td>
+      <td>0.0255</td>
+      <td>-1.0448</td>
+      <td>-0.9528</td>
+      <td>0.0023</td>
+      <td>0.0018</td>
+      <td>119.5630</td>
+      <td>70.4080</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x2</th>
-      <td>-0.9879</td>
-      <td>0.0258</td>
-      <td>-1.0287</td>
-      <td>-0.9362</td>
-      <td>0.0024</td>
-      <td>0.0025</td>
-      <td>124.9054</td>
-      <td>61.5722</td>
+      <td>-0.9889</td>
+      <td>0.0260</td>
+      <td>-1.0323</td>
+      <td>-0.9418</td>
+      <td>0.0027</td>
+      <td>0.0017</td>
+      <td>99.8179</td>
+      <td>91.9034</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>lam</th>
-      <td>0.6928</td>
-      <td>0.0171</td>
-      <td>0.6640</td>
-      <td>0.7201</td>
-      <td>0.0018</td>
-      <td>0.0014</td>
-      <td>94.5528</td>
-      <td>80.7584</td>
+      <td>0.6934</td>
+      <td>0.0170</td>
+      <td>0.6592</td>
+      <td>0.7219</td>
+      <td>0.0012</td>
+      <td>0.0017</td>
+      <td>198.6335</td>
+      <td>110.0793</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>sigma</th>
-      <td>0.3088</td>
-      <td>0.0051</td>
-      <td>0.3012</td>
-      <td>0.3193</td>
+      <td>0.3089</td>
+      <td>0.0045</td>
+      <td>0.3015</td>
+      <td>0.3163</td>
       <td>0.0004</td>
       <td>0.0003</td>
-      <td>189.1255</td>
-      <td>138.4639</td>
+      <td>107.5681</td>
+      <td>89.8917</td>
       <td>NaN</td>
     </tr>
   </tbody>
@@ -1460,45 +1438,45 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
       <th>0</th>
       <td>lam</td>
       <td>0.7</td>
-      <td>0.692826</td>
-      <td>0.007174</td>
-      <td>1.024865</td>
+      <td>0.693387</td>
+      <td>0.006613</td>
+      <td>0.944759</td>
       <td>True</td>
     </tr>
     <tr>
       <th>1</th>
       <td>x1</td>
       <td>1.0</td>
-      <td>1.001807</td>
-      <td>0.001807</td>
-      <td>0.180741</td>
+      <td>1.001211</td>
+      <td>0.001211</td>
+      <td>0.121115</td>
       <td>True</td>
     </tr>
     <tr>
       <th>2</th>
       <td>x2</td>
       <td>1.0</td>
-      <td>1.013353</td>
-      <td>0.013353</td>
-      <td>1.335317</td>
+      <td>1.012786</td>
+      <td>0.012786</td>
+      <td>1.278594</td>
       <td>True</td>
     </tr>
     <tr>
       <th>3</th>
       <td>W*x1</td>
       <td>-1.0</td>
-      <td>-0.991139</td>
-      <td>0.008861</td>
-      <td>0.886112</td>
+      <td>-0.993426</td>
+      <td>0.006574</td>
+      <td>0.657442</td>
       <td>True</td>
     </tr>
     <tr>
       <th>4</th>
       <td>W*x2</td>
       <td>-1.0</td>
-      <td>-0.987930</td>
-      <td>0.012070</td>
-      <td>1.207015</td>
+      <td>-0.988892</td>
+      <td>0.011108</td>
+      <td>1.110827</td>
       <td>True</td>
     </tr>
   </tbody>
@@ -1548,7 +1526,11 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Only one chain was sampled, this makes it impossible to run some convergence checks
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (1 chains in 1 job)
+NUTS: [rho, beta, sigma]
+Sampling 1 chain for 160 tune and 160 draw iterations (160 + 160 draws total) took 1 seconds.
+Only one chain was sampled, this makes it impossible to run some convergence checks
 arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape: (chains=2, draws=4)
 </code></pre></div>
 </div>
@@ -1584,86 +1566,86 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
   <tbody>
     <tr>
       <th>Intercept</th>
-      <td>2.0689</td>
-      <td>0.1324</td>
-      <td>1.8508</td>
-      <td>2.2992</td>
-      <td>0.0318</td>
-      <td>0.0097</td>
-      <td>15.1938</td>
-      <td>105.2508</td>
+      <td>2.0895</td>
+      <td>0.1604</td>
+      <td>1.8084</td>
+      <td>2.3819</td>
+      <td>0.0184</td>
+      <td>0.0111</td>
+      <td>76.1709</td>
+      <td>69.7704</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x1</th>
-      <td>0.9900</td>
+      <td>0.9909</td>
       <td>0.0223</td>
-      <td>0.9511</td>
-      <td>1.0312</td>
-      <td>0.0014</td>
-      <td>0.0015</td>
-      <td>252.4034</td>
-      <td>137.2956</td>
+      <td>0.9495</td>
+      <td>1.0274</td>
+      <td>0.0025</td>
+      <td>0.0012</td>
+      <td>78.6532</td>
+      <td>114.3114</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x2</th>
-      <td>0.9865</td>
-      <td>0.0226</td>
-      <td>0.9490</td>
-      <td>1.0305</td>
-      <td>0.0018</td>
-      <td>0.0017</td>
-      <td>167.3978</td>
-      <td>136.1683</td>
+      <td>0.9904</td>
+      <td>0.0218</td>
+      <td>0.9427</td>
+      <td>1.0228</td>
+      <td>0.0024</td>
+      <td>0.0014</td>
+      <td>83.3803</td>
+      <td>133.7529</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x1</th>
-      <td>-0.5283</td>
-      <td>0.0599</td>
-      <td>-0.6336</td>
-      <td>-0.4316</td>
-      <td>0.0072</td>
-      <td>0.0056</td>
-      <td>65.9411</td>
-      <td>101.2897</td>
+      <td>-0.5214</td>
+      <td>0.0725</td>
+      <td>-0.6267</td>
+      <td>-0.3649</td>
+      <td>0.0086</td>
+      <td>0.0052</td>
+      <td>71.4726</td>
+      <td>82.6740</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x2</th>
-      <td>-0.4600</td>
-      <td>0.0696</td>
-      <td>-0.5768</td>
-      <td>-0.3404</td>
-      <td>0.0113</td>
-      <td>0.0053</td>
-      <td>38.5002</td>
-      <td>48.0878</td>
+      <td>-0.4491</td>
+      <td>0.0642</td>
+      <td>-0.5878</td>
+      <td>-0.3461</td>
+      <td>0.0078</td>
+      <td>0.0043</td>
+      <td>73.7442</td>
+      <td>42.5167</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>rho</th>
-      <td>0.4885</td>
-      <td>0.0330</td>
-      <td>0.4336</td>
-      <td>0.5463</td>
-      <td>0.0088</td>
-      <td>0.0024</td>
-      <td>13.3856</td>
-      <td>105.2508</td>
+      <td>0.4836</td>
+      <td>0.0396</td>
+      <td>0.4218</td>
+      <td>0.5583</td>
+      <td>0.0045</td>
+      <td>0.0027</td>
+      <td>77.7034</td>
+      <td>80.1964</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>sigma</th>
-      <td>0.7012</td>
-      <td>0.0160</td>
-      <td>0.6718</td>
-      <td>0.7285</td>
+      <td>0.7014</td>
+      <td>0.0145</td>
+      <td>0.6739</td>
+      <td>0.7266</td>
+      <td>0.0012</td>
       <td>0.0010</td>
-      <td>0.0011</td>
-      <td>264.3643</td>
-      <td>113.6371</td>
+      <td>148.0342</td>
+      <td>81.7051</td>
       <td>NaN</td>
     </tr>
   </tbody>
@@ -1736,54 +1718,54 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
       <th>0</th>
       <td>rho</td>
       <td>0.5</td>
-      <td>0.488548</td>
-      <td>0.011452</td>
-      <td>2.290330</td>
+      <td>0.483582</td>
+      <td>0.016418</td>
+      <td>3.283523</td>
       <td>True</td>
     </tr>
     <tr>
       <th>1</th>
       <td>Intercept</td>
       <td>2.0</td>
-      <td>2.068882</td>
-      <td>0.068882</td>
-      <td>3.444122</td>
+      <td>2.089455</td>
+      <td>0.089455</td>
+      <td>4.472738</td>
       <td>True</td>
     </tr>
     <tr>
       <th>2</th>
       <td>x1</td>
       <td>1.0</td>
-      <td>0.989973</td>
-      <td>0.010027</td>
-      <td>1.002660</td>
+      <td>0.990925</td>
+      <td>0.009075</td>
+      <td>0.907520</td>
       <td>True</td>
     </tr>
     <tr>
       <th>3</th>
       <td>x2</td>
       <td>1.0</td>
-      <td>0.986460</td>
-      <td>0.013540</td>
-      <td>1.353984</td>
+      <td>0.990423</td>
+      <td>0.009577</td>
+      <td>0.957704</td>
       <td>True</td>
     </tr>
     <tr>
       <th>4</th>
       <td>W*x1</td>
       <td>-0.5</td>
-      <td>-0.528285</td>
-      <td>0.028285</td>
-      <td>5.657031</td>
+      <td>-0.521430</td>
+      <td>0.021430</td>
+      <td>4.285993</td>
       <td>True</td>
     </tr>
     <tr>
       <th>5</th>
       <td>W*x2</td>
       <td>-0.5</td>
-      <td>-0.460045</td>
-      <td>0.039955</td>
-      <td>7.991032</td>
+      <td>-0.449054</td>
+      <td>0.050946</td>
+      <td>10.189174</td>
       <td>True</td>
     </tr>
   </tbody>
@@ -1837,7 +1819,11 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Only one chain was sampled, this makes it impossible to run some convergence checks
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (1 chains in 1 job)
+NUTS: [lam, beta, sigma]
+Sampling 1 chain for 160 tune and 160 draw iterations (160 + 160 draws total) took 1 seconds.
+Only one chain was sampled, this makes it impossible to run some convergence checks
 arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape: (chains=2, draws=4)
 </code></pre></div>
 </div>
@@ -1873,134 +1859,134 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
   <tbody>
     <tr>
       <th>Intercept</th>
-      <td>0.8847</td>
-      <td>0.0965</td>
-      <td>0.6992</td>
-      <td>1.0592</td>
-      <td>0.0086</td>
-      <td>0.0070</td>
-      <td>121.2528</td>
-      <td>114.7430</td>
+      <td>0.8825</td>
+      <td>0.1032</td>
+      <td>0.7220</td>
+      <td>1.1005</td>
+      <td>0.0074</td>
+      <td>0.0091</td>
+      <td>202.0411</td>
+      <td>103.9191</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x1</th>
-      <td>1.0465</td>
-      <td>0.0217</td>
-      <td>1.0136</td>
-      <td>1.0905</td>
-      <td>0.0018</td>
-      <td>0.0014</td>
-      <td>141.2548</td>
-      <td>113.5137</td>
+      <td>1.0481</td>
+      <td>0.0238</td>
+      <td>1.0047</td>
+      <td>1.0911</td>
+      <td>0.0019</td>
+      <td>0.0015</td>
+      <td>158.7727</td>
+      <td>123.1338</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x2</th>
-      <td>0.9717</td>
-      <td>0.0218</td>
-      <td>0.9394</td>
-      <td>1.0204</td>
-      <td>0.0022</td>
-      <td>0.0013</td>
-      <td>103.0095</td>
-      <td>125.4469</td>
+      <td>0.9737</td>
+      <td>0.0231</td>
+      <td>0.9387</td>
+      <td>1.0248</td>
+      <td>0.0018</td>
+      <td>0.0015</td>
+      <td>153.2695</td>
+      <td>140.6729</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x3</th>
-      <td>1.0194</td>
-      <td>0.0221</td>
-      <td>0.9827</td>
-      <td>1.0586</td>
-      <td>0.0020</td>
-      <td>0.0013</td>
-      <td>121.6698</td>
-      <td>115.1212</td>
+      <td>1.0189</td>
+      <td>0.0191</td>
+      <td>0.9822</td>
+      <td>1.0483</td>
+      <td>0.0019</td>
+      <td>0.0010</td>
+      <td>107.1056</td>
+      <td>139.6531</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x4</th>
-      <td>1.0268</td>
-      <td>0.0211</td>
-      <td>0.9885</td>
-      <td>1.0649</td>
-      <td>0.0017</td>
-      <td>0.0015</td>
-      <td>166.3260</td>
-      <td>68.2140</td>
+      <td>1.0260</td>
+      <td>0.0218</td>
+      <td>0.9872</td>
+      <td>1.0608</td>
+      <td>0.0022</td>
+      <td>0.0016</td>
+      <td>103.7006</td>
+      <td>95.7920</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x1</th>
-      <td>0.5489</td>
-      <td>0.0617</td>
-      <td>0.4254</td>
-      <td>0.6543</td>
-      <td>0.0051</td>
-      <td>0.0044</td>
-      <td>148.3566</td>
-      <td>138.4639</td>
+      <td>0.5570</td>
+      <td>0.0613</td>
+      <td>0.4483</td>
+      <td>0.6681</td>
+      <td>0.0050</td>
+      <td>0.0039</td>
+      <td>188.2920</td>
+      <td>175.2638</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x2</th>
-      <td>0.4802</td>
-      <td>0.0722</td>
-      <td>0.3423</td>
-      <td>0.6012</td>
-      <td>0.0081</td>
-      <td>0.0071</td>
-      <td>85.1576</td>
-      <td>92.8855</td>
+      <td>0.4742</td>
+      <td>0.0700</td>
+      <td>0.3346</td>
+      <td>0.5738</td>
+      <td>0.0061</td>
+      <td>0.0049</td>
+      <td>135.1161</td>
+      <td>138.7687</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x3</th>
-      <td>0.6164</td>
-      <td>0.0617</td>
-      <td>0.5176</td>
-      <td>0.7486</td>
-      <td>0.0068</td>
-      <td>0.0048</td>
-      <td>88.1698</td>
-      <td>77.8717</td>
+      <td>0.6098</td>
+      <td>0.0646</td>
+      <td>0.5094</td>
+      <td>0.7484</td>
+      <td>0.0054</td>
+      <td>0.0042</td>
+      <td>142.0523</td>
+      <td>140.6729</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>W*x4</th>
-      <td>0.6414</td>
-      <td>0.0582</td>
-      <td>0.5507</td>
-      <td>0.7689</td>
-      <td>0.0052</td>
-      <td>0.0036</td>
-      <td>134.7903</td>
-      <td>163.0626</td>
+      <td>0.6317</td>
+      <td>0.0659</td>
+      <td>0.5142</td>
+      <td>0.7428</td>
+      <td>0.0065</td>
+      <td>0.0043</td>
+      <td>107.4254</td>
+      <td>92.2475</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>lam</th>
-      <td>0.8148</td>
-      <td>0.0084</td>
-      <td>0.7973</td>
-      <td>0.8282</td>
+      <td>0.8147</td>
+      <td>0.0100</td>
+      <td>0.7944</td>
+      <td>0.8331</td>
       <td>0.0007</td>
-      <td>0.0005</td>
-      <td>154.0845</td>
-      <td>135.0205</td>
+      <td>0.0011</td>
+      <td>210.8133</td>
+      <td>95.6355</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>sigma</th>
-      <td>1.0019</td>
-      <td>0.0146</td>
-      <td>0.9726</td>
-      <td>1.0231</td>
-      <td>0.0010</td>
-      <td>0.0014</td>
-      <td>195.5547</td>
-      <td>81.2036</td>
+      <td>1.0029</td>
+      <td>0.0118</td>
+      <td>0.9809</td>
+      <td>1.0264</td>
+      <td>0.0011</td>
+      <td>0.0011</td>
+      <td>117.0226</td>
+      <td>114.3114</td>
       <td>NaN</td>
     </tr>
   </tbody>
@@ -2064,90 +2050,90 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
       <th>0</th>
       <td>lam</td>
       <td>0.8</td>
-      <td>0.814840</td>
-      <td>0.014840</td>
-      <td>1.854955</td>
+      <td>0.814673</td>
+      <td>0.014673</td>
+      <td>1.834086</td>
       <td>True</td>
     </tr>
     <tr>
       <th>1</th>
       <td>Intercept</td>
       <td>1.0</td>
-      <td>0.884665</td>
-      <td>0.115335</td>
-      <td>11.533513</td>
+      <td>0.882506</td>
+      <td>0.117494</td>
+      <td>11.749364</td>
       <td>True</td>
     </tr>
     <tr>
       <th>2</th>
       <td>x1</td>
       <td>1.0</td>
-      <td>1.046546</td>
-      <td>0.046546</td>
-      <td>4.654573</td>
+      <td>1.048149</td>
+      <td>0.048149</td>
+      <td>4.814949</td>
       <td>True</td>
     </tr>
     <tr>
       <th>3</th>
       <td>x2</td>
       <td>1.0</td>
-      <td>0.971729</td>
-      <td>0.028271</td>
-      <td>2.827146</td>
+      <td>0.973665</td>
+      <td>0.026335</td>
+      <td>2.633489</td>
       <td>True</td>
     </tr>
     <tr>
       <th>4</th>
       <td>x3</td>
       <td>1.0</td>
-      <td>1.019426</td>
-      <td>0.019426</td>
-      <td>1.942581</td>
+      <td>1.018902</td>
+      <td>0.018902</td>
+      <td>1.890174</td>
       <td>True</td>
     </tr>
     <tr>
       <th>5</th>
       <td>x4</td>
       <td>1.0</td>
-      <td>1.026780</td>
-      <td>0.026780</td>
-      <td>2.677953</td>
+      <td>1.026049</td>
+      <td>0.026049</td>
+      <td>2.604886</td>
       <td>True</td>
     </tr>
     <tr>
       <th>6</th>
       <td>W*x1</td>
       <td>0.5</td>
-      <td>0.548936</td>
-      <td>0.048936</td>
-      <td>9.787242</td>
+      <td>0.557048</td>
+      <td>0.057048</td>
+      <td>11.409560</td>
       <td>True</td>
     </tr>
     <tr>
       <th>7</th>
       <td>W*x2</td>
       <td>0.5</td>
-      <td>0.480163</td>
-      <td>0.019837</td>
-      <td>3.967359</td>
+      <td>0.474210</td>
+      <td>0.025790</td>
+      <td>5.157997</td>
       <td>True</td>
     </tr>
     <tr>
       <th>8</th>
       <td>W*x3</td>
       <td>0.5</td>
-      <td>0.616351</td>
-      <td>0.116351</td>
-      <td>23.270221</td>
+      <td>0.609806</td>
+      <td>0.109806</td>
+      <td>21.961218</td>
       <td>True</td>
     </tr>
     <tr>
       <th>9</th>
       <td>W*x4</td>
       <td>0.5</td>
-      <td>0.641448</td>
-      <td>0.141448</td>
-      <td>28.289522</td>
+      <td>0.631671</td>
+      <td>0.131671</td>
+      <td>26.334224</td>
       <td>True</td>
     </tr>
   </tbody>
@@ -2221,7 +2207,10 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 160), minimum_shape:
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>There were 14 divergences after tuning. Increase `target_accept` or reparameterize.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (1 chains in 1 job)
+NUTS: [rho, beta, sigma_a, a_raw]
+Sampling 1 chain for 220 tune and 220 draw iterations (220 + 220 draws total) took 6 seconds.
 Only one chain was sampled, this makes it impossible to run some convergence checks
 arviz - WARNING - Shape validation failed: input_shape: (1, 220), minimum_shape: (chains=2, draws=4)
 </code></pre></div>
@@ -2258,74 +2247,74 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 220), minimum_shape:
   <tbody>
     <tr>
       <th>Intercept</th>
-      <td>0.9759</td>
-      <td>0.3651</td>
-      <td>0.2115</td>
-      <td>1.6432</td>
-      <td>0.0777</td>
-      <td>0.0620</td>
-      <td>27.4879</td>
-      <td>26.8354</td>
+      <td>0.9025</td>
+      <td>0.3523</td>
+      <td>0.3351</td>
+      <td>1.5192</td>
+      <td>0.1708</td>
+      <td>0.0349</td>
+      <td>4.4307</td>
+      <td>59.3780</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x1</th>
-      <td>0.8663</td>
-      <td>0.0509</td>
-      <td>0.7753</td>
-      <td>0.9508</td>
-      <td>0.0032</td>
-      <td>0.0034</td>
-      <td>237.1229</td>
-      <td>162.6025</td>
+      <td>0.8703</td>
+      <td>0.0445</td>
+      <td>0.7946</td>
+      <td>0.9623</td>
+      <td>0.0035</td>
+      <td>0.0026</td>
+      <td>160.7860</td>
+      <td>168.2302</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x2</th>
-      <td>-0.6216</td>
-      <td>0.0399</td>
-      <td>-0.6930</td>
-      <td>-0.5588</td>
-      <td>0.0029</td>
+      <td>-0.6279</td>
+      <td>0.0380</td>
+      <td>-0.6852</td>
+      <td>-0.5528</td>
       <td>0.0026</td>
-      <td>196.3479</td>
-      <td>119.9803</td>
+      <td>0.0020</td>
+      <td>211.4049</td>
+      <td>156.9384</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>x3</th>
-      <td>0.5329</td>
-      <td>0.0348</td>
-      <td>0.4688</td>
-      <td>0.6014</td>
-      <td>0.0035</td>
-      <td>0.0022</td>
-      <td>109.1698</td>
-      <td>92.9212</td>
+      <td>0.5320</td>
+      <td>0.0411</td>
+      <td>0.4555</td>
+      <td>0.6071</td>
+      <td>0.0030</td>
+      <td>0.0031</td>
+      <td>196.2861</td>
+      <td>122.7730</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>rho</th>
-      <td>0.4453</td>
-      <td>0.1586</td>
-      <td>0.1693</td>
-      <td>0.7153</td>
-      <td>0.0240</td>
-      <td>0.0096</td>
-      <td>45.9345</td>
-      <td>145.7426</td>
+      <td>0.3801</td>
+      <td>0.1940</td>
+      <td>0.0729</td>
+      <td>0.7363</td>
+      <td>0.0335</td>
+      <td>0.0160</td>
+      <td>32.3092</td>
+      <td>86.5355</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>sigma_a</th>
-      <td>1.3245</td>
-      <td>0.1368</td>
-      <td>1.0770</td>
-      <td>1.5509</td>
-      <td>0.0191</td>
-      <td>0.0099</td>
-      <td>52.9780</td>
-      <td>92.2683</td>
+      <td>1.3408</td>
+      <td>0.1472</td>
+      <td>1.0916</td>
+      <td>1.5938</td>
+      <td>0.0234</td>
+      <td>0.0082</td>
+      <td>39.9044</td>
+      <td>103.3733</td>
       <td>NaN</td>
     </tr>
   </tbody>
@@ -2356,7 +2345,7 @@ arviz - WARNING - Shape validation failed: input_shape: (1, 220), minimum_shape:
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Regional-effects RMSE: 0.6170
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Regional-effects RMSE: 0.5538
 SpatialProbit semip-style pass rate: 0.8
 </code></pre></div>
 </div>
@@ -2391,45 +2380,45 @@ SpatialProbit semip-style pass rate: 0.8
       <th>0</th>
       <td>rho</td>
       <td>0.45</td>
-      <td>0.445266</td>
-      <td>0.004734</td>
-      <td>1.052045</td>
+      <td>0.380101</td>
+      <td>0.069899</td>
+      <td>15.533042</td>
       <td>True</td>
     </tr>
     <tr>
       <th>1</th>
       <td>Intercept</td>
       <td>0.40</td>
-      <td>0.975936</td>
-      <td>0.575936</td>
-      <td>143.984080</td>
+      <td>0.902493</td>
+      <td>0.502493</td>
+      <td>125.623332</td>
       <td>False</td>
     </tr>
     <tr>
       <th>2</th>
       <td>x1</td>
       <td>0.80</td>
-      <td>0.866259</td>
-      <td>0.066259</td>
-      <td>8.282399</td>
+      <td>0.870256</td>
+      <td>0.070256</td>
+      <td>8.782017</td>
       <td>True</td>
     </tr>
     <tr>
       <th>3</th>
       <td>x2</td>
       <td>-0.60</td>
-      <td>-0.621601</td>
-      <td>0.021601</td>
-      <td>3.600207</td>
+      <td>-0.627864</td>
+      <td>0.027864</td>
+      <td>4.643953</td>
       <td>True</td>
     </tr>
     <tr>
       <th>4</th>
       <td>x3</td>
       <td>0.50</td>
-      <td>0.532915</td>
-      <td>0.032915</td>
-      <td>6.583087</td>
+      <td>0.532009</td>
+      <td>0.032009</td>
+      <td>6.401809</td>
       <td>True</td>
     </tr>
   </tbody>

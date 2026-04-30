@@ -11,7 +11,7 @@
       
       
       
-        <link rel="prev" href="spatial_diagnostics_recovery.html">
+        <link rel="prev" href="faithfulness_bayespecon.html">
       
       
         <link rel="next" href="logdet_profiling.html">
@@ -629,30 +629,6 @@
   
   <span class="md-ellipsis">
     <span>Recovering Parameters</span>
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="spatial_diagnostics_recovery.html" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    <span>Spatial Diagnostics Recovery</span>
     
   </span>
   
@@ -1341,9 +1317,15 @@ W_ed row sums: 0.999999999999998 1.0000000000000016
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Fit complete for both specifications.
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-  from .autonotebook import tqdm as notebook_tqdm
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (1 chains in 1 job)
+NUTS: [rho, beta, sigma]
+Sampling 1 chain for 600 tune and 600 draw iterations (600 + 600 draws total) took 2 seconds.
 Only one chain was sampled, this makes it impossible to run some convergence checks
+Initializing NUTS using jitter+adapt_diag...
+Sequential sampling (1 chains in 1 job)
+NUTS: [rho, beta, sigma]
+Sampling 1 chain for 600 tune and 600 draw iterations (600 + 600 draws total) took 2 seconds.
 Only one chain was sampled, this makes it impossible to run some convergence checks
 </code></pre></div>
 </div>
@@ -1501,74 +1483,74 @@ Effects comparison: ED
     <tr>
       <th>inv</th>
       <td>0.002422</td>
-      <td>0.002458</td>
-      <td>0.000036</td>
-      <td>0.000036</td>
-      <td>1.494879</td>
+      <td>0.002401</td>
+      <td>-0.000021</td>
+      <td>0.000021</td>
+      <td>0.871485</td>
     </tr>
     <tr>
       <th>pop</th>
       <td>-0.008074</td>
-      <td>-0.008063</td>
-      <td>0.000011</td>
-      <td>0.000011</td>
-      <td>0.140519</td>
+      <td>-0.008100</td>
+      <td>-0.000026</td>
+      <td>0.000026</td>
+      <td>0.326475</td>
     </tr>
     <tr>
       <th>initial_gdp</th>
       <td>-0.093832</td>
-      <td>-0.093959</td>
-      <td>-0.000127</td>
-      <td>0.000127</td>
-      <td>0.134962</td>
+      <td>-0.093623</td>
+      <td>0.000209</td>
+      <td>0.000209</td>
+      <td>0.222785</td>
     </tr>
     <tr>
       <th>lagged_growth</th>
       <td>0.013879</td>
-      <td>0.013277</td>
-      <td>-0.000602</td>
-      <td>0.000602</td>
-      <td>4.337659</td>
+      <td>0.014822</td>
+      <td>0.000943</td>
+      <td>0.000943</td>
+      <td>6.797672</td>
     </tr>
     <tr>
       <th>W*inv</th>
       <td>0.008933</td>
-      <td>0.008876</td>
-      <td>-0.000057</td>
-      <td>0.000057</td>
-      <td>0.639954</td>
+      <td>0.009203</td>
+      <td>0.000270</td>
+      <td>0.000270</td>
+      <td>3.021487</td>
     </tr>
     <tr>
       <th>W*pop</th>
       <td>-0.002317</td>
-      <td>-0.002336</td>
-      <td>-0.000019</td>
-      <td>0.000019</td>
-      <td>0.806865</td>
+      <td>-0.002227</td>
+      <td>0.000090</td>
+      <td>0.000090</td>
+      <td>3.892028</td>
     </tr>
     <tr>
       <th>W*initial_gdp</th>
       <td>0.065751</td>
-      <td>0.065889</td>
-      <td>0.000138</td>
-      <td>0.000138</td>
-      <td>0.210251</td>
+      <td>0.065425</td>
+      <td>-0.000326</td>
+      <td>0.000326</td>
+      <td>0.496474</td>
     </tr>
     <tr>
       <th>W*lagged_growth</th>
       <td>0.191021</td>
-      <td>0.193396</td>
-      <td>0.002375</td>
-      <td>0.002375</td>
-      <td>1.243160</td>
+      <td>0.189651</td>
+      <td>-0.001370</td>
+      <td>0.001370</td>
+      <td>0.717257</td>
     </tr>
     <tr>
       <th>rho</th>
       <td>0.534381</td>
-      <td>0.531982</td>
-      <td>-0.002399</td>
-      <td>0.002399</td>
-      <td>0.448869</td>
+      <td>0.533089</td>
+      <td>-0.001292</td>
+      <td>0.001292</td>
+      <td>0.241778</td>
     </tr>
   </tbody>
 </table>
@@ -1601,74 +1583,74 @@ Effects comparison: ED
     <tr>
       <th>inv</th>
       <td>0.001616</td>
-      <td>0.001602</td>
-      <td>-0.000014</td>
-      <td>0.000014</td>
-      <td>0.882744</td>
+      <td>0.001563</td>
+      <td>-0.000053</td>
+      <td>0.000053</td>
+      <td>3.279578</td>
     </tr>
     <tr>
       <th>pop</th>
       <td>-0.007904</td>
-      <td>-0.007876</td>
-      <td>0.000028</td>
-      <td>0.000028</td>
-      <td>0.351829</td>
+      <td>-0.007963</td>
+      <td>-0.000059</td>
+      <td>0.000059</td>
+      <td>0.747733</td>
     </tr>
     <tr>
       <th>initial_gdp</th>
       <td>-0.088731</td>
-      <td>-0.088905</td>
-      <td>-0.000174</td>
-      <td>0.000174</td>
-      <td>0.196650</td>
+      <td>-0.088650</td>
+      <td>0.000081</td>
+      <td>0.000081</td>
+      <td>0.091122</td>
     </tr>
     <tr>
       <th>lagged_growth</th>
       <td>0.011519</td>
-      <td>0.010895</td>
-      <td>-0.000624</td>
-      <td>0.000624</td>
-      <td>5.417865</td>
+      <td>0.010933</td>
+      <td>-0.000586</td>
+      <td>0.000586</td>
+      <td>5.087972</td>
     </tr>
     <tr>
       <th>W*inv</th>
       <td>0.009081</td>
-      <td>0.009026</td>
-      <td>-0.000055</td>
-      <td>0.000055</td>
-      <td>0.601880</td>
+      <td>0.009061</td>
+      <td>-0.000020</td>
+      <td>0.000020</td>
+      <td>0.216536</td>
     </tr>
     <tr>
       <th>W*pop</th>
       <td>-0.004958</td>
-      <td>-0.004935</td>
-      <td>0.000023</td>
-      <td>0.000023</td>
-      <td>0.470356</td>
+      <td>-0.004751</td>
+      <td>0.000207</td>
+      <td>0.000207</td>
+      <td>4.169315</td>
     </tr>
     <tr>
       <th>W*initial_gdp</th>
       <td>0.070415</td>
-      <td>0.070505</td>
-      <td>0.000090</td>
-      <td>0.000090</td>
-      <td>0.128334</td>
+      <td>0.070092</td>
+      <td>-0.000323</td>
+      <td>0.000323</td>
+      <td>0.458834</td>
     </tr>
     <tr>
       <th>W*lagged_growth</th>
       <td>0.194065</td>
-      <td>0.195831</td>
-      <td>0.001766</td>
-      <td>0.001766</td>
-      <td>0.909999</td>
+      <td>0.194667</td>
+      <td>0.000602</td>
+      <td>0.000602</td>
+      <td>0.310172</td>
     </tr>
     <tr>
       <th>rho</th>
       <td>0.650187</td>
-      <td>0.648969</td>
-      <td>-0.001218</td>
-      <td>0.001218</td>
-      <td>0.187284</td>
+      <td>0.649596</td>
+      <td>-0.000591</td>
+      <td>0.000591</td>
+      <td>0.090829</td>
     </tr>
   </tbody>
 </table>
@@ -1712,15 +1694,15 @@ Effects comparison: ED
       <td>0.003500</td>
       <td>0.021200</td>
       <td>0.024700</td>
-      <td>0.003547</td>
-      <td>0.020684</td>
-      <td>0.024231</td>
-      <td>0.000047</td>
-      <td>0.000047</td>
-      <td>-0.000516</td>
-      <td>0.000516</td>
-      <td>-0.000469</td>
-      <td>0.000469</td>
+      <td>0.003524</td>
+      <td>0.021325</td>
+      <td>0.024849</td>
+      <td>0.000024</td>
+      <td>0.000024</td>
+      <td>0.000125</td>
+      <td>0.000125</td>
+      <td>0.000149</td>
+      <td>0.000149</td>
     </tr>
     <tr>
       <th>1</th>
@@ -1728,15 +1710,15 @@ Effects comparison: ED
       <td>-0.008800</td>
       <td>-0.013500</td>
       <td>-0.022300</td>
-      <td>-0.008770</td>
-      <td>-0.013446</td>
-      <td>-0.022216</td>
-      <td>0.000030</td>
-      <td>0.000030</td>
-      <td>0.000054</td>
-      <td>0.000054</td>
-      <td>0.000084</td>
-      <td>0.000084</td>
+      <td>-0.008802</td>
+      <td>-0.013325</td>
+      <td>-0.022127</td>
+      <td>-0.000002</td>
+      <td>0.000002</td>
+      <td>0.000175</td>
+      <td>0.000175</td>
+      <td>0.000173</td>
+      <td>0.000173</td>
     </tr>
     <tr>
       <th>2</th>
@@ -1744,15 +1726,15 @@ Effects comparison: ED
       <td>-0.092100</td>
       <td>0.032200</td>
       <td>-0.059900</td>
-      <td>-0.092264</td>
-      <td>0.032248</td>
-      <td>-0.060016</td>
-      <td>-0.000164</td>
-      <td>0.000164</td>
-      <td>0.000048</td>
-      <td>0.000048</td>
-      <td>-0.000116</td>
-      <td>0.000116</td>
+      <td>-0.091961</td>
+      <td>0.031560</td>
+      <td>-0.060401</td>
+      <td>0.000139</td>
+      <td>0.000139</td>
+      <td>-0.000640</td>
+      <td>0.000640</td>
+      <td>-0.000501</td>
+      <td>0.000501</td>
     </tr>
     <tr>
       <th>3</th>
@@ -1760,15 +1742,15 @@ Effects comparison: ED
       <td>0.035100</td>
       <td>0.402900</td>
       <td>0.438000</td>
-      <td>0.034676</td>
-      <td>0.406861</td>
-      <td>0.441536</td>
-      <td>-0.000424</td>
-      <td>0.000424</td>
-      <td>0.003961</td>
-      <td>0.003961</td>
-      <td>0.003536</td>
-      <td>0.003536</td>
+      <td>0.035994</td>
+      <td>0.401985</td>
+      <td>0.437979</td>
+      <td>0.000894</td>
+      <td>0.000894</td>
+      <td>-0.000915</td>
+      <td>0.000915</td>
+      <td>-0.000021</td>
+      <td>0.000021</td>
     </tr>
   </tbody>
 </table>
@@ -1812,15 +1794,15 @@ Effects comparison: ED
       <td>0.002600</td>
       <td>0.028100</td>
       <td>0.030700</td>
-      <td>0.002514</td>
-      <td>0.027836</td>
-      <td>0.030350</td>
-      <td>-0.000086</td>
-      <td>0.000086</td>
-      <td>-0.000264</td>
-      <td>0.000264</td>
-      <td>-0.000350</td>
-      <td>0.000350</td>
+      <td>0.002476</td>
+      <td>0.027849</td>
+      <td>0.030325</td>
+      <td>-0.000124</td>
+      <td>0.000124</td>
+      <td>-0.000251</td>
+      <td>0.000251</td>
+      <td>-0.000375</td>
+      <td>0.000375</td>
     </tr>
     <tr>
       <th>1</th>
@@ -1828,15 +1810,15 @@ Effects comparison: ED
       <td>-0.008900</td>
       <td>-0.028200</td>
       <td>-0.037100</td>
-      <td>-0.008786</td>
-      <td>-0.027761</td>
-      <td>-0.036547</td>
-      <td>0.000114</td>
-      <td>0.000114</td>
-      <td>0.000439</td>
-      <td>0.000439</td>
-      <td>0.000553</td>
-      <td>0.000553</td>
+      <td>-0.008863</td>
+      <td>-0.027443</td>
+      <td>-0.036305</td>
+      <td>0.000037</td>
+      <td>0.000037</td>
+      <td>0.000757</td>
+      <td>0.000757</td>
+      <td>0.000795</td>
+      <td>0.000795</td>
     </tr>
     <tr>
       <th>2</th>
@@ -1844,15 +1826,15 @@ Effects comparison: ED
       <td>-0.087600</td>
       <td>0.035200</td>
       <td>-0.052300</td>
-      <td>-0.087749</td>
-      <td>0.035300</td>
-      <td>-0.052449</td>
-      <td>-0.000149</td>
-      <td>0.000149</td>
-      <td>0.000100</td>
-      <td>0.000100</td>
-      <td>-0.000149</td>
-      <td>0.000149</td>
+      <td>-0.087519</td>
+      <td>0.034515</td>
+      <td>-0.053004</td>
+      <td>0.000081</td>
+      <td>0.000081</td>
+      <td>-0.000685</td>
+      <td>0.000685</td>
+      <td>-0.000704</td>
+      <td>0.000704</td>
     </tr>
     <tr>
       <th>3</th>
@@ -1860,15 +1842,15 @@ Effects comparison: ED
       <td>0.029100</td>
       <td>0.556600</td>
       <td>0.585700</td>
-      <td>0.029246</td>
-      <td>0.560108</td>
-      <td>0.589354</td>
-      <td>0.000146</td>
-      <td>0.000146</td>
-      <td>0.003508</td>
-      <td>0.003508</td>
-      <td>0.003654</td>
-      <td>0.003654</td>
+      <td>0.029223</td>
+      <td>0.557976</td>
+      <td>0.587199</td>
+      <td>0.000123</td>
+      <td>0.000123</td>
+      <td>0.001376</td>
+      <td>0.001376</td>
+      <td>0.001499</td>
+      <td>0.001499</td>
     </tr>
   </tbody>
 </table>
@@ -1939,20 +1921,20 @@ Effects comparison: ED
     <tr>
       <th>0</th>
       <td>Table 1 col[1] 6NN</td>
-      <td>0.000640</td>
-      <td>0.639954</td>
-      <td>0.000166</td>
-      <td>0.001144</td>
-      <td>0.001051</td>
+      <td>0.000505</td>
+      <td>0.717257</td>
+      <td>0.000265</td>
+      <td>0.000464</td>
+      <td>0.000211</td>
     </tr>
     <tr>
       <th>1</th>
       <td>Table 1 col[2] ED</td>
-      <td>0.000444</td>
-      <td>0.470356</td>
-      <td>0.000124</td>
-      <td>0.001078</td>
-      <td>0.001177</td>
+      <td>0.000280</td>
+      <td>0.458834</td>
+      <td>0.000091</td>
+      <td>0.000767</td>
+      <td>0.000843</td>
     </tr>
   </tbody>
 </table>
@@ -1987,44 +1969,44 @@ Top absolute coefficient gaps (ED):
   </thead>
   <tbody>
     <tr>
-      <th>rho</th>
-      <td>0.534381</td>
-      <td>0.531982</td>
-      <td>-0.002399</td>
-      <td>0.002399</td>
-      <td>0.448869</td>
-    </tr>
-    <tr>
       <th>W*lagged_growth</th>
       <td>0.191021</td>
-      <td>0.193396</td>
-      <td>0.002375</td>
-      <td>0.002375</td>
-      <td>1.243160</td>
+      <td>0.189651</td>
+      <td>-0.001370</td>
+      <td>0.001370</td>
+      <td>0.717257</td>
+    </tr>
+    <tr>
+      <th>rho</th>
+      <td>0.534381</td>
+      <td>0.533089</td>
+      <td>-0.001292</td>
+      <td>0.001292</td>
+      <td>0.241778</td>
     </tr>
     <tr>
       <th>lagged_growth</th>
       <td>0.013879</td>
-      <td>0.013277</td>
-      <td>-0.000602</td>
-      <td>0.000602</td>
-      <td>4.337659</td>
+      <td>0.014822</td>
+      <td>0.000943</td>
+      <td>0.000943</td>
+      <td>6.797672</td>
     </tr>
     <tr>
       <th>W*initial_gdp</th>
       <td>0.065751</td>
-      <td>0.065889</td>
-      <td>0.000138</td>
-      <td>0.000138</td>
-      <td>0.210251</td>
+      <td>0.065425</td>
+      <td>-0.000326</td>
+      <td>0.000326</td>
+      <td>0.496474</td>
     </tr>
     <tr>
-      <th>initial_gdp</th>
-      <td>-0.093832</td>
-      <td>-0.093959</td>
-      <td>-0.000127</td>
-      <td>0.000127</td>
-      <td>0.134962</td>
+      <th>W*inv</th>
+      <td>0.008933</td>
+      <td>0.009203</td>
+      <td>0.000270</td>
+      <td>0.000270</td>
+      <td>3.021487</td>
     </tr>
   </tbody>
 </table>
@@ -2057,42 +2039,42 @@ Top absolute coefficient gaps (ED):
     <tr>
       <th>W*lagged_growth</th>
       <td>0.194065</td>
-      <td>0.195831</td>
-      <td>0.001766</td>
-      <td>0.001766</td>
-      <td>0.909999</td>
+      <td>0.194667</td>
+      <td>0.000602</td>
+      <td>0.000602</td>
+      <td>0.310172</td>
     </tr>
     <tr>
       <th>rho</th>
       <td>0.650187</td>
-      <td>0.648969</td>
-      <td>-0.001218</td>
-      <td>0.001218</td>
-      <td>0.187284</td>
+      <td>0.649596</td>
+      <td>-0.000591</td>
+      <td>0.000591</td>
+      <td>0.090829</td>
     </tr>
     <tr>
       <th>lagged_growth</th>
       <td>0.011519</td>
-      <td>0.010895</td>
-      <td>-0.000624</td>
-      <td>0.000624</td>
-      <td>5.417865</td>
-    </tr>
-    <tr>
-      <th>initial_gdp</th>
-      <td>-0.088731</td>
-      <td>-0.088905</td>
-      <td>-0.000174</td>
-      <td>0.000174</td>
-      <td>0.196650</td>
+      <td>0.010933</td>
+      <td>-0.000586</td>
+      <td>0.000586</td>
+      <td>5.087972</td>
     </tr>
     <tr>
       <th>W*initial_gdp</th>
       <td>0.070415</td>
-      <td>0.070505</td>
-      <td>0.000090</td>
-      <td>0.000090</td>
-      <td>0.128334</td>
+      <td>0.070092</td>
+      <td>-0.000323</td>
+      <td>0.000323</td>
+      <td>0.458834</td>
+    </tr>
+    <tr>
+      <th>W*pop</th>
+      <td>-0.004958</td>
+      <td>-0.004751</td>
+      <td>0.000207</td>
+      <td>0.000207</td>
+      <td>4.169315</td>
     </tr>
   </tbody>
 </table>

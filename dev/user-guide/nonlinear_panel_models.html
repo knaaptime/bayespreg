@@ -706,30 +706,6 @@
   
   
     <li class="md-nav__item">
-      <a href="spatial_diagnostics_recovery.html" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    <span>Spatial Diagnostics Recovery</span>
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="jgsy2024_replication_bayespecon.html" class="md-nav__link">
         
   
@@ -1176,13 +1152,15 @@
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Censored fraction: 0.21
-rho:   true=0.35  estimated=0.308
-beta[0]: true=1.00  estimated=0.982
-beta[1]: true=1.40  estimated=1.436
+rho:   true=0.35  estimated=0.305
+beta[0]: true=1.00  estimated=0.988
+beta[1]: true=1.40  estimated=1.435
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-  from .autonotebook import tqdm as notebook_tqdm
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Multiprocess sampling (2 chains in 2 jobs)
+NUTS: [rho, beta, sigma, y_cens_gap]
+Sampling 2 chains for 500 tune and 500 draw iterations (1_000 + 1_000 draws total) took 7 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 </code></pre></div>
@@ -1234,11 +1212,15 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Censored fraction: 0.32
 lam:   true=0.35  estimated=0.325
-beta[0]: true=1.00  estimated=0.847
-beta[1]: true=1.40  estimated=1.355
+beta[0]: true=1.00  estimated=0.853
+beta[1]: true=1.40  estimated=1.349
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>We recommend running at least 4 chains for robust computation of convergence diagnostics
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
+Multiprocess sampling (2 chains in 2 jobs)
+NUTS: [lam, beta, sigma, y_cens_gap]
+Sampling 2 chains for 500 tune and 500 draw iterations (1_000 + 1_000 draws total) took 8 seconds.
+We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 </code></pre></div>
 </div>
