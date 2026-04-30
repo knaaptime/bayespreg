@@ -610,7 +610,12 @@ class SpatialModel(ABC):
         arviz.InferenceData
         """
         nuts_sampler = sample_kwargs.pop("nuts_sampler", "pymc")
-        model = self._build_pymc_model()
+        try:
+            model = self._build_pymc_model(nuts_sampler=nuts_sampler)
+        except TypeError:
+            # Subclasses that don't accept ``nuts_sampler`` build the same
+            # model on every backend.
+            model = self._build_pymc_model()
         self._pymc_model = model
         if "idata_kwargs" in sample_kwargs:
             sample_kwargs["idata_kwargs"] = prepare_idata_kwargs(
