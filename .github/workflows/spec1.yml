@@ -1,0 +1,126 @@
+name: SPEC 1 Compliance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  spec1:
+    name: Check SPEC 1 (lazy loading)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Check SPEC 1 compliance
+        run: |
+          python - <<'SCRIPT'
+          import re
+          import sys
+          from pathlib import Path
+
+          # ── Auto-detect package name from pyproject.toml ────────────────
+          pyproject = Path("pyproject.toml")
+          if not pyproject.is_file():
+              sys.exit("❌ No pyproject.toml found in repo root")
+          pyproject_text = pyproject.read_text()
+          m = re.search(r'^name\s*=\s*"([^"]+)"', pyproject_text, re.MULTILINE)
+          if not m:
+              sys.exit("❌ Could not find [project] name in pyproject.toml")
+          pkg_name = m.group(1).replace("-", "_")
+
+          # ── Auto-detect package directory (flat or src layout) ─────────
+          PKG = None
+          for candidate in [Path(pkg_name), Path("src") / pkg_name]:
+              if candidate.is_dir() and (candidate / "__init__.py").is_file():
+                  PKG = candidate
+                  break
+          if PKG is None:
+              sys.exit(f"❌ Could not find package directory for '{pkg_name}'")
+
+          print(f"Package: {pkg_name}  →  {PKG}/\n")
+          errors = []
+          warnings = []
+
+          # ── 1. lazy_loader is a dependency ──────────────────────────────
+          if "lazy_loader" not in pyproject_text:
+              errors.append("lazy_loader not found in pyproject.toml dependencies")
+
+          # ── 2. Scan every __init__.py under the package ─────────────────
+          has_any_pyi = False
+
+          for init in sorted(PKG.rglob("__init__.py")):
+              rel = init.relative_to(PKG.parent)
+              src = init.read_text()
+
+              # Skip test directories
+              if any(part == "tests" or part.startswith("test_") for part in init.parts):
+                  continue
+
+              uses_stub = "attach_stub" in src
+              uses_attach = bool(re.search(r"\.attach\s*\(", src)) and not uses_stub
+              uses_lazy = uses_stub or uses_attach
+
+              # 2a. If using lazy_loader, must set __getattr__, __dir__, __all__
+              if uses_lazy:
+                  for attr in ("__getattr__", "__dir__", "__all__"):
+                      if attr not in src:
+                          errors.append(f"{rel}: lazy_loader used but {attr} not assigned")
+
+              # 2b. If using attach_stub, must have a .pyi sibling
+              if uses_stub:
+                  pyi = init.with_suffix(".pyi")
+                  has_any_pyi = True
+                  if not pyi.is_file():
+                      errors.append(f"{rel}: uses attach_stub but {pyi.name} is missing")
+
+              # 2c. No eager submodule imports alongside lazy loading
+              if uses_lazy:
+                  for line in src.splitlines():
+                      stripped = line.strip()
+                      if stripped.startswith("#") or not stripped:
+                          continue
+                      if re.match(r"^from\s+\.\w+\s+import\s+", stripped):
+                          if any(allow in stripped for allow in
+                                 ["lazy_loader", "contextlib", "importlib"]):
+                              continue
+                          errors.append(
+                              f"{rel}: eager import alongside lazy_loader: {stripped}"
+                          )
+
+          # ── 3. If .pyi stubs exist, check py.typed and package-data ────
+          if has_any_pyi:
+              py_typed = PKG / "py.typed"
+              if not py_typed.is_file():
+                  warnings.append(
+                      f"{PKG}/py.typed is missing — required by PEP 561 when "
+                      "shipping .pyi stubs"
+                  )
+              if "*.pyi" not in pyproject_text:
+                  warnings.append(
+                      "pyproject.toml [tool.setuptools.package-data] should "
+                      "include '*.pyi' and '**/*.pyi' for .pyi stubs to ship"
+                  )
+
+          # ── Report ─────────────────────────────────────────────────────
+          if warnings:
+              print("⚠️  Warnings:")
+              for w in warnings:
+                  print(f"  • {w}")
+              print()
+
+          if errors:
+              print("❌ SPEC 1 compliance check FAILED:\n")
+              for e in errors:
+                  print(f"  • {e}")
+              sys.exit(1)
+          else:
+              print("✅ SPEC 1 compliance check passed")
+          SCRIPT
