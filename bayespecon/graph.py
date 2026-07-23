@@ -102,6 +102,27 @@ def _graph_to_csr(G: Graph) -> sp.csr_matrix:
     return G.sparse.tocsr().astype(np.float64)
 
 
+def _weights_to_csr(W) -> sp.csr_matrix:
+    """Coerce spatial weights to a CSR matrix, accepting a Graph or a matrix.
+
+    Flow models take their ``n×n`` regional weights as ``W`` (mirroring the
+    other spatial models); this helper accepts a :class:`libpysal.graph.Graph`
+    (row-standardised) or a scipy-sparse / dense array and never densifies a
+    sparse input.
+    """
+    if isinstance(W, Graph):
+        return _graph_to_csr(W)
+    if sp.issparse(W):
+        return W.tocsr().astype(np.float64)
+    arr = np.asarray(W, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[0] != arr.shape[1]:
+        raise TypeError(
+            "W must be a libpysal.graph.Graph or a square (n×n) weights matrix; "
+            f"got array with shape {getattr(arr, 'shape', None)}."
+        )
+    return sp.csr_matrix(arr)
+
+
 def destination_weights(G: Graph) -> sp.csr_matrix:
     """Build the N×N destination weight matrix :math:`W_d = I_n \\otimes W`.
 
@@ -119,7 +140,7 @@ def destination_weights(G: Graph) -> sp.csr_matrix:
     scipy.sparse.csr_matrix
         :math:`N \\times N` destination weight matrix (:math:`N = n^2`).
     """
-    W = _graph_to_csr(G)
+    W = _weights_to_csr(G)
     n = W.shape[0]
     return sp.kron(sp.eye(n, format="csr"), W, format="csr")
 
@@ -141,7 +162,7 @@ def origin_weights(G: Graph) -> sp.csr_matrix:
     scipy.sparse.csr_matrix
         :math:`N \\times N` origin weight matrix (:math:`N = n^2`).
     """
-    W = _graph_to_csr(G)
+    W = _weights_to_csr(G)
     n = W.shape[0]
     return sp.kron(W, sp.eye(n, format="csr"), format="csr")
 
@@ -163,7 +184,7 @@ def network_weights(G: Graph) -> sp.csr_matrix:
     scipy.sparse.csr_matrix
         :math:`N \\times N` network weight matrix (:math:`N = n^2`).
     """
-    W = _graph_to_csr(G)
+    W = _weights_to_csr(G)
     return sp.kron(W, W, format="csr")
 
 
@@ -180,7 +201,7 @@ def flow_weight_matrices(G: Graph) -> dict[str, sp.csr_matrix]:
     dict[str, scipy.sparse.csr_matrix]
         Dictionary with keys ``"destination"``, ``"origin"``, ``"network"``.
     """
-    W = _graph_to_csr(G)
+    W = _weights_to_csr(G)
     n = W.shape[0]
     eye = sp.eye(n, format="csr")
     return {

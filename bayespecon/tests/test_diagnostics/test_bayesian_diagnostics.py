@@ -1317,7 +1317,7 @@ def fitted_olsflow(_flow_ring_graph):
         sigma=0.3,
         seed=0,
     )
-    ols = OLSFlow(data["y_vec"], data["G"], data["X"], col_names=data["col_names"])
+    ols = OLSFlow(data["y_vec"], data["X"], data["G"], col_names=data["col_names"])
     ols.fit(draws=150, tune=150, chains=2, progressbar=False, random_seed=0)
     return ols
 
@@ -1341,8 +1341,8 @@ def fitted_sarflow(_flow_ring_graph):
     )
     sar = SARFlow(
         data["y_vec"],
-        data["G"],
         data["X"],
+        data["G"],
         col_names=data["col_names"],
         logdet_method="traces",
         restrict_positive=False,
@@ -1452,8 +1452,8 @@ def fitted_olsflow_panel(_flow_ring_graph):
 
     model = OLSFlowPanel(
         y_panel,
-        G,
         X_panel,
+        G,
         T=T_periods,
         col_names=col_names,
         effects=0,

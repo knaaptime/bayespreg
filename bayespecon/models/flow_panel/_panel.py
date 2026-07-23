@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 import pytensor.tensor as pt
 import scipy.sparse as sp
-from libpysal.graph import Graph
 
 from ..._backends.sampler_helpers import (
     enforce_c_backend,
@@ -30,7 +29,7 @@ from ..._logdet import (
     make_flow_separable_logdet_numpy,
 )
 from ..._ops import kron_solve_matrix
-from ...graph import _graph_to_csr, flow_trace_blocks, flow_weight_matrices
+from ...graph import _weights_to_csr, flow_trace_blocks, flow_weight_matrices
 from ..flow import (
     _build_flow_effect_masks,
     _compute_flow_effects_lesage,
@@ -48,7 +47,7 @@ class FlowPanelModel(SpatialPanelModel):
         - shape (T, n, n)
         - shape (T, n^2)
         - shape (n^2 * T,)
-    G : libpysal.graph.Graph
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
         Row-standardized graph on n units.
     X : np.ndarray or pandas.DataFrame, shape (n^2 * T, p)
         Stacked panel design matrix in time-first order.
@@ -77,8 +76,8 @@ class FlowPanelModel(SpatialPanelModel):
     def __init__(
         self,
         y: Union[np.ndarray, pd.Series],
-        G: Graph,
         X: Union[np.ndarray, pd.DataFrame],
+        W,
         T: int,
         col_names: Optional[list[str]] = None,
         k: Optional[int] = None,
@@ -102,7 +101,7 @@ class FlowPanelModel(SpatialPanelModel):
         self._pymc_model: Optional[pm.Model] = None
 
         # Validate and extract n x n W
-        self._W_sparse: sp.csr_matrix = _graph_to_csr(G)
+        self._W_sparse: sp.csr_matrix = _weights_to_csr(W)
         self._n: int = self._W_sparse.shape[0]
         self._N_flow: int = self._n * self._n
 
@@ -226,7 +225,7 @@ class FlowPanelModel(SpatialPanelModel):
         self._X = self._X
 
         # Build flow weight matrices on N_flow = n^2 system
-        wms = flow_weight_matrices(G)
+        wms = flow_weight_matrices(self._W_sparse)
         self._Wd: sp.csr_matrix = wms["destination"]
         self._Wo: sp.csr_matrix = wms["origin"]
         self._Ww: sp.csr_matrix = wms["network"]
@@ -1009,7 +1008,7 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
     y : array-like
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
-    G : libpysal.graph.Graph
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
         Row-standardised graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
@@ -1163,7 +1162,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
     y : array-like
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
-    G : libpysal.graph.Graph
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
         Row-standardised graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
@@ -1206,7 +1205,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
     priors on the individual :math:`\\rho` components.
     """
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         method = kwargs.pop("logdet_method", None)
         _VALID = {"eigenvalue", "chebyshev", "cheb_cholesky", "aaa", "cheb_stochastic"}
         if method is not None and method not in _VALID:
@@ -1215,7 +1214,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
                 f"{sorted(_VALID)}; got {method!r}."
             )
         kwargs["logdet_method"] = method
-        super().__init__(y, G, X, **kwargs)
+        super().__init__(y, X, W, **kwargs)
 
     def _build_pymc_model(self) -> pm.Model:
         beta_mu = self.priors.get("beta_mu", 0.0)
@@ -1314,7 +1313,7 @@ class OLSFlowPanel(FlowPanelModel):
     y : array-like
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
-    G : libpysal.graph.Graph
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
         Row-standardised graph on ``n`` units. Required for API
         symmetry but not used in estimation.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
@@ -1354,11 +1353,11 @@ class OLSFlowPanel(FlowPanelModel):
     :math:`|A| = 1`).
     """
 
-    def __init__(self, y, G, X, T, **kwargs):
+    def __init__(self, y, X, W, T, **kwargs):
         # Skip log-determinant precomputation: A = I_N has |A| = 1.
         kwargs.pop("logdet_method", None)
         kwargs.pop("restrict_positive", None)
-        super().__init__(y, G, X, T, logdet_method="none", **kwargs)
+        super().__init__(y, X, W, T, logdet_method="none", **kwargs)
 
     def _build_pymc_model(self) -> pm.Model:
         beta_mu = self.priors.get("beta_mu", 0.0)
@@ -1501,7 +1500,7 @@ class OLSFlowPanel(FlowPanelModel):
 class SARNegBinFlowPanel(SARFlowPanel):
     """Panel NB2 SAR flow model with unrestricted dependence parameters."""
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         # Count model: no |A| change-of-variables Jacobian, so it keeps the PyMC
         # path (not the Gaussian resolvent sampler); "none" routes fit accordingly.
         kwargs.setdefault("logdet_method", "none")
@@ -1526,7 +1525,7 @@ class SARNegBinFlowPanel(SARFlowPanel):
                 "SARNegBinFlowPanel requires non-negative integer observations."
             )
 
-        super().__init__(y_arr.astype(np.float64), G, X, **kwargs)
+        super().__init__(y_arr.astype(np.float64), X, W, **kwargs)
         self._y_int_vec: np.ndarray = y_arr.reshape(-1).astype(np.int64)
 
     def fit(
@@ -1738,7 +1737,7 @@ class SARNegBinFlowPanel(SARFlowPanel):
 class SARNegBinFlowSeparablePanel(SARFlowSeparablePanel):
     """Panel separable NB2 SAR flow model."""
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         effects_mode = int(kwargs.get("effects", kwargs.get("model", 0)))
         if effects_mode != 0:
             raise ValueError(
@@ -1768,7 +1767,7 @@ class SARNegBinFlowSeparablePanel(SARFlowSeparablePanel):
                 f"{sorted(_VALID)}; got {method!r}."
             )
         kwargs["logdet_method"] = method
-        super().__init__(y_arr.astype(np.float64), G, X, **kwargs)
+        super().__init__(y_arr.astype(np.float64), X, W, **kwargs)
         self._y_int_vec: np.ndarray = y_arr.reshape(-1).astype(np.int64)
 
     def fit(
@@ -1977,7 +1976,7 @@ class SARNegBinFlowSeparablePanel(SARFlowSeparablePanel):
 class NegBinFlowPanel(OLSFlowPanel):
     """Aspatial panel OD-flow NB2 gravity baseline."""
 
-    def __init__(self, y, G, X, T, **kwargs):
+    def __init__(self, y, X, W, T, **kwargs):
         effects_mode = int(kwargs.get("effects", kwargs.get("model", 0)))
         if effects_mode != 0:
             raise ValueError(
@@ -1998,7 +1997,7 @@ class NegBinFlowPanel(OLSFlowPanel):
             raise ValueError(
                 "NegBinFlowPanel requires non-negative integer observations."
             )
-        super().__init__(y_arr.astype(np.float64), G, X, T, **kwargs)
+        super().__init__(y_arr.astype(np.float64), X, W, T, **kwargs)
         self._y_int_vec: np.ndarray = y_arr.reshape(-1).astype(np.int64)
 
     def _simulate_y_rep_period(
@@ -2142,7 +2141,7 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
     y : array-like
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
-    G : libpysal.graph.Graph
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
         Row-standardised graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
@@ -2184,11 +2183,11 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
     """
 
-    def __init__(self, y, G, X, T, **kwargs):
+    def __init__(self, y, X, W, T, **kwargs):
         # Default to the resolvent-gradient SEM panel sampler (parallel to the
         # cross-sectional SEMFlow); the separable subclass sets its own method.
         kwargs.setdefault("logdet_method", "resolvent")
-        super().__init__(y, G, X, T, **kwargs)
+        super().__init__(y, X, W, T, **kwargs)
         self._init_sem_lags()
 
     def _sample_resolvent(self, **kwargs) -> az.InferenceData:
@@ -2266,7 +2265,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
     y : array-like
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
-    G : libpysal.graph.Graph
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
         Row-standardised graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
@@ -2309,7 +2308,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
     priors on the individual :math:`\\lambda` components.
     """
 
-    def __init__(self, y, G, X, T, **kwargs):
+    def __init__(self, y, X, W, T, **kwargs):
         method = kwargs.pop("logdet_method", None)
         _VALID = {"eigenvalue", "chebyshev", "cheb_cholesky", "aaa", "cheb_stochastic"}
         if method is not None and method not in _VALID:
@@ -2318,7 +2317,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
                 f"{sorted(_VALID)}; got {method!r}."
             )
         kwargs["logdet_method"] = method
-        super().__init__(y, G, X, T, **kwargs)
+        super().__init__(y, X, W, T, **kwargs)
         self._init_sem_lags()
 
     def _build_pymc_model(self) -> pm.Model:

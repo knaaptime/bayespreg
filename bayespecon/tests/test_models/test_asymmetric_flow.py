@@ -314,8 +314,8 @@ class TestModelAsymmetric:
         )
         model = SARFlow(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         assert model._k_d == 2
@@ -339,8 +339,8 @@ class TestModelAsymmetric:
         )
         model = OLSFlow(
             np.log(data["y_vec"]),
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         model.fit(draws=30, tune=30, chains=1, progressbar=False, random_seed=0)
@@ -368,8 +368,8 @@ class TestModelAsymmetric:
         )
         model = OLSFlow(
             np.log(data["y_vec"]),
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         model.fit(draws=30, tune=30, chains=1, progressbar=False, random_seed=0)

@@ -472,9 +472,8 @@ def register_jax_dispatch() -> bool:
     from pytensor.link.jax.dispatch import jax_funcify
 
     sparse_backend = _select_jax_sparse_backend()
-    klujax = None
     if sparse_backend == "klujax":
-        import klujax
+        pass
 
     sar_solver = _select_jax_sar_solver()
     lineax_solver_name = _select_jax_sar_lineax_solver()
@@ -516,12 +515,72 @@ def register_jax_dispatch() -> bool:
         """Equivalent to ``M.ravel(order='F')`` for a 2D array."""
         return M.T.reshape(-1)
 
+    def _kron_klujax_ctx(op):
+        """Sparse klujax context for the separable-Kronecker regional solves.
+
+        ``Ld = I − ρ_d W`` and ``Lo = I − ρ_o W`` are sparse (``W`` is sparse),
+        so we solve them with klujax sparse LU instead of forming a dense
+        ``n×n`` and calling ``jsla.solve``.  Both share the ``I ∪ W`` pattern,
+        so one symbolic analysis is reused; ``factor`` gives a per-ρ numeric
+        factorisation reused across forward (``solve``) and adjoint (``tsolve``)
+        right-hand sides.  ``W`` is never densified.
+        """
+        import klujax
+        from jax.experimental import sparse as jsparse
+
+        n = op._n
+        eye = sp.eye(n, format="coo", dtype=np.float64)
+        Wc = op._W.tocoo()
+        _rows = np.concatenate([eye.row, Wc.row])
+        _cols = np.concatenate([eye.col, Wc.col])
+
+        def _slot(parts):
+            c = sp.coo_matrix((np.concatenate(parts), (_rows, _cols)), shape=(n, n))
+            c.sum_duplicates()
+            return c
+
+        eye_c = _slot([np.ones(eye.nnz), np.zeros(Wc.nnz)])
+        w_c = _slot([np.zeros(eye.nnz), Wc.data])
+        Ai = jnp.asarray(np.asarray(eye_c.row, dtype=np.int32))
+        Aj = jnp.asarray(np.asarray(eye_c.col, dtype=np.int32))
+        eye_vals = jnp.asarray(eye_c.data, dtype=jnp.float64)
+        w_vals = jnp.asarray(w_c.data, dtype=jnp.float64)
+        symbolic = klujax.analyze(
+            np.asarray(eye_c.row, dtype=np.int32),
+            np.asarray(eye_c.col, dtype=np.int32),
+            n,
+        )
+        W_bcoo = jsparse.BCOO.from_scipy_sparse(op._W.tocsr())
+
+        def factor_at(rho):
+            return klujax.factor(Ai, Aj, eye_vals - rho * w_vals, symbolic)
+
+        def solve_num(numeric, rhs):  # Ld x = rhs
+            return klujax.solve_with_numeric(numeric, rhs, symbolic)
+
+        def tsolve_num(numeric, rhs):  # Ldᵀ x = rhs (reuses the factorisation)
+            return klujax.tsolve_with_numeric(numeric, rhs, symbolic)
+
+        return n, factor_at, solve_num, tsolve_num, W_bcoo
+
     # ------------------------------------------------------------------
     # Kronecker forward — pure JAX
     # ------------------------------------------------------------------
 
     @jax_funcify.register(KroneckerFlowSolveOp)
     def _funcify_kron_solve(op, **kwargs):
+        if _klujax_available():
+            n, factor_at, solve_num, _tsolve, _W = _kron_klujax_ctx(op)
+
+            def kron_solve(rho_d, rho_o, b):
+                Hb = _reshape_F(b, (n, n))  # (n, n)
+                Hp = solve_num(factor_at(rho_d), Hb)  # Ld Hp = Hb
+                Z = solve_num(factor_at(rho_o), Hp.T)  # Lo Z = Hp^T
+                return Z.reshape(-1)
+
+            return kron_solve
+
+        # Dense fallback (klujax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -543,6 +602,34 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(_KroneckerFlowVJPOp)
     def _funcify_kron_vjp(op, **kwargs):
+        if _klujax_available():
+            n, factor_at, solve_num, tsolve_num, W_bcoo = _kron_klujax_ctx(op)
+
+            def kron_vjp(rho_d, rho_o, eta, g):
+                H_eta = _reshape_F(eta, (n, n))  # (n, n)
+                Hg = _reshape_F(g, (n, n))  # (n, n)
+
+                # Adjoint: (Lo^T ⊗ Ld^T) v = g  =>  Ld^T H_v Lo = Hg
+                num_d = factor_at(rho_d)
+                num_o = factor_at(rho_o)
+                P = tsolve_num(num_d, Hg)  # Ld^T P = Hg
+                Q = tsolve_num(num_o, P.T)  # Lo^T Q = P^T  (Q = H_v^T)
+                H_v = Q.T  # (n, n)
+
+                W_H = W_bcoo @ H_eta  # W @ H_eta
+                Ld_H = H_eta - rho_d * W_H  # Ld @ H_eta = H_eta - ρ_d W H_eta
+                # W_H @ W^T = (W @ W_H^T)^T ; Ld_H @ W^T = (W @ Ld_H^T)^T
+                WH_Wt = (W_bcoo @ W_H.T).T  # W_H @ W^T
+                LdH_Wt = (W_bcoo @ Ld_H.T).T  # Ld_H @ W^T
+                # W_H @ Lo^T = W_H - ρ_o (W_H @ W^T)
+                grad_rd = jnp.sum(H_v * (W_H - rho_o * WH_Wt))
+                grad_ro = jnp.sum(H_v * LdH_Wt)  # Ld_H @ W_d^T
+                grad_b = _ravel_F_2d(H_v)
+                return grad_rd, grad_ro, grad_b
+
+            return kron_vjp
+
+        # Dense fallback (klujax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -574,6 +661,25 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(KroneckerFlowSolveMatrixOp)
     def _funcify_kron_solve_matrix(op, **kwargs):
+        if _klujax_available():
+            n, factor_at, solve_num, _tsolve, _W = _kron_klujax_ctx(op)
+
+            def kron_solve_mat(rho_d, rho_o, B):
+                # Factor Ld, Lo once (ρ is shared across columns), then vmap.
+                num_d = factor_at(rho_d)
+                num_o = factor_at(rho_o)
+
+                def _one(b):
+                    Hb = _reshape_F(b, (n, n))
+                    Hp = solve_num(num_d, Hb)
+                    Z = solve_num(num_o, Hp.T)
+                    return Z.reshape(-1)
+
+                return jax.vmap(_one, in_axes=1, out_axes=1)(B)
+
+            return kron_solve_mat
+
+        # Dense fallback (klujax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -595,6 +701,34 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(_KroneckerFlowVJPMatrixOp)
     def _funcify_kron_vjp_matrix(op, **kwargs):
+        if _klujax_available():
+            n, factor_at, solve_num, tsolve_num, W_bcoo = _kron_klujax_ctx(op)
+
+            def kron_vjp_mat(rho_d, rho_o, H_eta, G):
+                num_d = factor_at(rho_d)
+                num_o = factor_at(rho_o)
+
+                def _one(eta_col, g_col):
+                    H_e = _reshape_F(eta_col, (n, n))
+                    Hg = _reshape_F(g_col, (n, n))
+                    P = tsolve_num(num_d, Hg)
+                    Q = tsolve_num(num_o, P.T)
+                    H_v = Q.T
+                    W_H = W_bcoo @ H_e
+                    Ld_H = H_e - rho_d * W_H
+                    WH_Wt = (W_bcoo @ W_H.T).T  # W_H @ W^T
+                    LdH_Wt = (W_bcoo @ Ld_H.T).T  # Ld_H @ W^T
+                    grad_rd = jnp.sum(H_v * (W_H - rho_o * WH_Wt))
+                    grad_ro = jnp.sum(H_v * LdH_Wt)
+                    return grad_rd, grad_ro, _ravel_F_2d(H_v)
+
+                vjper = jax.vmap(_one, in_axes=(1, 1), out_axes=(0, 0, 1))
+                grad_rd_per_t, grad_ro_per_t, grad_B = vjper(H_eta, G)
+                return jnp.sum(grad_rd_per_t), jnp.sum(grad_ro_per_t), grad_B
+
+            return kron_vjp_mat
+
+        # Dense fallback (klujax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -1138,14 +1272,28 @@ def register_jax_dispatch() -> bool:
         if resolved == "klujax" or (
             sar_solver != "auto" and sparse_backend == "klujax"
         ):
+            import klujax  # local: the module-level var is only set for sparse_backend="klujax"
+
             n = op._n
-            I = np.eye(n, dtype=np.float64)
-            W_dense = np.asarray(op._W.toarray(), dtype=np.float64)
-            A_pat = (sp.eye(n, format="csr", dtype=np.float64) + op._W).tocoo()
-            Ai = jnp.asarray(np.asarray(A_pat.row, dtype=np.int32))
-            Aj = jnp.asarray(np.asarray(A_pat.col, dtype=np.int32))
-            const_vals = jnp.asarray(I[A_pat.row, A_pat.col], dtype=jnp.float64)
-            w_vals = jnp.asarray(W_dense[A_pat.row, A_pat.col], dtype=jnp.float64)
+            # Build the aligned COO value vectors of A(ρ) = I − ρW over the
+            # structural union of I and W — never densify W (O(nnz), not O(n²);
+            # a dense n×n at n=20k would be ~3.2 GB in this scalable-solver path).
+            eye_coo = sp.eye(n, format="coo", dtype=np.float64)
+            W_coo = op._W.tocoo()
+            _rows = np.concatenate([eye_coo.row, W_coo.row])
+            _cols = np.concatenate([eye_coo.col, W_coo.col])
+
+            def _aligned(parts):
+                c = sp.coo_matrix((np.concatenate(parts), (_rows, _cols)), shape=(n, n))
+                c.sum_duplicates()
+                return c
+
+            eye_c = _aligned([np.ones(eye_coo.nnz), np.zeros(W_coo.nnz)])
+            w_c = _aligned([np.zeros(eye_coo.nnz), W_coo.data])
+            Ai = jnp.asarray(np.asarray(eye_c.row, dtype=np.int32))
+            Aj = jnp.asarray(np.asarray(eye_c.col, dtype=np.int32))
+            const_vals = jnp.asarray(eye_c.data, dtype=jnp.float64)
+            w_vals = jnp.asarray(w_c.data, dtype=jnp.float64)
             # Sparsity pattern is fixed for A(rho)=I-rho*W, so analyze once and
             # reuse symbolic metadata across all solves.
             symbolic = klujax.analyze(Ai, Aj, n)

@@ -33,8 +33,8 @@ class TestNegativeBinomialFlowConstruction:
         data = _small_negbin_flow(seed=1)
         model = SARNegBinFlow(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         pm_model = model._build_pymc_model()
@@ -44,8 +44,8 @@ class TestNegativeBinomialFlowConstruction:
         data = _small_negbin_flow(seed=2)
         model = SARNegBinFlowSeparable(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         pm_model = model._build_pymc_model()
@@ -55,8 +55,8 @@ class TestNegativeBinomialFlowConstruction:
         data = _small_negbin_flow(seed=3)
         model = NegBinFlow(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         pm_model = model._build_pymc_model()
@@ -68,7 +68,7 @@ class TestNegativeBinomialPanelFlowConstruction:
         data = _small_panel_negbin_flow(seed=4)
         model = SARNegBinFlowPanel(
             y=data["y"],
-            G=data["G"],
+            W=data["G"],
             X=data["X"],
             T=3,
             col_names=data["col_names"],
@@ -81,7 +81,7 @@ class TestNegativeBinomialPanelFlowConstruction:
         data = _small_panel_negbin_flow(seed=5)
         model = SARNegBinFlowSeparablePanel(
             y=data["y"],
-            G=data["G"],
+            W=data["G"],
             X=data["X"],
             T=3,
             col_names=data["col_names"],
@@ -94,7 +94,7 @@ class TestNegativeBinomialPanelFlowConstruction:
         data = _small_panel_negbin_flow(seed=6)
         model = NegBinFlowPanel(
             y=data["y"],
-            G=data["G"],
+            W=data["G"],
             X=data["X"],
             T=3,
             col_names=data["col_names"],
@@ -108,7 +108,7 @@ class TestNegativeBinomialPanelFlowConstruction:
         with pytest.raises(ValueError, match="effects=0 only"):
             SARNegBinFlowPanel(
                 y=data["y"],
-                G=data["G"],
+                W=data["G"],
                 X=data["X"],
                 T=3,
                 col_names=data["col_names"],
@@ -173,8 +173,8 @@ class TestNegativeBinomialFlowRecovery:
         )
         model = SARNegBinFlow(
             out["y_vec"],
-            out["G"],
             out["X"],
+            out["G"],
             col_names=out["col_names"],
         )
         idata = model.fit(
@@ -226,8 +226,8 @@ class TestNegativeBinomialFlowRecovery:
         )
         model = SARNegBinFlowSeparable(
             out["y_vec"],
-            out["G"],
             out["X"],
+            out["G"],
             col_names=out["col_names"],
         )
         idata = model.fit(
@@ -284,7 +284,7 @@ class TestNegativeBinomialPanelFlowRecovery:
         )
         model = SARNegBinFlowPanel(
             y=out["y"],
-            G=out["G"],
+            W=out["G"],
             X=out["X"],
             T=5,
             col_names=out["col_names"],
@@ -347,7 +347,7 @@ class TestNegativeBinomialPanelFlowRecovery:
         )
         model = SARNegBinFlowSeparablePanel(
             y=out["y"],
-            G=out["G"],
+            W=out["G"],
             X=out["X"],
             T=6,
             col_names=out["col_names"],

@@ -55,7 +55,7 @@ class TestFlowPanelModelConstruction:
 
         model = SARFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -77,7 +77,7 @@ class TestFlowPanelModelConstruction:
 
         model = SARFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -96,7 +96,7 @@ class TestFlowPanelModelConstruction:
         with pytest.raises(ValueError, match=r"n\^2\*T"):
             SARFlowPanel(
                 y=y[:-1],
-                G=G,
+                W=G,
                 X=X,
                 T=T,
                 col_names=col_names,
@@ -112,7 +112,7 @@ class TestSeparablePanelModelBuild:
 
         model = SARFlowSeparablePanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -134,7 +134,7 @@ def test_sar_flow_panel_fit_smoke():
 
     model = SARFlowPanel(
         y=y,
-        G=G,
+        W=G,
         X=X,
         T=T,
         col_names=col_names,
@@ -189,7 +189,7 @@ class TestSARFlowPanelRecovery:
         out = generate_panel_flow_data(
             n=PANEL_FLOW_N,
             T=PANEL_FLOW_T,
-            G=G,
+            W=G,
             rho_d=PF_RHO_D_TRUE,
             rho_o=PF_RHO_O_TRUE,
             rho_w=PF_RHO_W_TRUE,
@@ -203,7 +203,7 @@ class TestSARFlowPanelRecovery:
         # likelihood, so fit on np.log(y) (== eta).
         model = SARFlowPanel(
             y=np.log(out["y"]),
-            G=G,
+            W=G,
             X=out["X"],
             T=PANEL_FLOW_T,
             col_names=out["col_names"],
@@ -272,7 +272,7 @@ class TestSARFlowSeparablePanelRecovery:
         out = generate_panel_flow_data_separable(
             n=PANEL_FLOW_N,
             T=PANEL_FLOW_T,
-            G=G,
+            W=G,
             rho_d=PF_RHO_D_SEP_TRUE,
             rho_o=PF_RHO_O_SEP_TRUE,
             beta_d=PF_BETA_D_TRUE,
@@ -284,7 +284,7 @@ class TestSARFlowSeparablePanelRecovery:
         # Default panel-flow DGP is lognormal; fit on np.log(y).
         model = SARFlowSeparablePanel(
             y=np.log(out["y"]),
-            G=G,
+            W=G,
             X=out["X"],
             T=PANEL_FLOW_T,
             col_names=out["col_names"],
@@ -362,7 +362,7 @@ class TestOLSFlowPanelEffects:
 
         model = OLSFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -387,7 +387,7 @@ class TestOLSFlowPanelEffects:
         )
         model = OLSFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -413,7 +413,7 @@ class TestOLSFlowPanelEffects:
         )
         model = OLSFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -453,7 +453,7 @@ class TestFlowPanelLogLikelihood:
         y, X, col_names = _panel_flow_stack(n=n, T=T, k=2, seed=0)
         m = SARFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -468,7 +468,7 @@ class TestFlowPanelLogLikelihood:
         y, X, col_names = _panel_flow_stack(n=n, T=T, k=2, seed=0)
         m = SARFlowSeparablePanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -481,7 +481,7 @@ class TestFlowPanelLogLikelihood:
         n, T = 4, 2
         G = _flow_test_graph(n)
         y, X, col_names = _panel_flow_stack(n=n, T=T, k=2, seed=0)
-        m = OLSFlowPanel(y=y, G=G, X=X, T=T, col_names=col_names, effects=0)
+        m = OLSFlowPanel(y=y, W=G, X=X, T=T, col_names=col_names, effects=0)
         idata = m.fit(draws=20, tune=20, chains=1, progressbar=False, random_seed=0)
         self._check_loo(idata, n_obs=n * n * T)
 
@@ -494,7 +494,7 @@ class TestFlowPanelLogLikelihood:
         kw = dict(draws=30, tune=30, chains=1, progressbar=False, random_seed=0)
         m_sar = SARFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -502,13 +502,13 @@ class TestFlowPanelLogLikelihood:
         )
         m_sep = SARFlowSeparablePanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
             effects=0,
         )
-        m_ols = OLSFlowPanel(y=y, G=G, X=X, T=T, col_names=col_names, effects=0)
+        m_ols = OLSFlowPanel(y=y, W=G, X=X, T=T, col_names=col_names, effects=0)
         idata_sar = m_sar.fit(**kw)
         idata_sep = m_sep.fit(**kw)
         idata_ols = m_ols.fit(**kw)
@@ -527,7 +527,7 @@ class TestFlowPanelSamplerDispatch:
         y, X, col_names = _panel_flow_stack(n=n, T=T, k=2, seed=50)
         m = SARFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -555,7 +555,7 @@ class TestFlowPanelSamplerDispatch:
         y, X, col_names = _panel_flow_stack(n=n, T=T, k=2, seed=51)
         m = SARFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -581,7 +581,7 @@ class TestFlowPanelSamplerDispatch:
         y, X, col_names = _panel_flow_stack(n=n, T=T, k=2, seed=52)
         m = SARFlowSeparablePanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,
@@ -605,7 +605,7 @@ class TestFlowPanelSamplerDispatch:
         y, X, col_names = _panel_flow_stack(n=n, T=T, k=2, seed=53)
         m = SARFlowPanel(
             y=y,
-            G=G,
+            W=G,
             X=X,
             T=T,
             col_names=col_names,

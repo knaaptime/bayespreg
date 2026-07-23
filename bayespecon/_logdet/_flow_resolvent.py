@@ -483,10 +483,9 @@ def _make_flow_kron_jax(kron: FlowKron, probes: np.ndarray, n_quad: int = 8):
     of the gradient along ``0 → ρ``) and the gradient is the Hutchinson
     resolvent trace — all in JAX, with klujax for the batched sparse solve.
 
-    The Kronecker matvecs (``W_k @ x``) are done via JAX dense matmul on the
-    ``n × n`` reshape, using the dense ``W`` matrix stored as a JAX array.
-    This is ``O(n²)`` per matvec (vs ``O(n·nnz)`` for the sparse path) but is
-    fully jittable and vmappable — the right trade-off for JAX.
+    The Kronecker matvecs (``W_k @ x``) use sparse ``BCOO`` copies of ``W`` and
+    ``Wᵀ`` on the ``n × n`` reshape (``O(n·nnz)`` per matvec) — ``W`` is never
+    densified — while remaining fully jittable and vmappable.
 
     Parameters
     ----------

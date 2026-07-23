@@ -36,7 +36,6 @@ import numpy as np
 import pandas as pd
 import pytensor.tensor as pt
 import scipy.sparse as sp
-from libpysal.graph import Graph
 
 from ..._backends.sampler_helpers import (
     enforce_c_backend,
@@ -49,7 +48,7 @@ from ..._logdet import (
     make_flow_separable_logdet_numpy,
 )
 from ..._ops import kron_solve_matrix, kron_solve_vec
-from ...graph import _graph_to_csr, flow_trace_blocks, flow_weight_matrices
+from ...graph import _weights_to_csr, flow_trace_blocks, flow_weight_matrices
 from ..base import SpatialModel
 
 
@@ -229,8 +228,8 @@ class FlowModel(SpatialModel):
     y : array-like, shape (n, n) or (N,)
         Observed O-D flow matrix (or its vec-form).  Must be a square
         matrix or a flat vector of length :math:`N = n^2`.
-    G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.  Validated by
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
+        Row-standardised regional weights on *n* units (Graph or matrix).  Validated by
         :func:`~bayespecon.graph._graph_to_csr`.
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
@@ -277,8 +276,8 @@ class FlowModel(SpatialModel):
     def __init__(
         self,
         y: Union[np.ndarray, pd.Series],
-        G: Graph,
         X: Union[np.ndarray, pd.DataFrame],
+        W,
         col_names: Optional[list] = None,
         k: Optional[int] = None,
         priors: Optional[dict] = None,
@@ -290,12 +289,12 @@ class FlowModel(SpatialModel):
         self.logdet_method = logdet_method
         self.restrict_positive = restrict_positive
         self.robust = False
-        self._is_row_std = True  # Graph is assumed row-standardised
+        self._is_row_std = True  # W is assumed row-standardised
         self._idata: Optional[az.InferenceData] = None
         self._pymc_model: Optional[pm.Model] = None
 
-        # Validate and extract the n×n weight matrix
-        self._W_sparse: sp.csr_matrix = _graph_to_csr(G)
+        # Validate and extract the n×n weight matrix (Graph or matrix accepted).
+        self._W_sparse: sp.csr_matrix = _weights_to_csr(W)
         self._n: int = self._W_sparse.shape[0]
         self._N: int = self._n * self._n
 
@@ -433,7 +432,7 @@ class FlowModel(SpatialModel):
                 ).real
 
         # Pre-compute spatial lags: Wd_y, Wo_y, Ww_y
-        wms = flow_weight_matrices(G)
+        wms = flow_weight_matrices(self._W_sparse)
         self._Wd_y: np.ndarray = wms["destination"] @ self._y
         self._Wo_y: np.ndarray = wms["origin"] @ self._y
         self._Ww_y: np.ndarray = wms["network"] @ self._y
@@ -1005,8 +1004,8 @@ class SARFlow(FlowModel):
     y : array-like, shape (n, n) or (N,)
         Observed origin-destination flow matrix or its vec-form. Must be
         a square matrix or a flat vector of length :math:`N = n^2`.
-    G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
+        Row-standardised regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         Typically produced by :func:`~bayespecon.graph.flow_design_matrix`
@@ -1053,11 +1052,11 @@ class SARFlow(FlowModel):
     remains reachable via ``logdet_method="traces"`` (PyMC/NUTS path).
     """
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         # Default to the resolvent-gradient sampler; "traces" stays as an
         # explicit (deprecated) opt-in routed through the legacy PyMC path.
         kwargs.setdefault("logdet_method", "resolvent")
-        super().__init__(y, G, X, **kwargs)
+        super().__init__(y, X, W, **kwargs)
 
     def fit(
         self,
@@ -1239,8 +1238,8 @@ class SARFlowSeparable(FlowModel):
     y : array-like, shape (n, n) or (N,)
         Observed origin-destination flow matrix or its vec-form. Must be
         a square matrix or a flat vector of length :math:`N = n^2`.
-    G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
+        Row-standardised regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         Typically produced by :func:`~bayespecon.graph.flow_design_matrix`
@@ -1277,7 +1276,7 @@ class SARFlowSeparable(FlowModel):
     priors on the individual :math:`\rho` components.
     """
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         method = kwargs.pop("logdet_method", None)
         _VALID = {"eigenvalue", "chebyshev", "cheb_cholesky", "aaa", "cheb_stochastic"}
         if method is not None and method not in _VALID:
@@ -1286,7 +1285,7 @@ class SARFlowSeparable(FlowModel):
                 f"{sorted(_VALID)}; got {method!r}."
             )
         kwargs["logdet_method"] = method
-        super().__init__(y, G, X, **kwargs)
+        super().__init__(y, X, W, **kwargs)
 
     def _build_pymc_model(self) -> pm.Model:
         beta_mu = self.priors.get("beta_mu", 0.0)
@@ -1460,8 +1459,8 @@ class OLSFlow(FlowModel):
     y : array-like, shape (n, n) or (N,)
         Observed O-D flow matrix (or its vec-form). Must be a square
         matrix or a flat vector of length :math:`N = n^2`.
-    G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units. Required for API
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
+        Row-standardised regional weights on *n* units (Graph or matrix). Required for API
         symmetry with the spatial flow models, but the graph weights
         are not used in estimation.
     X : np.ndarray or pandas.DataFrame, shape (N, p)
@@ -1490,11 +1489,11 @@ class OLSFlow(FlowModel):
     is required and ``logdet_method`` is ignored if passed.
     """
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         # Skip log-determinant precomputation: A = I_N has |A| = 1.
         kwargs.pop("logdet_method", None)
         kwargs.pop("restrict_positive", None)
-        super().__init__(y, G, X, logdet_method="none", **kwargs)
+        super().__init__(y, X, W, logdet_method="none", **kwargs)
 
     def _build_pymc_model(self) -> pm.Model:
         beta_mu = self.priors.get("beta_mu", 0.0)
@@ -1684,9 +1683,12 @@ class _NegBinFlowMixin:
             Sampling method: ``"gibbs"`` (default) for the reduced-form
             Pólya–Gamma Gibbs sampler, or ``"nuts"`` for PyMC NUTS on the
             exact count likelihood (much slower).
-        gibbs_backend : {"numpy", "auto"}, default "numpy"
+        gibbs_backend : {"numpy", "jax", "auto"}, default "numpy"
             Execution backend for the Gibbs sampler (only used when
-            ``sampler="gibbs"``).  The NB flow Gibbs sampler is NumPy-only.
+            ``sampler="gibbs"``).  ``"jax"`` runs the single-JIT klujax-sparse
+            chain (unrestricted 3-ρ model only; GPU-friendly); ``"numpy"`` uses
+            the host CHOLMOD/KLU path.  ``"auto"`` currently resolves to
+            ``"numpy"``.  The separable Kronecker model is NumPy-only.
         store_lambda : bool, default False
             If True, include the high-dimensional fitted mean ``lambda`` in the
             stored posterior (NUTS only).
@@ -1710,10 +1712,11 @@ class _NegBinFlowMixin:
         arviz.InferenceData
         """
         if sampler == "gibbs":
-            if gibbs_backend not in {"numpy", "auto"}:
+            if gibbs_backend not in {"numpy", "jax", "auto"}:
                 raise ValueError(
-                    "Negative-Binomial flow Gibbs supports only "
-                    f"gibbs_backend='numpy' (or 'auto'); got {gibbs_backend!r}."
+                    "Negative-Binomial flow Gibbs supports "
+                    "gibbs_backend in {'numpy', 'jax', 'auto'}; "
+                    f"got {gibbs_backend!r}."
                 )
             idata = self._fit_gibbs(
                 draws=draws,
@@ -1722,6 +1725,7 @@ class _NegBinFlowMixin:
                 random_seed=random_seed,
                 progressbar=progressbar,
                 n_jobs=n_jobs,
+                gibbs_backend=gibbs_backend,
                 sample_kwargs=sample_kwargs,
             )
         elif sampler == "nuts":
@@ -1758,7 +1762,7 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
     HalfNormal prior.
     """
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         y_arr = np.asarray(y)
         if not np.issubdtype(y_arr.dtype, np.integer):
             y_rounded = np.round(y_arr).astype(np.int64)
@@ -1773,7 +1777,7 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
             raise ValueError(
                 "SARNegBinFlow requires non-negative integer observations."
             )
-        super().__init__(y_arr.astype(np.float64), G, X, **kwargs)
+        super().__init__(y_arr.astype(np.float64), X, W, **kwargs)
         self._y_int_vec: np.ndarray = y_arr.ravel().astype(np.int64)
 
     def _compute_jacobian_log_det(self, posterior) -> Optional[np.ndarray]:
@@ -1867,6 +1871,7 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
         random_seed: Optional[int] = None,
         progressbar: bool = True,
         n_jobs: int = -1,
+        gibbs_backend: str = "numpy",
         sample_kwargs: dict[str, Any] | None = None,
     ) -> az.InferenceData:
         """Sample posterior via reduced-form PG-Gibbs (unrestricted 3-ρ)."""
@@ -1875,6 +1880,7 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
         return run_negbin_flow_gibbs(
             self,
             separable=False,
+            gibbs_backend=gibbs_backend,
             model_type="nb_sar_flow",
             omega_size=self._N,
             draws=draws,
@@ -1889,7 +1895,7 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
 class SARNegBinFlowSeparable(_NegBinFlowMixin, SARFlowSeparable):
     """Separable SAR flow model with NB2 observation noise."""
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         y_arr = np.asarray(y)
         if not np.issubdtype(y_arr.dtype, np.integer):
             y_rounded = np.round(y_arr).astype(np.int64)
@@ -1904,7 +1910,7 @@ class SARNegBinFlowSeparable(_NegBinFlowMixin, SARFlowSeparable):
             raise ValueError(
                 "SARNegBinFlowSeparable requires non-negative integer observations."
             )
-        super().__init__(y_arr.astype(np.float64), G, X, **kwargs)
+        super().__init__(y_arr.astype(np.float64), X, W, **kwargs)
         self._y_int_vec: np.ndarray = y_arr.ravel().astype(np.int64)
 
     def _compute_jacobian_log_det(self, posterior) -> Optional[np.ndarray]:
@@ -1997,6 +2003,7 @@ class SARNegBinFlowSeparable(_NegBinFlowMixin, SARFlowSeparable):
         random_seed: Optional[int] = None,
         progressbar: bool = True,
         n_jobs: int = -1,
+        gibbs_backend: str = "numpy",
         sample_kwargs: dict[str, Any] | None = None,
     ) -> az.InferenceData:
         """Sample posterior via reduced-form PG-Gibbs (separable 2-ρ)."""
@@ -2005,6 +2012,7 @@ class SARNegBinFlowSeparable(_NegBinFlowMixin, SARFlowSeparable):
         return run_negbin_flow_gibbs(
             self,
             separable=True,
+            gibbs_backend=gibbs_backend,
             model_type="nb_sar_flow_sep",
             omega_size=self._N,
             draws=draws,
@@ -2019,7 +2027,7 @@ class SARNegBinFlowSeparable(_NegBinFlowMixin, SARFlowSeparable):
 class NegBinFlow(_NegBinFlowMixin, OLSFlow):
     """Aspatial OD-flow Negative Binomial gravity baseline."""
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         y_arr = np.asarray(y)
         if not np.issubdtype(y_arr.dtype, np.integer):
             y_rounded = np.round(y_arr).astype(np.int64)
@@ -2032,7 +2040,7 @@ class NegBinFlow(_NegBinFlowMixin, OLSFlow):
             y_arr = y_rounded
         if np.any(y_arr < 0):
             raise ValueError("NegBinFlow requires non-negative integer observations.")
-        super().__init__(y_arr.astype(np.float64), G, X, **kwargs)
+        super().__init__(y_arr.astype(np.float64), X, W, **kwargs)
         self._y_int_vec: np.ndarray = y_arr.ravel().astype(np.int64)
 
     def _compute_jacobian_log_det(self, posterior) -> Optional[np.ndarray]:
@@ -2092,6 +2100,7 @@ class NegBinFlow(_NegBinFlowMixin, OLSFlow):
         random_seed: Optional[int] = None,
         progressbar: bool = True,
         n_jobs: int = -1,
+        gibbs_backend: str = "numpy",
         sample_kwargs: dict[str, Any] | None = None,
     ) -> az.InferenceData:
         """Sample posterior via aspatial PG-Gibbs (no spatial parameters).
@@ -2280,8 +2289,8 @@ class SEMFlow(FlowModel):
     ----------
     y : array-like, shape (n, n) or (N,)
         Observed origin-destination flow matrix or its vec-form.
-    G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
+        Row-standardised regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         DataFrame columns are preserved as feature names.
@@ -2324,11 +2333,11 @@ class SEMFlow(FlowModel):
     :class:`SARFlow`.
     """
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         # Default to the resolvent-gradient SEM sampler (separable subclasses pass
         # their own separable logdet_method and route to the PyMC path).
         kwargs.setdefault("logdet_method", "resolvent")
-        super().__init__(y, G, X, **kwargs)
+        super().__init__(y, X, W, **kwargs)
         # Precompute lags of the design matrix (constant — no parameter dependence).
         self._Wd_X: np.ndarray = np.asarray(self._Wd @ self._X, dtype=np.float64)
         self._Wo_X: np.ndarray = np.asarray(self._Wo @ self._X, dtype=np.float64)
@@ -2507,8 +2516,8 @@ class SEMFlowSeparable(SEMFlow):
     ----------
     y : array-like, shape (n, n) or (N,)
         Observed origin-destination flow matrix or its vec-form.
-    G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+    W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
+        Row-standardised regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         DataFrame columns are preserved as feature names.
@@ -2541,7 +2550,7 @@ class SEMFlowSeparable(SEMFlow):
     priors on the individual :math:`\\lambda` components.
     """
 
-    def __init__(self, y, G, X, **kwargs):
+    def __init__(self, y, X, W, **kwargs):
         method = kwargs.pop("logdet_method", None)
         _VALID = {"eigenvalue", "chebyshev", "cheb_cholesky", "aaa", "cheb_stochastic"}
         if method is not None and method not in _VALID:
@@ -2550,7 +2559,7 @@ class SEMFlowSeparable(SEMFlow):
                 f"{sorted(_VALID)}; got {method!r}."
             )
         kwargs["logdet_method"] = method
-        super().__init__(y, G, X, **kwargs)
+        super().__init__(y, X, W, **kwargs)
 
     def _build_pymc_model(self) -> pm.Model:
         beta_mu = self.priors.get("beta_mu", 0.0)
