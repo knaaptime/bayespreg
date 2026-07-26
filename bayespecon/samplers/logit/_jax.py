@@ -41,6 +41,19 @@ from bayespecon._jax_dispatch import ensure_x64
 from .._utils._jax_polyagamma import jax_polyagamma
 from ._core import JAXLogitGibbsState
 
+# On-device Pólya-Gamma for the ω ~ PG(1, η) block.  Prefer pgjax's exact Devroye
+# sampler (no host round-trip, no truncation bias) when installed; else fall back
+# to the on-device but truncated/approximate "exp" method.  h = 1 (Bernoulli).
+try:
+    import pgjax as _pgjax
+
+    def _draw_pg1(h, z, key):
+        return _pgjax.pg_sample(h, z, key)
+except ImportError:
+
+    def _draw_pg1(h, z, key):
+        return jax_polyagamma(h, z, key=key, method="exp")
+
 
 def _check_jax_available() -> None:
     """Raise ImportError if JAX or equinox is not installed."""
@@ -222,8 +235,8 @@ def _make_gibbs_step_with_data(
 
         key_omega, key_eta, key_beta, key_rho = jax.random.split(key, 4)
 
-        # ── Block 1: ω ~ PG(1, η) — exact Exp method (h = 1) ──
-        omega_new = jax_polyagamma(jnp.ones(n), eta, key=key_omega, method="exp")
+        # ── Block 1: ω ~ PG(1, η) — on-device (pgjax Devroye, else exp) ──
+        omega_new = _draw_pg1(jnp.ones(n), eta, key_omega)
 
         # ── Block 2: η | ω, ρ, β — Cholesky solve (σ² = 1) ──
         # P = I + diag(ω) - ρ(W+W^T) + ρ²W^TW  (no 1/σ² scaling)
@@ -642,8 +655,8 @@ def _make_gibbs_step_with_data_sem(
 
         key_omega, key_eta, key_beta, key_lam = jax.random.split(key, 4)
 
-        # ── Block 1: ω ~ PG(1, η) — exact Exp method (h = 1) ──
-        omega_new = jax_polyagamma(jnp.ones(n), eta, key=key_omega, method="exp")
+        # ── Block 1: ω ~ PG(1, η) — on-device (pgjax Devroye, else exp) ──
+        omega_new = _draw_pg1(jnp.ones(n), eta, key_omega)
 
         # ── Block 2: η | ω, β, λ — SEM-specific rhs ──
         # P = I + diag(ω) - λ(W+W^T) + λ²W^TW
@@ -1150,14 +1163,23 @@ def run_chains_jax_vectorized(
     # because jax.lax.fori_loop requires a concrete length.
     adapt_window = max(50, tune // 10) if tune > 0 else 50
 
+    # One chain per CPU device (pmap) when enough host devices exist — the better
+    # JAX chain-parallelism (measured ~1.5x over vmap here).  It does NOT beat the
+    # NumPy backend for SAR/SEM-logit, though: this sampler is *solve-heavy* (a
+    # spatial solve per slice candidate — KLU for asymmetric W, CHOLMOD for
+    # d-symmetrizable W), and SuiteSparse serializes concurrent solves (it
+    # parallelizes across processes, as NumPy/joblib does, not threads).  pmap's
+    # win over NumPy is specific to arithmetic-heavy samplers whose solve is a
+    # small fraction of the sweep (e.g. the reduced-form SAR-NB).
+    _use_pmap = chains > 1 and jax.local_device_count() >= chains
+
+    def _pv(f):
+        return jax.pmap(f) if _use_pmap else jax.jit(jax.vmap(f))
+
     def _make_warmup_fn(n_iters: int):
-        """Create a JIT-compiled warmup function with baked-in iteration count."""
-        return jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_warmup(
-                    gibbs_step, s_, k_, n_iters, w_
-                )
-            )(s, k, w)
+        """Create a device-parallel warmup function with baked-in iter count."""
+        return _pv(
+            lambda s_, k_, w_: _run_chain_logit_warmup(gibbs_step, s_, k_, n_iters, w_)
         )
 
     # Pre-compile the main warmup function for the standard window size
@@ -1200,12 +1222,10 @@ def run_chains_jax_vectorized(
         # ── Phase 2: post-warmup draws — single scan ──
         draw_keys = jax.random.split(jax.random.fold_in(master_key, 1), chains)
 
-        draws_fn = jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_draws_sar(
-                    gibbs_step, y_jax, s_, k_, draws, w_
-                )
-            )(s, k, w)
+        draws_fn = _pv(
+            lambda s_, k_, w_: _run_chain_logit_draws_sar(
+                gibbs_step, y_jax, s_, k_, draws, w_
+            )
         )
 
         state, keys, rhos, betas, eta_norms, log_liks, accept_rates = draws_fn(
@@ -1308,14 +1328,23 @@ def run_chains_jax_sem_vectorized(
     slice_width_arr = jnp.full(chains, jnp.float64(0.2))
     adapt_window = max(50, tune // 10) if tune > 0 else 50
 
+    # One chain per CPU device (pmap) when enough host devices exist — the better
+    # JAX chain-parallelism (measured ~1.5x over vmap here).  It does NOT beat the
+    # NumPy backend for SAR/SEM-logit, though: this sampler is *solve-heavy* (a
+    # spatial solve per slice candidate — KLU for asymmetric W, CHOLMOD for
+    # d-symmetrizable W), and SuiteSparse serializes concurrent solves (it
+    # parallelizes across processes, as NumPy/joblib does, not threads).  pmap's
+    # win over NumPy is specific to arithmetic-heavy samplers whose solve is a
+    # small fraction of the sweep (e.g. the reduced-form SAR-NB).
+    _use_pmap = chains > 1 and jax.local_device_count() >= chains
+
+    def _pv(f):
+        return jax.pmap(f) if _use_pmap else jax.jit(jax.vmap(f))
+
     def _make_warmup_fn(n_iters: int):
-        """Create a JIT-compiled warmup function with baked-in iteration count."""
-        return jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_warmup(
-                    gibbs_step, s_, k_, n_iters, w_
-                )
-            )(s, k, w)
+        """Create a device-parallel warmup function with baked-in iter count."""
+        return _pv(
+            lambda s_, k_, w_: _run_chain_logit_warmup(gibbs_step, s_, k_, n_iters, w_)
         )
 
     warmup_fn = _make_warmup_fn(adapt_window)
@@ -1357,12 +1386,10 @@ def run_chains_jax_sem_vectorized(
         # ── Phase 2: post-warmup draws — single scan ──
         draw_keys = jax.random.split(jax.random.fold_in(master_key, 1), chains)
 
-        draws_fn = jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_draws_sem(
-                    gibbs_step, y_jax, s_, k_, draws, w_
-                )
-            )(s, k, w)
+        draws_fn = _pv(
+            lambda s_, k_, w_: _run_chain_logit_draws_sem(
+                gibbs_step, y_jax, s_, k_, draws, w_
+            )
         )
 
         state, keys, lams, betas, eta_norms, log_liks, accept_rates = draws_fn(

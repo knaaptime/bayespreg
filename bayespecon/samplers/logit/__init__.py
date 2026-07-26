@@ -1,4 +1,10 @@
-"""Pólya–Gamma Gibbs sampler for structural-form SAR-logit and SEM-logit."""
+"""Pólya–Gamma Gibbs sampler for structural-form SAR-logit and SEM-logit.
+
+Serves the *structural* (latent-field) binary models ``SARLogitStructural``
+(``η = ρWη + Xβ + ν``) and ``SEMLogit`` (``η = Xβ + (I−λW)⁻¹ν``) under the
+registry key ``"binary_structural"``.  The canonical reduced-form ``SARLogit``
+lives in :mod:`bayespecon.samplers.logit_reduced` (key ``"binary"``).
+"""
 
 from .._registry import register
 from ._core import (
@@ -31,10 +37,12 @@ __all__ = [
 # Gibbs registry entry
 # ---------------------------------------------------------------------------
 #
-# SARLogit and SEMLogit are both cross-section binary (Bernoulli) models; the
-# SAR-vs-SEM distinction is handled by MRO dispatch of ``_fit_gibbs`` (each
-# model owns its Pólya-Gamma orchestration).  ``auto`` prefers the CHOLMOD
-# ``factorize`` (NumPy) path — the ``jax`` dense path is opt-in.
+# SARLogitStructural and SEMLogit are both structural cross-section binary
+# (Bernoulli) models; the SAR-vs-SEM distinction is handled by MRO dispatch of
+# ``_fit_gibbs`` (each model owns its Pólya-Gamma orchestration).  ``auto``
+# prefers the ``jax`` path (fastest for cross-section); the CHOLMOD NumPy path
+# is available via ``gibbs_backend="numpy"``.  The reduced-form ``SARLogit``
+# (key ``"binary"``) is registered separately in ``logit_reduced``.
 
 
 def _run_binary_gibbs(
@@ -71,10 +79,10 @@ def _run_binary_gibbs(
 
 
 register(
-    "binary",
+    "binary_structural",
     "cross_section",
     run=_run_binary_gibbs,
     backends={"jax", "numpy"},
-    auto_backend="numpy",
+    auto_backend="jax",
     options={"return_eta", "pg_n_terms", "n_probes", "lanczos_deg"},
 )

@@ -1,3 +1,4 @@
+from .cross_section import SARLogitStructural as SARLogitStructural
 from .cross_section import SARNegBinStructural as SARNegBinStructural
 from .cross_section import SARProbit as SARProbit
 from .cross_section.logit import Logit as Logit

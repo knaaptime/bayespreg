@@ -52,11 +52,11 @@ class GibbsEntry:
         family supports ``"numpy"`` (JAX is the optional accelerated path).
     auto_backend
         Which backend ``gibbs_backend="auto"`` prefers.  ``"jax"`` (default)
-        selects JAX when installed and supported, else NumPy — the Gaussian
-        families, where the vmapped JAX Gibbs is the fast default.  ``"numpy"``
-        pins ``auto`` to NumPy regardless of JAX availability — the nonlinear
-        Pólya-Gamma families, where the CHOLMOD ``factorize`` path is the fast
-        default and the ``jax_dense`` path is an opt-in (GPU / experimental).
+        selects JAX when installed and supported, else NumPy — the JAX Gibbs
+        path uses the sparse cholgraph solve (it never densifies ``W``; a dense
+        fallback runs only when cholgraph is unavailable or on GPU).  ``"numpy"``
+        pins ``auto`` to NumPy regardless of JAX availability — for families with
+        no JAX backend, or where the CHOLMOD path is intentionally the default.
     options
         Names of family-specific ``fit`` keyword arguments this runner accepts
         (e.g. ``{"init_jitter", "slice_width", "krylov_degree"}``).  The base
@@ -92,8 +92,8 @@ def register(
 
     ``auto_backend`` defaults to ``"jax"`` when the family supports JAX, else
     ``"numpy"``.  Pass ``auto_backend="numpy"`` explicitly for a JAX-capable
-    family whose ``auto`` should still prefer NumPy (the Pólya-Gamma families,
-    where ``jax_dense`` is opt-in).
+    family whose ``auto`` should still prefer NumPy (e.g. ZINB, whose JAX and
+    NumPy backends fit different model specs).
     """
     key = (likelihood, structure)
     if key in _REGISTRY:

@@ -22,7 +22,8 @@ __all__ = [
 # Gibbs registry entry — zero-inflated SAR NegBin (9-block Pólya-Gamma)
 # ---------------------------------------------------------------------------
 #
-# Gibbs-only (no NUTS build) and NumPy-only (CHOLMOD; no JAX kernel).
+# Gibbs-only (no NUTS build).  Two backends: "numpy" (CHOLMOD, structural
+# selection) and "jax" (device-parallel reduced-form, cholgraph-KLU + pgjax).
 
 
 def _run_zinb_gibbs(
@@ -56,6 +57,7 @@ register(
     "zinb",
     "cross_section",
     run=_run_zinb_gibbs,
-    backends={"numpy"},
+    backends={"numpy", "jax"},
+    auto_backend="numpy",
     options={"timeout"},
 )

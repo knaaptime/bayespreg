@@ -3,6 +3,7 @@ from .negbin import NegBin as NegBin
 from .ols import OLS as OLS
 from .sar import SAR as SAR
 from .sar_logit import SARLogit as SARLogit
+from .sar_logit_structural import SARLogitStructural as SARLogitStructural
 from .sar_negbin import SARNegBin as SARNegBin
 from .sar_negbin_structural import SARNegBinStructural as SARNegBinStructural
 from .sar_probit import SARProbit as SARProbit

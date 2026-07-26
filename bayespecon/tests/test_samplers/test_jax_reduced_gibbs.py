@@ -64,9 +64,10 @@ def _make_problem(n: int = 25, k: int = 3, seed: int = 42):
 def _krylov_basis(W, X_jax, rho_c, n, k, degree):
     """Build a Krylov basis via the sparse klujax path (W never densified)."""
     ctx = _build_sparse_ctx(sp.csr_matrix(W), n)
-    factor_at, solve_num, matvec_W, _ = _make_sparse_solvers(ctx)
-    numeric_c = factor_at(rho_c)
-    return _build_krylov_basis_jax(numeric_c, X_jax, solve_num, matvec_W, n, k, degree)
+    solve, matvec_W = _make_sparse_solvers(ctx)
+    return _build_krylov_basis_jax(
+        lambda rhs: solve(rho_c, rhs), X_jax, matvec_W, n, k, degree
+    )
 
 
 # ---------------------------------------------------------------------------

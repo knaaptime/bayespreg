@@ -869,8 +869,7 @@ def _check_jax_available() -> None:
 
     if importlib.util.find_spec("jax") is None:
         raise ImportError(
-            "JAX is required for the 'jax_dense' Gibbs method. "
-            "Install with: pip install jax"
+            "JAX is required for gibbs_backend='jax'. Install with: pip install jax"
         )
 
 

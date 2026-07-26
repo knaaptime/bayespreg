@@ -56,8 +56,9 @@ __all__ = [
 # ---------------------------------------------------------------------------
 #
 # SARNegBin also supports NUTS (``sampler="nuts"`` builds a reduced-form PyMC
-# model); the base dispatcher routes that path.  ``auto`` prefers the CHOLMOD
-# ``factorize`` (NumPy) path — the ``jax`` dense path is opt-in.
+# model); the base dispatcher routes that path.  ``auto`` prefers the ``jax``
+# path (fastest for cross-section); the CHOLMOD NumPy path is available via
+# gibbs_backend="numpy".
 
 
 def _run_count_reduced_gibbs(
@@ -72,9 +73,9 @@ def _run_count_reduced_gibbs(
     progressbar,
     backend,
     init_jitter=0.1,
-    slice_width=0.2,
-    krylov_degree=8,
-    krylov_dmax=0.15,
+    slice_width=0.4,
+    krylov_degree=12,
+    krylov_dmax=0.4,
     n_rho_omega_cycles=1,
     timeout=None,
 ):
@@ -102,7 +103,7 @@ register(
     "cross_section",
     run=_run_count_reduced_gibbs,
     backends={"jax", "numpy"},
-    auto_backend="numpy",
+    auto_backend="jax",
     options={
         "init_jitter",
         "slice_width",

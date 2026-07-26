@@ -425,9 +425,13 @@ class SARZINB(SpatialModel):
             Number of parallel chains. 1 = sequential.
         progressbar : bool
             Show per-chain progress bars.
-        backend : {"numpy"}
-            Execution backend.  ZINB is NumPy-only (CHOLMOD 9-block Gibbs);
-            there is no JAX kernel.
+        backend : {"numpy", "jax"}
+            Execution backend.  ``"numpy"`` uses the CHOLMOD 9-block Gibbs
+            with a *structural* SAR-logit selection equation.  ``"jax"`` runs
+            a fully device-parallel (pmap) reduced-form sampler — both the
+            selection and count equations reduced-form (Krylov-only ρ/λ slice,
+            cholgraph-KLU solves, on-device Pólya-Gamma) — one chain per CPU
+            device.
         timeout : float or None
             Maximum wall-clock seconds for parallel chains.
 
@@ -467,6 +471,65 @@ class SARZINB(SpatialModel):
             alpha_sigma=self.priors.get("alpha_sigma", 2.5),
             alpha_nu=self.priors.get("alpha_nu", 3.0),
         )
+
+        # ── JAX device-parallel path ──
+        # Both equations reduced-form (Krylov-only slice, cholgraph-KLU solves,
+        # on-device Pólya-Gamma via pgjax, one chain per CPU device via pmap).
+        # NB: the JAX selection is *reduced-form* SAR-logit (η^sel =
+        # (I−λW_sel)⁻¹Zγ), whereas the NumPy path uses the *structural* latent
+        # SAR-logit selection; the count equation is reduced-form in both.
+        if backend == "jax":
+            from ...samplers.zinb._jax import run_chains_jax_zinb
+
+            seed_rng = np.random.default_rng(random_seed)
+            chain_seeds = [int(s) for s in seed_rng.integers(0, 2**31, size=chains)]
+            chain_inits = [
+                self._initialize_from_ols(np.random.default_rng(seed))
+                for seed in chain_seeds
+            ]
+
+            chain_results = run_chains_jax_zinb(
+                y=self._y,
+                d=self._d,
+                Z=self._Z,
+                X=self._X,
+                W_sel_sparse=self._W_sel_sparse.tocsr(),
+                W_cnt_sparse=self._W_sparse.tocsr(),
+                priors=priors,
+                inits=chain_inits,
+                draws=draws,
+                tune=tune,
+                thin=thin,
+                jax_seeds=chain_seeds,
+                progressbar=progressbar,
+            )
+
+            stacked = {
+                "lam": np.stack([c["lam"] for c in chain_results], axis=0),
+                "gamma": np.stack([c["gamma"] for c in chain_results], axis=0),
+                "rho": np.stack([c["rho"] for c in chain_results], axis=0),
+                "beta": np.stack([c["beta"] for c in chain_results], axis=0),
+                "alpha": np.stack([c["alpha"] for c in chain_results], axis=0),
+            }
+            log_lik = np.stack([c["log_lik"] for c in chain_results], axis=0)
+
+            idata = gibbs_to_inference_data(
+                posterior_samples=stacked,
+                log_likelihood={"obs": log_lik},
+                observed_data={"obs": self._y_int},
+                coords={
+                    "sel_coefficient": list(self._sel_feature_names),
+                    "coefficient": list(self._feature_names),
+                    "obs_id": list(range(n)),
+                },
+                dims={
+                    "gamma": ["sel_coefficient"],
+                    "beta": ["coefficient"],
+                    "obs": ["obs_id"],
+                },
+            )
+            self._idata = idata
+            return idata
 
         # Build sub-priors for cache construction
         LogitGibbsPriors(

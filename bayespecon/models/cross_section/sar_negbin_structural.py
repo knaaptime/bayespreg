@@ -346,8 +346,8 @@ class SARNegBinStructural(SpatialModel):
         if _use_jax_full:
             if return_eta:
                 raise NotImplementedError(
-                    "return_eta=True is not supported with gibbs_method='jax_dense'. "
-                    "Use gibbs_method='factorize' if you need the full latent field stored."
+                    "return_eta=True is not supported with gibbs_backend='jax'. "
+                    "Use gibbs_backend='numpy' if you need the full latent field stored."
                 )
             chain_inits = [
                 self._initialize_from_glm(np.random.default_rng(seed)) for seed in seeds

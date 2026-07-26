@@ -55,84 +55,109 @@ from .._utils._jax_polyagamma import jax_polyagamma
 
 
 def _build_sparse_ctx(W_sparse, n) -> dict:
-    """Build the sparse klujax solve context for ``I − ρW`` (never densify W).
+    """Build the sparse LU solve context for ``I − ρW`` (never densify W).
 
     Returns the constant COO pattern of ``I − ρW`` with aligned value vectors
-    (so ``Ax(ρ) = eye_vals − ρ·w_vals``), a cached klujax symbolic
-    factorisation, and a BCOO ``W`` for sparse matvecs.  The symbolic
-    analysis (AMD ordering + elimination tree) is done once and reused for
-    every numeric factorisation across the whole run.
+    (so ``Ax(ρ) = eye_vals − ρ·w_vals``) and a BCOO ``W`` for sparse matvecs.
+    The fill-reducing symbolic analysis is cached inside cholgraph, keyed on the
+    (constant) sparsity pattern, so it is computed once and reused for every
+    numeric factorisation across the whole run.
     """
-    import klujax
     from jax.experimental import sparse as jsparse
 
     from ._flow_jax import build_sar_pattern
 
     pat = build_sar_pattern(W_sparse, n)
-    pat["symbolic"] = klujax.analyze(pat["Ai"], pat["Aj"], n)
     pat["W_bcoo"] = jsparse.BCOO.from_scipy_sparse(W_sparse.tocsr())
     return pat
 
 
 def _make_sparse_solvers(sparse_ctx):
-    """Build klujax solve closures over a sparse context (W never densified).
+    """Build vmap-safe sparse-LU solve closures over a sparse context (W never densified).
 
-    Returns ``(factor_at, solve_num, matvec_W, solve_at)`` where
+    Returns ``(solve, matvec_W)`` where
 
-    - ``factor_at(rho)`` → numeric klujax factorisation of ``I − ρW`` (reusable
-      across right-hand sides via ``solve_num``),
-    - ``solve_num(numeric, rhs)`` → ``(I − ρW)⁻¹ rhs`` reusing a factorisation,
-    - ``matvec_W(v)`` → ``W @ v`` via BCOO,
-    - ``solve_at(rho, rhs)`` → one-shot ``(I − ρW)⁻¹ rhs`` (factor + solve).
+    - ``solve(rho, rhs)`` → ``(I − ρW)⁻¹ rhs`` via ``cholgraph.lu_solve`` (KLU),
+    - ``matvec_W(v)`` → ``W @ v`` via BCOO.
 
-    All closures close over the cached symbolic factorisation, so the AMD
-    ordering / elimination tree is computed once for the whole run.
+    ``cholgraph.lu_solve`` (SuiteSparse KLU) is vmap-safe *and* reuses its
+    numeric factorisation: the fill-reducing analysis is cached by pattern, and
+    a content-addressed LU factor cache keyed on ``Ax`` means the m+1 solves of
+    a Krylov basis at a fixed ρ pay one ``klu_factor`` and m cheap solves — per
+    chain — even under ``jax.vmap`` over chains.  (This replaced klujax, whose
+    ``factor`` + ``solve_with_numeric`` reuse path segfaults under
+    ``jit(vmap(...))`` and whose ``solve_with_symbol`` is vmap-safe but re-factors
+    on every solve, ~3× slower than numpy.)  See ``set_lu_cache_size`` — the
+    factor cache must be ≥ the chain count for the reuse to land.
     """
+    import cholgraph
     import jax.numpy as jnp
-    import klujax
 
-    Ai = jnp.asarray(sparse_ctx["Ai"])
-    Aj = jnp.asarray(sparse_ctx["Aj"])
+    Ai = jnp.asarray(sparse_ctx["Ai"], jnp.int32)
+    Aj = jnp.asarray(sparse_ctx["Aj"], jnp.int32)
     eye_vals = jnp.asarray(sparse_ctx["eye_vals"])
     w_vals = jnp.asarray(sparse_ctx["w_vals"])
-    symbolic = sparse_ctx["symbolic"]
     W_bcoo = sparse_ctx["W_bcoo"]
 
-    def factor_at(rho):
-        return klujax.factor(Ai, Aj, eye_vals - rho * w_vals, symbolic)
-
-    def solve_num(numeric, rhs):
-        return klujax.solve_with_numeric(numeric, rhs, symbolic)
+    def solve(rho, rhs):
+        return cholgraph.lu_solve(Ai, Aj, eye_vals - rho * w_vals, rhs)
 
     def matvec_W(v):
         return W_bcoo @ v
 
-    def solve_at(rho, rhs):
-        return solve_num(factor_at(rho), rhs)
-
-    return factor_at, solve_num, matvec_W, solve_at
+    return solve, matvec_W
 
 
-def _build_krylov_basis_jax(numeric_c, X_jax, solve_num, matvec_W, n, k, degree):
-    """Build a shift-invert Krylov basis at ρ_c in JAX (sparse).
+def _run_chains_device_parallel(
+    warm_one, draw_one, state0, warm_keys, draw_keys, chains, tune
+):
+    """Drive per-chain warmup + draws across CPU devices.
 
-    Given a *single* klujax numeric factorisation ``numeric_c`` of
-    ``A_c = I − ρ_c W`` (built once by the caller and reused), solves (m+1)
-    RHS to build ``V_stack[j] = A_c⁻¹ (W V_{j-1})`` for ``j = 1..m`` with
-    ``V_0 = A_c⁻¹ X``.  ``W`` is never densified: the ``W @ V_j`` products go
-    through the sparse ``matvec_W`` (BCOO) and the solves through
-    ``solve_num`` (klujax ``solve_with_numeric``, reusing ``numeric_c``).
+    Uses ``jax.pmap`` — one chain per CPU device, i.e. true multi-core
+    parallelism, the analogue of the NumPy path's joblib processes but faster —
+    when enough host devices are available (see
+    :func:`bayespecon._auto_configure_cpu_devices`), otherwise falls back to
+    ``jax.jit(jax.vmap(...))`` on a single device.
+
+    ``vmap`` alone runs on one device and only benefits from XLA's intra-op
+    threading, which barely helps the small-op Gibbs sweep — so it loses to the
+    process-parallel NumPy backend.  ``pmap`` maps each chain to its own device
+    and overtakes it.  (Auto-parallel ``jit`` + ``in_shardings`` is *worse* here:
+    the exact PG host callback pins to device 0, forcing the SPMD partitioner to
+    gather every chain to device 0 each sweep.)
+
+    Returns the stacked draw traces (whatever ``draw_one`` returns), leading
+    axis = chains.
+    """
+    import jax
+
+    ndev = jax.local_device_count()
+    if chains > 1 and ndev >= chains:
+        state = jax.pmap(warm_one)(state0, warm_keys) if tune > 0 else state0
+        return jax.pmap(draw_one)(state, draw_keys)
+    state = jax.jit(jax.vmap(warm_one))(state0, warm_keys) if tune > 0 else state0
+    return jax.jit(jax.vmap(draw_one))(state, draw_keys)
+
+
+def _build_krylov_basis_jax(solve1, X_jax, matvec_W, n, k, degree):
+    """Build a shift-invert Krylov basis at the current A_c in JAX (sparse).
+
+    Solves (m+1) RHS to build ``V_stack[j] = A_c⁻¹ (W V_{j-1})`` for
+    ``j = 1..m`` with ``V_0 = A_c⁻¹ X``.  ``W`` is never densified: the
+    ``W @ V_j`` products go through the sparse ``matvec_W`` (BCOO) and each
+    solve through the unary ``solve1``.  Taking ``solve1`` as a unary
+    ``rhs -> A_c⁻¹ rhs`` decouples the basis from how ``A_c`` is parameterised
+    (single-ρ SAR vs 3-ρ flow) and from the klujax call convention.
 
     Parameters
     ----------
-    numeric_c : klujax numeric handle
-        Numeric factorisation of ``I − ρ_c W`` at the basis centre ρ_c.
+    solve1 : callable ``(rhs) -> A_c⁻¹ rhs``
+        Solve against the fixed base matrix ``A_c`` (closes over ρ / the
+        factorisation).
     X_jax : jax.numpy.ndarray, shape (n, k)
         Design matrix.
-    solve_num : callable ``(numeric, rhs) -> A_c⁻¹ rhs``
-        klujax ``solve_with_numeric`` closure (reuses one factorisation).
     matvec_W : callable ``(v) -> W @ v``
-        Sparse (BCOO) matvec.
+        Sparse (BCOO) matvec in the basis direction.
     n, k : int
         Spatial units and regression coefficients.
     degree : int
@@ -149,12 +174,12 @@ def _build_krylov_basis_jax(numeric_c, X_jax, solve_num, matvec_W, n, k, degree)
     V_stack = jnp.empty((m + 1, n, k), dtype=jnp.float64)
 
     # V_0 = A_c⁻¹ X
-    V_stack = V_stack.at[0].set(solve_num(numeric_c, X_jax))
+    V_stack = V_stack.at[0].set(solve1(X_jax))
 
     # V_{j+1} = A_c⁻¹ (W @ V_j)
     for j in range(m):
         Wv = matvec_W(V_stack[j])
-        V_stack = V_stack.at[j + 1].set(solve_num(numeric_c, Wv))
+        V_stack = V_stack.at[j + 1].set(solve1(Wv))
 
     return V_stack
 
@@ -498,8 +523,21 @@ def _make_reduced_gibbs_step(
 
     ensure_x64()
 
-    # ── Sparse klujax solve closures (W is never densified) ──
-    _factor_at, _solve_num, _matvec_W, _solve_at = _make_sparse_solvers(sparse_ctx)
+    # On-device Pólya-Gamma (pgjax) when installed — draws ω ~ PG(y+α, ·) with no
+    # host round-trip (real-h via the tail-corrected Gamma sum; exact and
+    # bias-free, so α does not collapse).  Falls back to the exact host callback.
+    try:
+        import pgjax
+
+        def _draw_pg(hh, zz, kk):
+            return pgjax.pg_sample(hh, zz, kk)
+    except ImportError:
+
+        def _draw_pg(hh, zz, kk):
+            return jax_polyagamma(hh, zz, key=kk, method="callback")
+
+    # ── Sparse klujax solve closures (W is never densified; vmap-safe) ──
+    _solve, _matvec_W = _make_sparse_solvers(sparse_ctx)
 
     # Prior hyperparameters
     beta_mu = priors.beta_mu
@@ -550,20 +588,25 @@ def _make_reduced_gibbs_step(
         key_rho, key_beta, key_alpha = jax.random.split(key, 3)
 
         # ── Block 0: ω ~ PG(y + α, η) ──
-        # Factorise A = (I − ρW) once at the current ρ (sparse klujax); reuse
-        # it for both η and the Krylov basis (W never densified).
-        numeric_c = _factor_at(rho)
-        eta = _solve_num(numeric_c, X_jax @ beta)
+        # η = (I − ρW)⁻¹ Xβ at the current ρ (sparse klujax; W never densified).
+        eta = _solve(rho, X_jax @ beta)
         key, key_pg = jax.random.split(key)
         h = jnp.maximum(y_jax + alpha, 1e-3)
         z = jnp.clip(eta - jnp.log(alpha), -20.0, 20.0)
-        omega = jax_polyagamma(h, z, key=key_pg, method="callback")
+        omega = _draw_pg(h, z, key_pg)
 
         # ── Block 1: ρ — slice sampling with Krylov basis ──
         V_stack = _build_krylov_basis_jax(
-            numeric_c, X_jax, _solve_num, _matvec_W, n, k, _krylov_degree
+            lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _krylov_degree
         )
 
+        # Krylov-only slice: solve_at=None means candidates outside the Krylov
+        # radius are rejected (−inf) rather than evaluated with a per-candidate
+        # direct solve.  Under jax.vmap the fallback solve is computed for *every*
+        # candidate (jnp.where evaluates both branches), which was ~62% of the
+        # sweep; the bounded ρ step it induces is offset by a wider krylov_dmax
+        # (with enough degree to stay accurate).  The NumPy path keeps its cheap
+        # conditional fallback.
         rho_new = _slice_sample_rho_jax(
             rho_current=rho,
             V_stack=V_stack,
@@ -579,16 +622,15 @@ def _make_reduced_gibbs_step(
             krylov_dmax=_krylov_dmax,
             slice_width=slice_width,
             key=key_rho,
-            X_jax=X_jax,
-            solve_at=_solve_at,
+            X_jax=None,
+            solve_at=None,
         )
 
         # ── Block 2: β | ρ, ω, α, y — conjugate normal ──
+        # Krylov-only guarantees |Δρ| ≤ dmax, so the basis evaluation of
+        # X̃ = (I−ρ_new W)⁻¹X is always valid — no direct-solve fallback needed.
         drho_new = rho_new - rho
-        use_basis = jnp.abs(drho_new) <= _krylov_dmax
-        Xtilde_krylov = _eval_U_from_basis_jax(V_stack, drho_new)
-        Xtilde_direct = _solve_at(rho_new, X_jax)
-        Xtilde = jnp.where(use_basis, Xtilde_krylov, Xtilde_direct)
+        Xtilde = _eval_U_from_basis_jax(V_stack, drho_new)
 
         reparam_beta = (_intercept_col >= 0) & (jnp.abs(rho_new) > 1e-8)
         scale_beta = 1.0 - rho_new
@@ -648,7 +690,11 @@ def _make_reduced_gibbs_step(
             "alpha": alpha_new,
             "omega": omega,
         }
-        return new_state, jnp.float64(1.0)
+        # Return the fitted latent η = (I−ρ_new W)⁻¹Xβ_new so the runner can form
+        # the pointwise NB log-likelihood on-device (reusing the sweep's solve),
+        # instead of a post-hoc per-draw host-solve loop (which dwarfed the
+        # sampling cost — 0.46 ms/draw).
+        return new_state, eta_new
 
     return gibbs_step
 
@@ -915,12 +961,67 @@ def run_chains_jax_reduced(
     X_jax = jnp.asarray(X, dtype=jnp.float64)
     sparse_ctx = _build_sparse_ctx(W_sparse, n)
 
+    # cholgraph's KLU factor cache must hold at least one factor per chain (each
+    # chain has its own ρ) for the Krylov basis to reuse the factorisation
+    # across its m+1 solves under vmap; size generously to also cover the
+    # separate ρ_new (X̃) solve and occasional slice fallbacks per sweep.
+    import cholgraph
+
+    cholgraph.set_lu_cache_size(max(32, 6 * chains))
+
     slice_width_jax = jnp.float64(slice_width)
 
     if jax_seeds is None:
         jax_seeds = list(range(chains))
 
-    chain_results = []
+    # Build the Gibbs step once; all chains run together under jax.vmap.  The
+    # step is vmap-safe because its non-symmetric solves use cholgraph.lu_solve
+    # (SuiteSparse KLU): vmap-safe and factor-reusing, so the basis costs one
+    # klu_factor + m solves per chain.  This matches logit's
+    # run_chains_jax_vectorized (which uses cholgraph's Cholesky for SPD W).
+    gibbs_step = _make_reduced_gibbs_step(
+        y_jax=y_jax,
+        X_jax=X_jax,
+        sparse_ctx=sparse_ctx,
+        n=n,
+        k=k,
+        priors=priors,
+        intercept_col=intercept_col,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
+    )
+
+    # Stack per-chain inits into a batched pytree (leading axis = chain).
+    state0 = {
+        "beta": jnp.asarray(np.stack([i.beta for i in inits]), dtype=jnp.float64),
+        "rho": jnp.asarray([float(i.rho) for i in inits], dtype=jnp.float64),
+        "alpha": jnp.asarray([float(i.alpha) for i in inits], dtype=jnp.float64),
+        "omega": jnp.asarray(np.stack([i.omega for i in inits]), dtype=jnp.float64),
+    }
+    warm_keys = jnp.stack([jax.random.PRNGKey(int(s)) for s in jax_seeds])
+    draw_keys = jnp.stack(
+        [jax.random.fold_in(jax.random.PRNGKey(int(s)), 1) for s in jax_seeds]
+    )
+
+    def _warm_one(s, key):
+        def body(_, carry):
+            st, kk = carry
+            kk, sk = jax.random.split(kk)
+            st, _ = gibbs_step(st, sk, slice_width_jax)
+            return (st, kk)
+
+        st, _ = jax.lax.fori_loop(0, tune, body, (s, key))
+        return st
+
+    def _draw_one(s, key):
+        def body(carry, _):
+            st, kk = carry
+            kk, sk = jax.random.split(kk)
+            st, eta = gibbs_step(st, sk, slice_width_jax)
+            return (st, kk), (st["rho"], st["beta"], st["alpha"], eta)
+
+        _, traces = jax.lax.scan(body, (s, key), None, length=draws)
+        return traces  # (rho, beta, alpha, eta), each leaf (draws, ...)
 
     with GibbsProgressBarManager(
         chains=chains,
@@ -929,156 +1030,116 @@ def run_chains_jax_reduced(
         progressbar=progressbar,
         model_type="sar_negbin",
     ) as pm:
-        for c in range(chains):
-            if pm is not None:
+        if pm is not None:
+            for c in range(chains):
                 pm.start_chain(c)
-
-            key = jax.random.PRNGKey(jax_seeds[c])
-
-            # Build the Gibbs step
-            gibbs_step = _make_reduced_gibbs_step(
-                y_jax=y_jax,
-                X_jax=X_jax,
-                sparse_ctx=sparse_ctx,
-                n=n,
-                k=k,
-                priors=priors,
-                intercept_col=intercept_col,
-                krylov_degree=krylov_degree,
-                krylov_dmax=krylov_dmax,
-            )
-
-            # Initialise state
-            init_state = {
-                "beta": jnp.asarray(inits[c].beta, dtype=jnp.float64),
-                "rho": jnp.float64(inits[c].rho),
-                "alpha": jnp.float64(inits[c].alpha),
-                "omega": jnp.asarray(inits[c].omega, dtype=jnp.float64),
-            }
-
-            # ── Phase 1: warmup (no traces stored) ──
-            if tune > 0:
-                warmup_chunk = max(1, tune // 20)
-                state = init_state
-                iter_done = 0
-                while iter_done < tune:
-                    step = min(warmup_chunk, tune - iter_done)
-                    state, key, _ = _run_chain_reduced(
-                        gibbs_step, state, key, step, slice_width_jax
-                    )
-                    iter_done += step
-                    if pm is not None:
-                        pm.update(c, iter_done, tuning=True, accept=None)
-
-            # ── Phase 2: draws (traces stored) ──
-            draws_chunk = max(1, draws // 20)
-            rho_list = []
-            beta_list = []
-            alpha_list = []
-            iter_done = 0
-            while iter_done < draws:
-                step = min(draws_chunk, draws - iter_done)
-                state, key, traces = _run_chain_reduced(
-                    gibbs_step, state, key, step, slice_width_jax
-                )
-                rho_list.append(np.asarray(traces[0]))
-                beta_list.append(np.asarray(traces[1]))
-                alpha_list.append(np.asarray(traces[2]))
-                iter_done += step
-                if pm is not None:
-                    pm.update(c, tune + iter_done, tuning=False, accept=None)
-
-            if pm is not None:
+        rho_all, beta_all, alpha_all, eta_all = _run_chains_device_parallel(
+            _warm_one, _draw_one, state0, warm_keys, draw_keys, chains, tune
+        )
+        rho_all = np.asarray(rho_all)  # (chains, draws)
+        beta_all = np.asarray(beta_all)  # (chains, draws, k)
+        alpha_all = np.asarray(alpha_all)  # (chains, draws)
+        eta_all = np.asarray(eta_all)  # (chains, draws, n)
+        if pm is not None:
+            for c in range(chains):
                 pm.update(c, tune + draws, tuning=False, accept=None)
 
-            # Stack and thin
-            rho_samples = np.concatenate(rho_list)
-            beta_samples = np.concatenate(beta_list)
-            alpha_samples = np.concatenate(alpha_list)
-            if thin > 1:
-                rho_samples = rho_samples[::thin]
-                beta_samples = beta_samples[::thin]
-                alpha_samples = alpha_samples[::thin]
+    # Pointwise NB log-likelihood from the fitted η collected during sampling —
+    # no post-hoc solves (matching how the NumPy path reuses its sweep η).
+    from scipy.special import gammaln
 
-            # Compute pointwise log-likelihood (NumPy, sparse solves)
-            n_keep = rho_samples.shape[0]
-            log_lik = np.empty((n_keep, n), dtype=np.float64)
-            # Prefer klujax (cached symbolic analysis) over dense solve loop
-            import scipy.sparse as _sp
-            from scipy.special import gammaln
-
-            from ..._jax_dispatch import _klujax_available
-
-            if _klujax_available():
-                import klujax
-
-                I_coo = _sp.eye(n, format="coo")
-                W_coo = W_sparse.tocoo()
-                all_rows = np.concatenate([I_coo.row, W_coo.row])
-                all_cols = np.concatenate([I_coo.col, W_coo.col])
-                shape = (n, n)
-                const_coo = _sp.coo_matrix(
-                    (
-                        np.concatenate([np.ones(I_coo.nnz), np.zeros(W_coo.nnz)]),
-                        (all_rows, all_cols),
-                    ),
-                    shape=shape,
-                )
-                const_coo.sum_duplicates()
-                w_coo = _sp.coo_matrix(
-                    (
-                        np.concatenate([np.zeros(I_coo.nnz), W_coo.data]),
-                        (all_rows, all_cols),
-                    ),
-                    shape=shape,
-                )
-                w_coo.sum_duplicates()
-                Ai = np.asarray(const_coo.row, dtype=np.int32)
-                Aj = np.asarray(const_coo.col, dtype=np.int32)
-                const_vals = np.asarray(const_coo.data, dtype=np.float64)
-                w_vals = np.asarray(w_coo.data, dtype=np.float64)
-                symbolic = klujax.analyze(Ai, Aj, n)
-                for i in range(n_keep):
-                    rho_i = rho_samples[i]
-                    beta_i = beta_samples[i]
-                    Ax = const_vals - rho_i * w_vals
-                    eta_i = np.asarray(
-                        klujax.solve_with_symbol(Ai, Aj, Ax, X @ beta_i, symbolic),
-                        dtype=np.float64,
-                    )
-                    alpha_i = alpha_samples[i]
-                    mu = np.exp(eta_i)
-                    log_lik[i] = (
-                        gammaln(y + alpha_i)
-                        - gammaln(alpha_i)
-                        + y * np.log(np.maximum(mu / (mu + alpha_i), 1e-300))
-                        + alpha_i * np.log(np.maximum(alpha_i / (mu + alpha_i), 1e-300))
-                    )
-            else:
-                from ..._ops._backend import _solve_sparse_vector
-
-                I_sp = _sp.eye(n, format="csc")
-                for i in range(n_keep):
-                    rho_i = rho_samples[i]
-                    beta_i = beta_samples[i]
-                    A_csc = (I_sp - rho_i * W_sparse).tocsc()
-                    eta_i = _solve_sparse_vector(A_csc, X @ beta_i)
-                    alpha_i = alpha_samples[i]
-                    mu = np.exp(eta_i)
-                    log_lik[i] = (
-                        gammaln(y + alpha_i)
-                        - gammaln(alpha_i)
-                        + y * np.log(np.maximum(mu / (mu + alpha_i), 1e-300))
-                        + alpha_i * np.log(np.maximum(alpha_i / (mu + alpha_i), 1e-300))
-                    )
-
-            chain_results.append(
-                {
-                    "rho": rho_samples,
-                    "beta": beta_samples,
-                    "alpha": alpha_samples,
-                    "log_lik": log_lik,
-                }
-            )
+    sl = slice(None, None, thin) if thin > 1 else slice(None)
+    y_np = np.asarray(y, dtype=np.float64)
+    chain_results = []
+    for c in range(chains):
+        eta_c = eta_all[c, sl]  # (n_keep, n)
+        alpha_samples = alpha_all[c, sl]
+        mu = np.exp(np.clip(eta_c, -30.0, 30.0))
+        a = alpha_samples[:, None]
+        log_lik = (
+            gammaln(y_np + a)
+            - gammaln(a)
+            + y_np * np.log(np.maximum(mu / (mu + a), 1e-300))
+            + a * np.log(np.maximum(a / (mu + a), 1e-300))
+        )
+        chain_results.append(
+            {
+                "rho": rho_all[c, sl],
+                "beta": beta_all[c, sl],
+                "alpha": alpha_samples,
+                "log_lik": log_lik,
+            }
+        )
 
     return chain_results
+
+
+def _reduced_pointwise_loglik(
+    y, X, W_sparse, n, rho_samples, beta_samples, alpha_samples
+):
+    """Per-draw pointwise NB log-likelihood via sparse ``(I−ρW)⁻¹`` solves.
+
+    Prefers cholgraph's KLU LU solve (one cached symbolic analysis, values
+    rescaled per draw) over a scipy factorisation loop; never densifies ``W``.
+    Runs off-vmap on the host.
+    """
+    import scipy.sparse as _sp
+    from scipy.special import gammaln
+
+    n_keep = rho_samples.shape[0]
+    log_lik = np.empty((n_keep, n), dtype=np.float64)
+
+    try:
+        import cholgraph
+
+        _has_cholgraph = True
+    except ImportError:
+        _has_cholgraph = False
+
+    if _has_cholgraph:
+        I_coo = _sp.eye(n, format="coo")
+        W_coo = W_sparse.tocoo()
+        rows = np.concatenate([I_coo.row, W_coo.row])
+        cols = np.concatenate([I_coo.col, W_coo.col])
+
+        def _slot(parts):
+            c = _sp.coo_matrix((np.concatenate(parts), (rows, cols)), shape=(n, n))
+            c.sum_duplicates()
+            return c
+
+        const_coo = _slot([np.ones(I_coo.nnz), np.zeros(W_coo.nnz)])
+        w_coo = _slot([np.zeros(I_coo.nnz), W_coo.data])
+        Ai = np.asarray(const_coo.row, dtype=np.int32)
+        Aj = np.asarray(const_coo.col, dtype=np.int32)
+        const_vals = np.asarray(const_coo.data, dtype=np.float64)
+        w_vals = np.asarray(w_coo.data, dtype=np.float64)
+        for i in range(n_keep):
+            Ax = const_vals - rho_samples[i] * w_vals
+            eta_i = np.asarray(
+                cholgraph.lu_solve(Ai, Aj, Ax, X @ beta_samples[i]),
+                dtype=np.float64,
+            )
+            a = alpha_samples[i]
+            mu = np.exp(eta_i)
+            log_lik[i] = (
+                gammaln(y + a)
+                - gammaln(a)
+                + y * np.log(np.maximum(mu / (mu + a), 1e-300))
+                + a * np.log(np.maximum(a / (mu + a), 1e-300))
+            )
+    else:
+        from ..._ops._backend import _solve_sparse_vector
+
+        I_sp = _sp.eye(n, format="csc")
+        for i in range(n_keep):
+            A_csc = (I_sp - rho_samples[i] * W_sparse).tocsc()
+            eta_i = _solve_sparse_vector(A_csc, X @ beta_samples[i])
+            a = alpha_samples[i]
+            mu = np.exp(eta_i)
+            log_lik[i] = (
+                gammaln(y + a)
+                - gammaln(a)
+                + y * np.log(np.maximum(mu / (mu + a), 1e-300))
+                + a * np.log(np.maximum(a / (mu + a), 1e-300))
+            )
+    return log_lik

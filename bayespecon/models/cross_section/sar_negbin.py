@@ -57,6 +57,10 @@ from ...samplers.negbin_reduced import (  # noqa: F401 — import side-effect re
     ReducedGibbsState,
     run_chain,
 )
+from ...samplers.negbin_reduced._core import (
+    _KRYLOV_DEGREE_DEFAULT,
+    _KRYLOV_DMAX_DEFAULT,
+)
 from ..base import SpatialModel
 from ..priors import SARNegBinPriors
 
@@ -151,9 +155,9 @@ class SARNegBin(SpatialModel):
         progressbar: bool = True,
         backend: str = "numpy",
         init_jitter: float = 0.1,
-        slice_width: float = 0.2,
-        krylov_degree: int = 8,
-        krylov_dmax: float = 0.15,
+        slice_width: float = 0.4,
+        krylov_degree: int = _KRYLOV_DEGREE_DEFAULT,
+        krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
         n_rho_omega_cycles: int = 1,
         timeout: float | None = None,
     ) -> "az.InferenceData":

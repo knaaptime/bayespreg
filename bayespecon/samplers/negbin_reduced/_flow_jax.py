@@ -30,6 +30,8 @@ from __future__ import annotations
 import numpy as np
 import scipy.sparse as sp
 
+from ._core import _KRYLOV_DEGREE_DEFAULT, _KRYLOV_DMAX_DEFAULT
+
 
 def build_flow_pattern(
     Wd: sp.spmatrix,
@@ -111,48 +113,44 @@ def build_sar_pattern(W: sp.spmatrix, n: int) -> dict:
 def make_flow_solve(pattern: dict):
     """Build a JIT-compiled ``solve(ρ_d, ρ_o, ρ_w, rhs) -> A(ρ)⁻¹ rhs``.
 
-    Uses one cached ``klujax`` symbolic analysis over the shared pattern; each
-    call only rebuilds the value vector ``Ax(ρ)`` and calls
-    ``solve_with_symbol``.  ``rhs`` may be a vector ``(N,)`` or matrix
-    ``(N, k)`` (batched solve — used for ``X̃ = A⁻¹X``).
+    Uses ``cholgraph.lu_solve`` (SuiteSparse KLU): the fill-reducing analysis is
+    cached by the shared pattern, so each call only rebuilds the value vector
+    ``Ax(ρ)``.  ``rhs`` may be a vector ``(N,)`` or matrix ``(N, k)`` (batched
+    solve — used for ``X̃ = A⁻¹X``).
     """
+    import cholgraph
     import jax
     import jax.numpy as jnp
-    import klujax
 
     from bayespecon._jax_dispatch import ensure_x64
 
     ensure_x64()
 
-    Ai = jnp.asarray(pattern["Ai"])
-    Aj = jnp.asarray(pattern["Aj"])
+    Ai = jnp.asarray(pattern["Ai"], jnp.int32)
+    Aj = jnp.asarray(pattern["Aj"], jnp.int32)
     eye_vals = jnp.asarray(pattern["eye_vals"])
     wd_vals = jnp.asarray(pattern["wd_vals"])
     wo_vals = jnp.asarray(pattern["wo_vals"])
     ww_vals = jnp.asarray(pattern["ww_vals"])
-    N = pattern["N"]
-    symbolic = klujax.analyze(pattern["Ai"], pattern["Aj"], N)
 
     @jax.jit
     def solve(rho_d, rho_o, rho_w, rhs):
         Ax = eye_vals - rho_d * wd_vals - rho_o * wo_vals - rho_w * ww_vals
-        return klujax.solve_with_symbol(Ai, Aj, Ax, rhs, symbolic)
+        return cholgraph.lu_solve(Ai, Aj, Ax, rhs)
 
     return solve
 
 
 def build_flow_ctx(Wd, Wo, Ww, N) -> dict:
-    """Sparse klujax context for the unrestricted flow (W never densified).
+    """Sparse solve context for the unrestricted flow (W never densified).
 
-    Bundles the shared COO pattern (:func:`build_flow_pattern`), a cached
-    klujax symbolic factorisation, and BCOO copies of the three lag matrices
-    for sparse matvecs.
+    Bundles the shared COO pattern (:func:`build_flow_pattern`) and BCOO copies
+    of the three lag matrices for sparse matvecs.  The fill-reducing symbolic
+    analysis is cached inside cholgraph, keyed on the (constant) pattern.
     """
-    import klujax
     from jax.experimental import sparse as jsparse
 
     ctx = build_flow_pattern(Wd.tocsr(), Wo.tocsr(), Ww.tocsr(), N)
-    ctx["symbolic"] = klujax.analyze(ctx["Ai"], ctx["Aj"], N)
     ctx["Wd_bcoo"] = jsparse.BCOO.from_scipy_sparse(Wd.tocsr())
     ctx["Wo_bcoo"] = jsparse.BCOO.from_scipy_sparse(Wo.tocsr())
     ctx["Ww_bcoo"] = jsparse.BCOO.from_scipy_sparse(Ww.tocsr())
@@ -160,38 +158,39 @@ def build_flow_ctx(Wd, Wo, Ww, N) -> dict:
 
 
 def _make_flow_solvers(ctx):
-    """Build klujax solve closures for ``A(ρ_d,ρ_o,ρ_w) = I−ρ_dWd−ρ_oWo−ρ_wWw``.
+    """Build sparse-LU solve closures for ``A(ρ_d,ρ_o,ρ_w) = I−ρ_dWd−ρ_oWo−ρ_wWw``.
 
-    Returns ``(factor_at, solve_num, matvec)`` where ``factor_at(ρ_d,ρ_o,ρ_w)``
-    is a reusable numeric factorisation, ``solve_num(numeric, rhs)`` reuses it,
-    and ``matvec`` is a dict ``{"d","o","w"}`` of sparse (BCOO) lag matvecs.
-    The symbolic factorisation is cached and reused across the whole run.
+    Returns ``(solve, matvec)`` where ``solve(ρ_d,ρ_o,ρ_w,rhs)`` →
+    ``A(ρ)⁻¹ rhs`` via ``cholgraph.lu_solve`` (SuiteSparse KLU) and ``matvec``
+    is a dict ``{"d","o","w"}`` of sparse (BCOO) lag matvecs.
+
+    ``cholgraph.lu_solve`` is vmap-safe and reuses its numeric factorisation via
+    a content-addressed cache: the m+1 solves of a Krylov basis at a fixed
+    (ρ_d,ρ_o,ρ_w) pay one ``klu_factor`` and m cheap solves — per chain — even
+    under ``jax.vmap`` over chains.  (Replaced klujax, whose numeric-handle reuse
+    segfaults under ``jit(vmap(...))``; see ``set_lu_cache_size``.)
     """
+    import cholgraph
     import jax.numpy as jnp
-    import klujax
 
-    Ai = jnp.asarray(ctx["Ai"])
-    Aj = jnp.asarray(ctx["Aj"])
+    Ai = jnp.asarray(ctx["Ai"], jnp.int32)
+    Aj = jnp.asarray(ctx["Aj"], jnp.int32)
     eye_vals = jnp.asarray(ctx["eye_vals"])
     wd_vals = jnp.asarray(ctx["wd_vals"])
     wo_vals = jnp.asarray(ctx["wo_vals"])
     ww_vals = jnp.asarray(ctx["ww_vals"])
-    symbolic = ctx["symbolic"]
     Wd_bcoo, Wo_bcoo, Ww_bcoo = ctx["Wd_bcoo"], ctx["Wo_bcoo"], ctx["Ww_bcoo"]
 
-    def factor_at(rho_d, rho_o, rho_w):
+    def solve(rho_d, rho_o, rho_w, rhs):
         Ax = eye_vals - rho_d * wd_vals - rho_o * wo_vals - rho_w * ww_vals
-        return klujax.factor(Ai, Aj, Ax, symbolic)
-
-    def solve_num(numeric, rhs):
-        return klujax.solve_with_numeric(numeric, rhs, symbolic)
+        return cholgraph.lu_solve(Ai, Aj, Ax, rhs)
 
     matvec = {
         "d": lambda v: Wd_bcoo @ v,
         "o": lambda v: Wo_bcoo @ v,
         "w": lambda v: Ww_bcoo @ v,
     }
-    return factor_at, solve_num, matvec
+    return solve, matvec
 
 
 def _make_flow_gibbs_step(
@@ -230,7 +229,7 @@ def _make_flow_gibbs_step(
     )
 
     ensure_x64()
-    factor_at, solve_num, matvec = _make_flow_solvers(ctx)
+    solve, matvec = _make_flow_solvers(ctx)
 
     beta_sigma = priors.beta_sigma
     if np.isscalar(beta_sigma):
@@ -276,20 +275,23 @@ def _make_flow_gibbs_step(
         return m + solve_triangular(L.T, z, lower=False)
 
     def _slice_one(rho_k, rd, ro, rw, wkey, other_abs, omega, alpha, slice_width, key):
-        """One ρ_k slice with a W_k-direction basis at the current A_0."""
-        num0 = factor_at(rd, ro, rw)
+        """One ρ_k slice with a W_k-direction basis at the current A_0.
+
+        Krylov-only (``solve_at=None``): candidates outside the Krylov radius are
+        rejected rather than evaluated with a per-candidate direct solve, which
+        under ``jax.vmap`` would be computed for *every* candidate (the dominant
+        cost).  The bounded ρ_k step this induces is offset by a wider
+        ``krylov_dmax`` with enough degree to stay accurate.
+        """
         V_stack = _build_krylov_basis_jax(
-            num0, X_jax, solve_num, matvec[wkey], n, k, krylov_degree
+            lambda rhs: solve(rd, ro, rw, rhs),
+            X_jax,
+            matvec[wkey],
+            n,
+            k,
+            krylov_degree,
         )
         lo, hi = _wall_bounds(other_abs)
-
-        # Solve at a candidate ρ_k holding the other two fixed.
-        if wkey == "d":
-            solve_at = lambda rc, rhs: solve_num(factor_at(rc, ro, rw), rhs)  # noqa: E731
-        elif wkey == "o":
-            solve_at = lambda rc, rhs: solve_num(factor_at(rd, rc, rw), rhs)  # noqa: E731
-        else:
-            solve_at = lambda rc, rhs: solve_num(factor_at(rd, ro, rc), rhs)  # noqa: E731
 
         return _slice_sample_rho_jax(
             rho_current=rho_k,
@@ -306,8 +308,8 @@ def _make_flow_gibbs_step(
             krylov_dmax=dmax,
             slice_width=slice_width,
             key=key,
-            X_jax=X_jax,
-            solve_at=solve_at,
+            X_jax=None,
+            solve_at=None,
         )
 
     @jax.jit
@@ -316,8 +318,7 @@ def _make_flow_gibbs_step(
         rd, ro, rw = state["rho_d"], state["rho_o"], state["rho_w"]
         alpha = state["alpha"]
 
-        num0 = factor_at(rd, ro, rw)
-        eta = solve_num(num0, X_jax @ beta)
+        eta = solve(rd, ro, rw, X_jax @ beta)
         key, kpg = jax.random.split(key)
         omega = _draw_omega(y_jax, alpha, eta, kpg)
 
@@ -360,8 +361,9 @@ def _make_flow_gibbs_step(
                 kw,
             )
 
-            num_f = factor_at(rd, ro, rw)
-            Xtilde = solve_num(num_f, X_jax)
+            # β step needs X̃ = A(ρ_new)⁻¹X at the just-updated (ρ_d,ρ_o,ρ_w);
+            # all three moved, so no single basis covers it — one direct solve.
+            Xtilde = solve(rd, ro, rw, X_jax)
             beta = _draw_beta(Xtilde, omega, alpha, kb)
             eta = Xtilde @ beta
             if cyc < n_cycles - 1:
@@ -371,6 +373,9 @@ def _make_flow_gibbs_step(
         key, ka = jax.random.split(key)
         alpha = _sample_alpha_jax_reduced(eta, y_jax, alpha, alpha_sigma, alpha_nu, ka)
 
+        # Return the fitted latent η so the runner forms the pointwise NB
+        # log-likelihood on-device (reusing the sweep's solve) instead of a
+        # post-hoc per-draw host-solve loop.
         return {
             "beta": beta,
             "rho_d": rd,
@@ -378,7 +383,7 @@ def _make_flow_gibbs_step(
             "rho_w": rw,
             "alpha": alpha,
             "omega": omega,
-        }, jnp.float64(1.0)
+        }, eta
 
     return gibbs_step
 
@@ -395,19 +400,23 @@ def run_chains_jax_flow(
     tune,
     *,
     thin=1,
-    krylov_degree=8,
-    krylov_dmax=0.15,
+    krylov_degree=_KRYLOV_DEGREE_DEFAULT,
+    krylov_dmax=_KRYLOV_DMAX_DEFAULT,
     positive=False,
     n_cycles=1,
     jax_seeds=None,
     progressbar=False,
-    slice_width=0.2,
+    slice_width=0.4,
 ):
-    """Run the unrestricted flow NB Gibbs sampler on the JAX/klujax backend.
+    """Run the unrestricted flow NB Gibbs sampler on the JAX backend.
 
-    Drop-in analogue of the numpy ``run_chain_unrestricted`` (one chain per
-    ``inits`` entry) that never densifies the ``N×N`` (``N = n²``) flow matrix:
-    all solves go through klujax sparse LU with a cached symbolic factorisation.
+    All chains run together under ``jax.vmap`` (like the reduced-form SAR-NB and
+    logit paths).  The non-symmetric LU solve goes through ``cholgraph.lu_solve``
+    (SuiteSparse KLU) — vmap-safe with numeric factor-reuse — replacing klujax,
+    whose numeric-handle reuse segfaults under ``jit(vmap(...))``.  The three ρ
+    slices are Krylov-only (no per-candidate direct solve, which under vmap would
+    run for every candidate).  ``W`` is never densified; the exact PG draw uses
+    the host callback.
 
     Returns one dict per chain with keys ``rho_d``, ``rho_o``, ``rho_w``,
     ``beta``, ``alpha``, ``log_lik``.
@@ -423,8 +432,7 @@ def run_chains_jax_flow(
     y_jax = jnp.asarray(y, dtype=jnp.float64)
     X_jax = jnp.asarray(X, dtype=jnp.float64)
     ctx = build_flow_ctx(Wd, Wo, Ww, N)
-    flow_solve = make_flow_solve(ctx)  # host-side post-hoc eta for log-lik
-    slice_width_jax = jnp.float64(slice_width)
+    sw = jnp.float64(slice_width)
 
     gibbs_step = _make_flow_gibbs_step(
         y_jax,
@@ -439,69 +447,97 @@ def run_chains_jax_flow(
         n_cycles=n_cycles,
     )
 
+    chains = len(inits)
     if jax_seeds is None:
-        jax_seeds = list(range(len(inits)))
-    n_keep = draws // thin if thin > 0 else draws
+        jax_seeds = list(range(chains))
+
+    # cholgraph's KLU factor cache must hold each chain's distinct factors live
+    # across the sweep's several solves (η, the 3 directional bases, X̃) for the
+    # vmapped reuse to land; size generously per chain.
+    import cholgraph
+
+    cholgraph.set_lu_cache_size(max(32, 8 * chains))
+
+    # All chains run together under jax.vmap — vmap-safe now that the LU solve is
+    # cholgraph.lu_solve (factor-reusing) and the ρ slices are Krylov-only.
+    state0 = {
+        "beta": jnp.asarray(np.stack([i.beta for i in inits]), dtype=jnp.float64),
+        "rho_d": jnp.asarray([float(i.rho_d) for i in inits], dtype=jnp.float64),
+        "rho_o": jnp.asarray([float(i.rho_o) for i in inits], dtype=jnp.float64),
+        "rho_w": jnp.asarray(
+            [float(i.rho_w if i.rho_w is not None else 0.0) for i in inits],
+            dtype=jnp.float64,
+        ),
+        "alpha": jnp.asarray([float(i.alpha) for i in inits], dtype=jnp.float64),
+        "omega": jnp.asarray(np.stack([i.omega for i in inits]), dtype=jnp.float64),
+    }
+    warm_keys = jnp.stack([jax.random.PRNGKey(int(s)) for s in jax_seeds])
+    draw_keys = jnp.stack(
+        [jax.random.fold_in(jax.random.PRNGKey(int(s)), 1) for s in jax_seeds]
+    )
+
+    def _warm_one(s, key):
+        def body(_, carry):
+            st, kk = carry
+            kk, sk = jax.random.split(kk)
+            st, _ = gibbs_step(st, sk, sw)
+            return (st, kk)
+
+        st, _ = jax.lax.fori_loop(0, tune, body, (s, key))
+        return st
+
+    def _draw_one(s, key):
+        def body(carry, _):
+            st, kk = carry
+            kk, sk = jax.random.split(kk)
+            st, eta = gibbs_step(st, sk, sw)
+            return (st, kk), (
+                st["rho_d"],
+                st["rho_o"],
+                st["rho_w"],
+                st["beta"],
+                st["alpha"],
+                eta,
+            )
+
+        _, traces = jax.lax.scan(body, (s, key), None, length=draws)
+        return traces
+
+    # One chain per CPU device (pmap) when available, else vmap — see
+    # negbin_reduced._jax._run_chains_device_parallel.
+    from ._jax import _run_chains_device_parallel
+
+    rd_all, ro_all, rw_all, beta_all, alpha_all, eta_all = _run_chains_device_parallel(
+        _warm_one, _draw_one, state0, warm_keys, draw_keys, chains, tune
+    )
+    sl = slice(None, None, thin) if thin > 1 else slice(None)
+    rd_all = np.asarray(rd_all)[:, sl]
+    ro_all = np.asarray(ro_all)[:, sl]
+    rw_all = np.asarray(rw_all)[:, sl]
+    beta_all = np.asarray(beta_all)[:, sl]
+    alpha_all = np.asarray(alpha_all)[:, sl]
+    eta_all = np.asarray(eta_all)[:, sl]  # (chains, n_keep, N)
+
+    # Pointwise NB log-likelihood from the fitted η collected during sampling —
+    # no post-hoc per-draw solves.
     y_np = np.asarray(y, dtype=np.float64)
-
     results = []
-    for c, init in enumerate(inits):
-        key = jax.random.PRNGKey(jax_seeds[c])
-        state = {
-            "beta": jnp.asarray(init.beta, dtype=jnp.float64),
-            "rho_d": jnp.float64(init.rho_d),
-            "rho_o": jnp.float64(init.rho_o),
-            "rho_w": jnp.float64(init.rho_w if init.rho_w is not None else 0.0),
-            "alpha": jnp.float64(init.alpha),
-            "omega": jnp.asarray(init.omega, dtype=jnp.float64),
-        }
-        # Warmup
-        for _ in range(tune):
-            key, sk = jax.random.split(key)
-            state, _ = gibbs_step(state, sk, slice_width_jax)
-        # Sampling
-        rd_s = np.empty(n_keep)
-        ro_s = np.empty(n_keep)
-        rw_s = np.empty(n_keep)
-        beta_s = np.empty((n_keep, k))
-        alpha_s = np.empty(n_keep)
-        kept = 0
-        for i in range(draws):
-            key, sk = jax.random.split(key)
-            state, _ = gibbs_step(state, sk, slice_width_jax)
-            if i % thin == 0 and kept < n_keep:
-                rd_s[kept] = float(state["rho_d"])
-                ro_s[kept] = float(state["rho_o"])
-                rw_s[kept] = float(state["rho_w"])
-                alpha_s[kept] = float(state["alpha"])
-                beta_s[kept] = np.asarray(state["beta"])
-                kept += 1
-
-        # Post-hoc pointwise log-likelihood via sparse flow solves (no densify).
-        log_lik = np.empty((n_keep, N))
-        for j in range(n_keep):
-            eta = np.asarray(
-                flow_solve(
-                    float(rd_s[j]),
-                    float(ro_s[j]),
-                    float(rw_s[j]),
-                    X_jax @ jnp.asarray(beta_s[j]),
-                )
-            )
-            mu = np.exp(np.clip(eta, -30.0, 30.0))
-            a = alpha_s[j]
-            log_lik[j] = (
-                gammaln(y_np + a)
-                - gammaln(a)
-                + y_np * np.log(np.maximum(mu / (mu + a), 1e-300))
-                + a * np.log(np.maximum(a / (mu + a), 1e-300))
-            )
+    for c in range(chains):
+        alpha_s = alpha_all[c]
+        mu = np.exp(np.clip(eta_all[c], -30.0, 30.0))  # (n_keep, N)
+        a = alpha_s[:, None]
+        log_lik = (
+            gammaln(y_np + a)
+            - gammaln(a)
+            + y_np * np.log(np.maximum(mu / (mu + a), 1e-300))
+            + a * np.log(np.maximum(a / (mu + a), 1e-300))
+        )
         results.append(
             {
-                "rho_d": rd_s,
-                "rho_o": ro_s,
-                "rho_w": rw_s,
-                "beta": beta_s,
+                "rho_d": rd_all[c],
+                "rho_o": ro_all[c],
+                "rho_w": rw_all[c],
+                "beta": beta_all[c],
                 "alpha": alpha_s,
                 "log_lik": log_lik,
             }

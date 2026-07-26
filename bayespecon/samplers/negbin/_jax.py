@@ -1082,17 +1082,24 @@ def run_chains_jax_vectorized(
         warmup_chunk = max(1, tune // 20) if tune > 0 else 1
         draws_chunk = max(1, draws // 20) if draws > 0 else 1
 
-        warmup_step = jax.jit(
-            lambda s, k: jax.vmap(
-                lambda s_, k_: _run_chain_nb_warmup(gibbs_step, s_, k_, warmup_chunk)
-            )(s, k)
+        # One chain per CPU device (pmap) when enough host devices exist — the
+        # better JAX chain-parallelism (vs vmap on one device).  It does NOT beat
+        # the NumPy backend here: the structural SAR-NB is *solve-heavy* (a spatial
+        # solve per slice candidate — KLU for asymmetric W, CHOLMOD for
+        # d-symmetrizable W), and SuiteSparse serializes concurrent solves (it
+        # parallelizes across processes, as NumPy/joblib does, not threads).  pmap's
+        # win over NumPy is specific to arithmetic-heavy samplers whose solve is a
+        # small fraction of the sweep (e.g. the reduced-form SAR-NB).
+        _use_pmap = chains > 1 and jax.local_device_count() >= chains
+
+        def _pv(f):
+            return jax.pmap(f) if _use_pmap else jax.jit(jax.vmap(f))
+
+        warmup_step = _pv(
+            lambda s_, k_: _run_chain_nb_warmup(gibbs_step, s_, k_, warmup_chunk)
         )
-        draws_step = jax.jit(
-            lambda s, k: jax.vmap(
-                lambda s_, k_: _run_chain_nb_draws(
-                    gibbs_step, y_jax, s_, k_, draws_chunk
-                )
-            )(s, k)
+        draws_step = _pv(
+            lambda s_, k_: _run_chain_nb_draws(gibbs_step, y_jax, s_, k_, draws_chunk)
         )
 
         # ── Phase 1: warmup ──
@@ -1104,7 +1111,7 @@ def run_chains_jax_vectorized(
             if step == warmup_chunk:
                 state, keys = warmup_step(state, keys)
             else:
-                state, keys = jax.vmap(
+                state, keys = _pv(
                     lambda s_, k_: _run_chain_nb_warmup(gibbs_step, s_, k_, step)
                 )(state, keys)
             jax.block_until_ready(state.rho)
@@ -1131,7 +1138,7 @@ def run_chains_jax_vectorized(
             if step == draws_chunk:
                 state, keys, traces = draws_step(state, keys)
             else:
-                state, keys, traces = jax.vmap(
+                state, keys, traces = _pv(
                     lambda s_, k_: _run_chain_nb_draws(gibbs_step, y_jax, s_, k_, step)
                 )(state, keys)
             rhos_c, betas_c, sigma2s_c, alphas_c, eta_c, ll_c = traces
