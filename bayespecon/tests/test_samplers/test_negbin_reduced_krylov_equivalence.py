@@ -65,6 +65,7 @@ def test_krylov_vs_exact_same_posterior(small_nb_problem):
         chains=1,
         random_seed=123,
         progressbar=False,
+        gibbs_backend="numpy",  # krylov_degree=0 exact-LU is a NumPy-path concept
         krylov_degree=0,
     )
 
@@ -80,6 +81,7 @@ def test_krylov_vs_exact_same_posterior(small_nb_problem):
         chains=1,
         random_seed=123,
         progressbar=False,
+        gibbs_backend="numpy",  # compare NumPy exact-LU vs NumPy Krylov
         krylov_degree=8,
         krylov_dmax=0.15,
     )

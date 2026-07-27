@@ -1,23 +1,25 @@
 r"""Zero-inflated SAR Negative Binomial (ZINB-SAR) model.
 
-Composes a structural-form SAR-logit selection equation with a
+Composes a reduced-form SAR-logit selection equation with a
 reduced-form SAR-NB count equation via a zero-allocation block:
 
 .. math::
 
     d_i \mid \eta_i^{\mathrm{sel}} &\sim \mathrm{Bernoulli}(\mathrm{logit}^{-1}(\eta_i^{\mathrm{sel}})) \\
-    \eta^{\mathrm{sel}} &= \lambda W_{\mathrm{sel}} \eta^{\mathrm{sel}} + Z\gamma + \nu, \quad \nu \sim N(0, I) \\
+    \eta^{\mathrm{sel}} &= (I - \lambda W_{\mathrm{sel}})^{-1} Z\gamma \\
     y_i \mid d_i, \eta_i^{\mathrm{cnt}}, \alpha &\sim \begin{cases}
         0 & \text{if } d_i = 0 \\
         \mathrm{NegBin}(\exp(\eta_i^{\mathrm{cnt}}), \alpha) & \text{if } d_i = 1
     \end{cases} \\
     \eta^{\mathrm{cnt}} &= (I - \rho W_{\mathrm{cnt}})^{-1} X\beta
 
-The logit link absorbs the error scale in the selection equation
-(σ² = 1), and the reduced-form NB has no latent noise term.
-The Pólya–Gamma augmentation yields fully conjugate Gibbs updates
-for all blocks except ρ, λ, and α, which use 1-D adaptive slice
-sampling.
+Both equations are reduced-form: the spatial lag enters each linear
+predictor as a deterministic mean-propagator (no latent noise field), so
+the ``|I − λW|`` / ``|I − ρW|`` Jacobians cancel under marginalisation.
+The logit link fixes σ² = 1 in the selection equation.  The Pólya–Gamma
+augmentation yields fully conjugate Gibbs updates for all blocks except
+ρ, λ, and α, which use 1-D adaptive slice sampling.  The NumPy and JAX
+backends fit the same model block-for-block.
 
 Use this model when:
 - The response is a non-negative integer count with excess zeros.
@@ -49,16 +51,8 @@ import scipy.sparse as sp
 from ..._lazy_deps import az
 from ...samplers._utils._idata import gibbs_to_inference_data
 from ...samplers._utils._slice import SliceWidthState
-from ...samplers._utils._spatial_normal import CholmodFactor
 from ...samplers.gaussian._chain_runner import run_chains
-from ...samplers.logit import (
-    LogitGibbsCache,
-    LogitGibbsPriors,
-)
-from ...samplers.negbin_reduced import (
-    ReducedGibbsCache,
-    ReducedGibbsPriors,
-)
+from ...samplers.negbin_reduced import ReducedGibbsCache
 from ...samplers.negbin_reduced._core import _make_cholmod_pattern
 from ...samplers.zinb import (
     ZINBGibbsCache,
@@ -426,12 +420,11 @@ class SARZINB(SpatialModel):
         progressbar : bool
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
-            Execution backend.  ``"numpy"`` uses the CHOLMOD 9-block Gibbs
-            with a *structural* SAR-logit selection equation.  ``"jax"`` runs
-            a fully device-parallel (pmap) reduced-form sampler — both the
-            selection and count equations reduced-form (Krylov-only ρ/λ slice,
-            cholgraph-KLU solves, on-device Pólya-Gamma) — one chain per CPU
-            device.
+            Execution backend — both fit the *same* reduced-form ZINB (reduced
+            SAR-logit selection + reduced SAR-NB count).  ``"jax"`` (the default
+            via ``"auto"``) runs a fully device-parallel (pmap) sampler with
+            cholgraph-KLU solves and on-device Pólya-Gamma, one chain per CPU
+            device; ``"numpy"`` uses the CHOLMOD 9-block Gibbs.
         timeout : float or None
             Maximum wall-clock seconds for parallel chains.
 
@@ -475,9 +468,7 @@ class SARZINB(SpatialModel):
         # ── JAX device-parallel path ──
         # Both equations reduced-form (Krylov-only slice, cholgraph-KLU solves,
         # on-device Pólya-Gamma via pgjax, one chain per CPU device via pmap).
-        # NB: the JAX selection is *reduced-form* SAR-logit (η^sel =
-        # (I−λW_sel)⁻¹Zγ), whereas the NumPy path uses the *structural* latent
-        # SAR-logit selection; the count equation is reduced-form in both.
+        # The NumPy path (below) fits the identical reduced-form model.
         if backend == "jax":
             from ...samplers.zinb._jax import run_chains_jax_zinb
 
@@ -531,49 +522,7 @@ class SARZINB(SpatialModel):
             self._idata = idata
             return idata
 
-        # Build sub-priors for cache construction
-        LogitGibbsPriors(
-            beta_mu=priors.gamma_mu,
-            beta_sigma=priors.gamma_sigma,
-            rho_lower=priors.lam_lower,
-            rho_upper=priors.lam_upper,
-        )
-        ReducedGibbsPriors(
-            beta_mu=priors.beta_mu,
-            beta_sigma=priors.beta_sigma,
-            alpha_sigma=priors.alpha_sigma,
-            alpha_nu=priors.alpha_nu,
-            rho_lower=priors.rho_lower,
-            rho_upper=priors.rho_upper,
-        )
-
-        # --- Selection equation cache ---
-        W_sel_csr = self._W_sel_sparse.tocsr()
-        self._W_sel_sparse.tocsc()
-        ZtZ = self._Z.T @ self._Z
-        W_sel_sym = W_sel_csr + W_sel_csr.T
-        W_sel_tW = W_sel_csr.T @ W_sel_csr
-
-        _P0_sel = sp.eye(n, format="csr") + 0.5 * W_sel_sym + 0.25 * W_sel_tW
-        sel_cholmod_factor = CholmodFactor(_P0_sel)
-
-        sel_cache = LogitGibbsCache(
-            W_sparse=W_sel_csr,
-            XtX=ZtZ,
-            logdet_fn=self._logdet_fn,  # approximate for selection
-            rho_lower=priors.lam_lower,
-            rho_upper=priors.lam_upper,
-            cholmod_factor=sel_cholmod_factor,
-            W_sym=W_sel_sym,
-            WtW=W_sel_tW,
-            solve_method="cholmod",
-            logdet_P_method="cholmod",
-            sample_method="cholmod",
-            rho_adaptive_width=True,
-            rho_slice_width_state=SliceWidthState(w=0.2),
-        )
-
-        # --- Count equation cache ---
+        # --- Count equation cache (reduced-form SAR-NB) ---
         W_cnt_csr = self._W_sparse.tocsr()
         W_cnt_csc = self._W_sparse.tocsc()
 
@@ -586,6 +535,36 @@ class SARZINB(SpatialModel):
 
         W_cnt_sym, W_cnt_tW, cnt_pattern = _make_cholmod_pattern(W_cnt_csc, n)
         cnt_cholmod_pattern = cnt_pattern
+
+        # --- Selection equation cache (reduced-form SAR-logit on W_sel) ---
+        # Same ReducedGibbsCache shape as the count; the λ slice uses the
+        # direct-CG path (basis=None), so krylov_degree is unused here.  For
+        # W_sel eigen bounds reuse the count's when the weights match, else use
+        # the row-standardised default [−1, 1] (safe for the CG SPD check).
+        W_sel_csr = self._W_sel_sparse.tocsr()
+        W_sel_csc = self._W_sel_sparse.tocsc()
+        W_sel_sym, W_sel_tW, sel_pattern = _make_cholmod_pattern(W_sel_csc, n)
+        if self._same_W:
+            W_sel_eig_max, W_sel_eig_min = W_eig_max, W_eig_min
+        else:
+            W_sel_eig_max, W_sel_eig_min = 1.0, -1.0
+
+        sel_cache = ReducedGibbsCache(
+            W_sparse=W_sel_csr,
+            W_csc=W_sel_csc,
+            rho_lower=priors.lam_lower,
+            rho_upper=priors.lam_upper,
+            rho_adaptive_width=True,
+            rho_slice_width_state=SliceWidthState(w=0.2),
+            krylov_degree=0,
+            krylov_dmax=0.15,
+            cholmod_pattern=sel_pattern,
+            W_sym=W_sel_sym,
+            WtW=W_sel_tW,
+            W_eig_max=W_sel_eig_max,
+            W_eig_min=W_sel_eig_min,
+            n_rho_omega_cycles=1,
+        )
 
         cnt_cache = ReducedGibbsCache(
             W_sparse=W_cnt_csr,

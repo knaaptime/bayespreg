@@ -55,12 +55,6 @@ def _jax_available() -> bool:
 
 
 @lru_cache(maxsize=1)
-def _klujax_available() -> bool:
-    """Return ``True`` when optional ``klujax`` is importable."""
-    return importlib.util.find_spec("klujax") is not None
-
-
-@lru_cache(maxsize=1)
 def _cholgraph_available() -> bool:
     """Return ``True`` when optional ``cholgraph`` is importable.
 
@@ -83,12 +77,6 @@ def _cholgraph_available() -> bool:
 
 
 @lru_cache(maxsize=1)
-def _lineax_available() -> bool:
-    """Return ``True`` when optional ``lineax`` is importable."""
-    return importlib.util.find_spec("lineax") is not None
-
-
-@lru_cache(maxsize=1)
 def _umfpack_available() -> bool:
     """Return ``True`` when ``sksparse.umfpack`` (scikit-sparse) is importable."""
     # ``find_spec`` raises ``ModuleNotFoundError`` in Python 3.14+ when the
@@ -105,8 +93,6 @@ def _warn_jax_auto_fallback_once(missing: str, target: str) -> None:
     install_hint = ""
     if missing == "sksparse.umfpack":
         install_hint = " Install 'scikit-sparse' to enable the UMFPACK callback path."
-    elif missing == "klujax":
-        install_hint = " Install 'klujax' to enable the faster JAX-native sparse path."
     elif missing == "cholgraph":
         install_hint = (
             " Install 'cholgraph' to enable the JAX-native sparse SPD Cholesky path."
@@ -126,9 +112,9 @@ def _select_jax_sparse_backend() -> str:
 
     Environment
     -----------
-    BAYESPECON_JAX_SPARSE_BACKEND : {"auto", "callback", "klujax", "cholgraph"}
-        Default ``auto``. ``auto`` prefers ``cholgraph`` (SPD-exact) when
-        available, then ``klujax``.
+    BAYESPECON_JAX_SPARSE_BACKEND : {"auto", "callback", "cholgraph"}
+        Default ``auto``. ``auto`` prefers ``cholgraph`` (JAX-native SuiteSparse:
+        CHOLMOD for SPD, KLU for asymmetric) when available, else ``callback``.
     BAYESPECON_JAX_SPARSE_STRICT : {"0", "1", "false", "true"}
         If truthy, missing requested optional backends raise ImportError.
     """
@@ -143,13 +129,10 @@ def _select_jax_sparse_backend() -> str:
     if requested in {"", "auto"}:
         if _cholgraph_available():
             return "cholgraph"
-        if _klujax_available():
-            return "klujax"
         # JAX path fallback chain:
-        #   1) cholgraph (SPD-exact, JAX-native)
-        #   2) klujax (LU-based, JAX-native)
-        #   3) callback + umfpack
-        #   4) callback + scipy
+        #   1) cholgraph (JAX-native SuiteSparse: CHOLMOD/KLU)
+        #   2) callback + umfpack
+        #   3) callback + scipy
         # The callback solver selection is handled in ops._select_sparse_backend.
         if _umfpack_available():
             _warn_jax_auto_fallback_once("cholgraph", "callback+umfpack")
@@ -159,18 +142,6 @@ def _select_jax_sparse_backend() -> str:
         return "callback"
 
     if requested in {"callback", "scipy", "pure_callback"}:
-        return "callback"
-
-    if requested in {"klu", "klujax"}:
-        if _klujax_available():
-            return "klujax"
-        msg = (
-            "BAYESPECON_JAX_SPARSE_BACKEND=klujax requested, but optional "
-            "dependency 'klujax' is not installed. Falling back to callback backend."
-        )
-        if strict:
-            raise ImportError(msg)
-        warnings.warn(msg, RuntimeWarning)
         return "callback"
 
     if requested in {"cholmod", "cholgraph"}:
@@ -187,14 +158,12 @@ def _select_jax_sparse_backend() -> str:
 
     msg = (
         f"Unknown BAYESPECON_JAX_SPARSE_BACKEND='{requested}'. "
-        "Valid values are: auto, callback, klujax, cholgraph. Falling back to auto."
+        "Valid values are: auto, callback, cholgraph. Falling back to auto."
     )
     if strict:
         raise ValueError(msg)
     warnings.warn(msg, RuntimeWarning)
-    if _cholgraph_available():
-        return "cholgraph"
-    return "klujax" if _klujax_available() else "callback"
+    return "cholgraph" if _cholgraph_available() else "callback"
 
 
 def _strict_env() -> bool:
@@ -228,11 +197,10 @@ def _cholmod_jax_enabled() -> bool:
     }
 
 
-# Threshold above which the auto solver switches from eigen to lineax.
-# Eigen uses O(N^2) memory (two N×N complex128 matrices) and O(N^3)
-# eigendecomposition time, which becomes prohibitive for very large N.
-# Lineax is matrix-free and uses O(nnz) memory with O(nnz) per iteration,
-# but can fail for near-singular systems during NUTS warmup.
+# Threshold above which the auto solver switches from eigen to the sparse
+# (cholgraph) path.  Eigen uses O(N^2) memory (two N×N complex128 matrices)
+# and O(N^3) eigendecomposition time, which becomes prohibitive for very
+# large N; the sparse path is O(nnz).
 #
 # Default is 0 (eigen path disabled). The eigen path materialises three
 # N×N complex128 matrices (eigenvalues, eigenvectors, inverse eigenvectors)
@@ -256,27 +224,15 @@ def _resolve_auto_sar_solver(n: int) -> str:
        N×N complex128 matrices plus a dense N×N float64 W and triggers
        multi-minute XLA compile times for n > ~500, so we keep it gated.
     2. ``cholgraph`` when installed (default; disable via
-       ``BAYESPECON_JAX_CHOLMOD=0``).  SPD-exact sparse CHOLMOD via JAX FFI;
-       supplies its own VJP.  CPU-only.  Requires D-symmetrizable W.
-    3. ``klujax`` when installed. Per
-       ``scripts/benchmarks/lineax_sar_benchmark.csv``, klujax is the
-       fastest pure sparse path in JAX (0.54 ms at n=1024 vs 0.72 ms
-       for lineax-bicgstab) and is robust at the boundary of the
-       stationary region where the iterative Krylov paths can stall.
-    4. ``lineax`` when installed but klujax is not. Matrix-free
-       iterative solve; can return NaN near singular operators (NUTS
-       rejects those steps).
-    5. ``callback`` as the final fallback (scipy splu via host
-       callback). Always available since scipy is a hard dependency.
+       ``BAYESPECON_JAX_CHOLMOD=0``).  Sparse SuiteSparse solve via JAX FFI —
+       CHOLMOD Cholesky for D-symmetrizable W, KLU (asymmetric LU) for directed
+       W — with its own VJP.  CPU-only.
+    3. ``jax_gmres`` as the final fallback (matrix-free iterative solve).
     """
     if n <= _JAX_SAR_EIGEN_N_MAX:
         return "eigen"
     if _cholmod_jax_enabled() and _cholgraph_available():
         return "cholgraph"
-    if _klujax_available():
-        return "klujax"
-    if _lineax_available():
-        return "lineax"
     return "jax_gmres"
 
 
@@ -284,19 +240,19 @@ def _resolve_auto_sar_solver(n: int) -> str:
 def _select_jax_sar_solver() -> str:
     """Resolve the JAX SAR solver from env vars.
 
-    Returns one of ``"auto"``, ``"eigen"``, ``"callback"``, ``"klujax"``, ``"lineax"``.
+    Returns one of ``"auto"``, ``"eigen"``, ``"callback"``, ``"cholgraph"``,
+    ``"jax_gmres"``.
 
     ``"auto"`` is resolved to a concrete solver at Op registration time
     by :func:`_resolve_auto_sar_solver` based on the problem size *n*.
 
     Environment
     -----------
-    BAYESPECON_JAX_SAR_SOLVER : {"auto", "eigen", "callback", "klujax", "cholgraph", "lineax"}
+    BAYESPECON_JAX_SAR_SOLVER : {"auto", "eigen", "callback", "cholgraph", "jax_gmres"}
         Default ``auto``. ``auto`` selects ``eigen`` when
         N ≤ ``BAYESPECON_JAX_SAR_EIGEN_N_MAX`` (default 0, i.e. opt-in),
         otherwise ``cholgraph`` when installed (default; disable via
-        ``BAYESPECON_JAX_CHOLMOD=0``), else ``klujax`` when installed, else
-        ``lineax`` when installed, else ``callback``.
+        ``BAYESPECON_JAX_CHOLMOD=0``), else ``jax_gmres``.
     BAYESPECON_JAX_SAR_EIGEN_N_MAX : int, default 0
         Maximum N for which ``auto`` selects the eigen path. Default
         0 disables eigen in ``auto`` because the dense materialisation
@@ -317,18 +273,6 @@ def _select_jax_sar_solver() -> str:
     if requested in {"callback", "scipy", "pure_callback"}:
         return "callback"
 
-    if requested in {"klu", "klujax"}:
-        if _klujax_available():
-            return "klujax"
-        msg = (
-            "BAYESPECON_JAX_SAR_SOLVER=klujax requested, but optional "
-            "dependency 'klujax' is not installed. Falling back to callback."
-        )
-        if strict:
-            raise ImportError(msg)
-        warnings.warn(msg, RuntimeWarning)
-        return "callback"
-
     if requested in {"cholmod", "cholgraph"}:
         if _cholgraph_available():
             return "cholgraph"
@@ -341,116 +285,18 @@ def _select_jax_sar_solver() -> str:
         warnings.warn(msg, RuntimeWarning)
         return "callback"
 
-    if requested == "lineax":
-        if _lineax_available():
-            return "lineax"
-        msg = (
-            "BAYESPECON_JAX_SAR_SOLVER=lineax requested, but optional "
-            "dependency 'lineax' is not installed. Falling back to jax_gmres."
-        )
-        if strict:
-            raise ImportError(msg)
-        warnings.warn(msg, RuntimeWarning)
-        return "jax_gmres"
-
     if requested in {"jax_gmres", "gmres", "jaxgmres"}:
         return "jax_gmres"
 
     msg = (
         f"Unknown BAYESPECON_JAX_SAR_SOLVER='{requested}'. "
-        "Valid values are: auto, eigen, callback, klujax, cholgraph, lineax, jax_gmres. Falling back to auto."
+        "Valid values are: auto, eigen, callback, cholgraph, jax_gmres. "
+        "Falling back to auto."
     )
     if strict:
         raise ValueError(msg)
     warnings.warn(msg, RuntimeWarning)
     return "auto"
-
-
-@lru_cache(maxsize=1)
-def _select_jax_sar_lineax_solver() -> str:
-    """Resolve the Lineax iterative solver (``bicgstab`` or ``gmres``)."""
-    requested = (
-        os.environ.get("BAYESPECON_JAX_SAR_LINEAX_SOLVER", "bicgstab").strip().lower()
-    )
-    if requested in {"", "bicgstab"}:
-        return "bicgstab"
-    if requested == "gmres":
-        return "gmres"
-    msg = (
-        f"Unknown BAYESPECON_JAX_SAR_LINEAX_SOLVER='{requested}'. "
-        "Valid values are: bicgstab, gmres. Falling back to bicgstab."
-    )
-    if _strict_env():
-        raise ValueError(msg)
-    warnings.warn(msg, RuntimeWarning)
-    return "bicgstab"
-
-
-@lru_cache(maxsize=1)
-def _select_jax_sar_lineax_precond() -> str:
-    """Resolve the Lineax SAR preconditioner kind.
-
-    Environment variable
-    --------------------
-    BAYESPECON_JAX_SAR_LINEAX_PRECOND : {"neumann", "none"}
-        Default ``"neumann"``. The Neumann-series left preconditioner
-        :math:`M^{-1} \\approx \\sum_{j=0}^{k} \\rho^j W^j` is exact in the
-        limit :math:`k \\to \\infty` when :math:`|\\rho| \\, \\sigma(W) < 1` and
-        strongly accelerates BiCGStab/GMRES convergence on the SAR system
-        :math:`(I - \\rho W) x = b` near the upper end of the stability
-        region. Disable with ``"none"`` to recover the unpreconditioned
-        behaviour (rarely useful — mostly for benchmarking).
-    """
-    requested = (
-        os.environ.get("BAYESPECON_JAX_SAR_LINEAX_PRECOND", "neumann").strip().lower()
-    )
-    if requested in {"", "neumann"}:
-        return "neumann"
-    if requested == "none":
-        return "none"
-    msg = (
-        f"Unknown BAYESPECON_JAX_SAR_LINEAX_PRECOND='{requested}'. "
-        "Valid values are: neumann, none. Falling back to neumann."
-    )
-    if _strict_env():
-        raise ValueError(msg)
-    warnings.warn(msg, RuntimeWarning)
-    return "neumann"
-
-
-@lru_cache(maxsize=1)
-def _select_jax_sar_lineax_neumann_k() -> int:
-    """Resolve the Neumann-series truncation order ``k`` (default 3).
-
-    Environment variable
-    --------------------
-    BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K : int, default 3
-        Number of Neumann correction terms. ``k = 0`` is equivalent to
-        ``BAYESPECON_JAX_SAR_LINEAX_PRECOND=none``. Each extra term costs
-        one additional sparse mat-vec per Krylov iteration but reduces the
-        effective spectral radius geometrically.
-    """
-    raw = os.environ.get("BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K", "3").strip()
-    try:
-        k = int(raw)
-    except ValueError:
-        msg = (
-            f"BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K='{raw}' is not an integer. "
-            "Falling back to 3."
-        )
-        if _strict_env():
-            raise ValueError(msg) from None
-        warnings.warn(msg, RuntimeWarning)
-        return 3
-    if k < 0:
-        msg = (
-            f"BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K={k} must be >= 0. Falling back to 3."
-        )
-        if _strict_env():
-            raise ValueError(msg)
-        warnings.warn(msg, RuntimeWarning)
-        return 3
-    return k
 
 
 @lru_cache(maxsize=1)
@@ -471,14 +317,7 @@ def register_jax_dispatch() -> bool:
     import scipy.sparse as sp
     from pytensor.link.jax.dispatch import jax_funcify
 
-    sparse_backend = _select_jax_sparse_backend()
-    if sparse_backend == "klujax":
-        pass
-
     sar_solver = _select_jax_sar_solver()
-    lineax_solver_name = _select_jax_sar_lineax_solver()
-    lineax_precond_kind = _select_jax_sar_lineax_precond()
-    lineax_neumann_k = _select_jax_sar_lineax_neumann_k()
 
     from ._ops import (
         KroneckerFlowSolveMatrixOp,
@@ -515,17 +354,19 @@ def register_jax_dispatch() -> bool:
         """Equivalent to ``M.ravel(order='F')`` for a 2D array."""
         return M.T.reshape(-1)
 
-    def _kron_klujax_ctx(op):
-        """Sparse klujax context for the separable-Kronecker regional solves.
+    def _kron_cholgraph_ctx(op):
+        """cholgraph KLU context for the separable-Kronecker regional solves.
 
         ``Ld = I − ρ_d W`` and ``Lo = I − ρ_o W`` are sparse (``W`` is sparse),
-        so we solve them with klujax sparse LU instead of forming a dense
-        ``n×n`` and calling ``jsla.solve``.  Both share the ``I ∪ W`` pattern,
-        so one symbolic analysis is reused; ``factor`` gives a per-ρ numeric
-        factorisation reused across forward (``solve``) and adjoint (``tsolve``)
-        right-hand sides.  ``W`` is never densified.
+        so we solve them with cholgraph's KLU (asymmetric sparse LU) instead of
+        forming a dense ``n×n`` and calling ``jsla.solve``.  Both share the
+        ``I ∪ W`` pattern, whose fill-reducing analysis cholgraph computes once
+        and caches (content-addressed), reusing it across forward
+        (``solve`` → ``lu_solve(Ai, Aj, ·)``) and adjoint
+        (``tsolve`` → ``lu_solve(Aj, Ai, ·)``, the transpose via swapped COO
+        indices) right-hand sides.  ``W`` is never densified.
         """
-        import klujax
+        import cholgraph
         from jax.experimental import sparse as jsparse
 
         n = op._n
@@ -545,23 +386,15 @@ def register_jax_dispatch() -> bool:
         Aj = jnp.asarray(np.asarray(eye_c.col, dtype=np.int32))
         eye_vals = jnp.asarray(eye_c.data, dtype=jnp.float64)
         w_vals = jnp.asarray(w_c.data, dtype=jnp.float64)
-        symbolic = klujax.analyze(
-            np.asarray(eye_c.row, dtype=np.int32),
-            np.asarray(eye_c.col, dtype=np.int32),
-            n,
-        )
         W_bcoo = jsparse.BCOO.from_scipy_sparse(op._W.tocsr())
 
-        def factor_at(rho):
-            return klujax.factor(Ai, Aj, eye_vals - rho * w_vals, symbolic)
+        def solve(Ax, rhs):  # L x = rhs
+            return cholgraph.lu_solve(Ai, Aj, Ax, rhs)
 
-        def solve_num(numeric, rhs):  # Ld x = rhs
-            return klujax.solve_with_numeric(numeric, rhs, symbolic)
+        def tsolve(Ax, rhs):  # Lᵀ x = rhs (transpose via swapped COO indices)
+            return cholgraph.lu_solve(Aj, Ai, Ax, rhs)
 
-        def tsolve_num(numeric, rhs):  # Ldᵀ x = rhs (reuses the factorisation)
-            return klujax.tsolve_with_numeric(numeric, rhs, symbolic)
-
-        return n, factor_at, solve_num, tsolve_num, W_bcoo
+        return n, eye_vals, w_vals, solve, tsolve, W_bcoo
 
     # ------------------------------------------------------------------
     # Kronecker forward — pure JAX
@@ -569,18 +402,18 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(KroneckerFlowSolveOp)
     def _funcify_kron_solve(op, **kwargs):
-        if _klujax_available():
-            n, factor_at, solve_num, _tsolve, _W = _kron_klujax_ctx(op)
+        if _cholgraph_available():
+            n, eye_vals, w_vals, solve, _tsolve, _W = _kron_cholgraph_ctx(op)
 
             def kron_solve(rho_d, rho_o, b):
                 Hb = _reshape_F(b, (n, n))  # (n, n)
-                Hp = solve_num(factor_at(rho_d), Hb)  # Ld Hp = Hb
-                Z = solve_num(factor_at(rho_o), Hp.T)  # Lo Z = Hp^T
+                Hp = solve(eye_vals - rho_d * w_vals, Hb)  # Ld Hp = Hb
+                Z = solve(eye_vals - rho_o * w_vals, Hp.T)  # Lo Z = Hp^T
                 return Z.reshape(-1)
 
             return kron_solve
 
-        # Dense fallback (klujax not installed).
+        # Dense fallback (cholgraph not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -602,18 +435,16 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(_KroneckerFlowVJPOp)
     def _funcify_kron_vjp(op, **kwargs):
-        if _klujax_available():
-            n, factor_at, solve_num, tsolve_num, W_bcoo = _kron_klujax_ctx(op)
+        if _cholgraph_available():
+            n, eye_vals, w_vals, _solve, tsolve, W_bcoo = _kron_cholgraph_ctx(op)
 
             def kron_vjp(rho_d, rho_o, eta, g):
                 H_eta = _reshape_F(eta, (n, n))  # (n, n)
                 Hg = _reshape_F(g, (n, n))  # (n, n)
 
                 # Adjoint: (Lo^T ⊗ Ld^T) v = g  =>  Ld^T H_v Lo = Hg
-                num_d = factor_at(rho_d)
-                num_o = factor_at(rho_o)
-                P = tsolve_num(num_d, Hg)  # Ld^T P = Hg
-                Q = tsolve_num(num_o, P.T)  # Lo^T Q = P^T  (Q = H_v^T)
+                P = tsolve(eye_vals - rho_d * w_vals, Hg)  # Ld^T P = Hg
+                Q = tsolve(eye_vals - rho_o * w_vals, P.T)  # Lo^T Q = P^T (Q=H_v^T)
                 H_v = Q.T  # (n, n)
 
                 W_H = W_bcoo @ H_eta  # W @ H_eta
@@ -629,7 +460,7 @@ def register_jax_dispatch() -> bool:
 
             return kron_vjp
 
-        # Dense fallback (klujax not installed).
+        # Dense fallback (cholgraph not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -661,25 +492,26 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(KroneckerFlowSolveMatrixOp)
     def _funcify_kron_solve_matrix(op, **kwargs):
-        if _klujax_available():
-            n, factor_at, solve_num, _tsolve, _W = _kron_klujax_ctx(op)
+        if _cholgraph_available():
+            n, eye_vals, w_vals, solve, _tsolve, _W = _kron_cholgraph_ctx(op)
 
             def kron_solve_mat(rho_d, rho_o, B):
-                # Factor Ld, Lo once (ρ is shared across columns), then vmap.
-                num_d = factor_at(rho_d)
-                num_o = factor_at(rho_o)
+                # ρ is shared across columns; cholgraph caches the factor for
+                # each distinct Ax, so the per-column vmap reuses it.
+                Ax_d = eye_vals - rho_d * w_vals
+                Ax_o = eye_vals - rho_o * w_vals
 
                 def _one(b):
                     Hb = _reshape_F(b, (n, n))
-                    Hp = solve_num(num_d, Hb)
-                    Z = solve_num(num_o, Hp.T)
+                    Hp = solve(Ax_d, Hb)
+                    Z = solve(Ax_o, Hp.T)
                     return Z.reshape(-1)
 
                 return jax.vmap(_one, in_axes=1, out_axes=1)(B)
 
             return kron_solve_mat
 
-        # Dense fallback (klujax not installed).
+        # Dense fallback (cholgraph not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -701,18 +533,18 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(_KroneckerFlowVJPMatrixOp)
     def _funcify_kron_vjp_matrix(op, **kwargs):
-        if _klujax_available():
-            n, factor_at, solve_num, tsolve_num, W_bcoo = _kron_klujax_ctx(op)
+        if _cholgraph_available():
+            n, eye_vals, w_vals, _solve, tsolve, W_bcoo = _kron_cholgraph_ctx(op)
 
             def kron_vjp_mat(rho_d, rho_o, H_eta, G):
-                num_d = factor_at(rho_d)
-                num_o = factor_at(rho_o)
+                Ax_d = eye_vals - rho_d * w_vals
+                Ax_o = eye_vals - rho_o * w_vals
 
                 def _one(eta_col, g_col):
                     H_e = _reshape_F(eta_col, (n, n))
                     Hg = _reshape_F(g_col, (n, n))
-                    P = tsolve_num(num_d, Hg)
-                    Q = tsolve_num(num_o, P.T)
+                    P = tsolve(Ax_d, Hg)
+                    Q = tsolve(Ax_o, P.T)
                     H_v = Q.T
                     W_H = W_bcoo @ H_e
                     Ld_H = H_e - rho_d * W_H
@@ -728,7 +560,7 @@ def register_jax_dispatch() -> bool:
 
             return kron_vjp_mat
 
-        # Dense fallback (klujax not installed).
+        # Dense fallback (cholgraph not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -1000,100 +832,6 @@ def register_jax_dispatch() -> bool:
     # Cross-sectional SAR sparse Op — Lineax matrix-free iterative solve
     # ------------------------------------------------------------------
 
-    def _build_lineax_sar_paths(op):
-        """Return ``(forward_fn, vjp_fn)`` for the Lineax SAR path.
-
-        Both functions are pure-JAX and tracer-compatible. The forward solves
-        :math:`(I - \\rho W) \\eta = b` and the VJP solves the adjoint system
-        :math:`(I - \\rho W^\\top) v = g` matrix-free over a BCOO ``W``.
-
-        A truncated Neumann-series left preconditioner
-
-        .. math::
-
-            M^{-1} \\approx \\sum_{j=0}^{k} \\rho^{\\,j} W^{\\,j}
-
-        is applied to both the operator and the right-hand side (and its
-        transpose for the adjoint path) when
-        ``BAYESPECON_JAX_SAR_LINEAX_PRECOND="neumann"`` (default). The
-        truncation order ``k`` is set by
-        ``BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K`` (default 3). Each extra
-        term costs one additional sparse mat-vec per Krylov iteration but
-        clusters the spectrum of :math:`M^{-1} A` tightly around 1,
-        which dramatically reduces BiCGStab breakdown and GMRES restart
-        cost near :math:`|\\rho|\\,\\sigma(W) \\to 1`.
-        """
-        import lineax as lx
-        from jax.experimental import sparse as jsparse
-
-        n = op._n
-        W_bcoo = jsparse.BCOO.from_scipy_sparse(op._W)
-        W_T_bcoo = jsparse.BCOO.from_scipy_sparse(op._W.transpose().tocsr())
-        max_steps = max(int(10 * n), 5000)
-        rtol = 1e-8
-        atol = 1e-8
-
-        use_precond = lineax_precond_kind == "neumann" and lineax_neumann_k > 0
-        neumann_k = lineax_neumann_k
-
-        def _make_solver():
-            if lineax_solver_name == "gmres":
-                return lx.GMRES(rtol=rtol, atol=atol, max_steps=max_steps, restart=20)
-            return lx.BiCGStab(rtol=rtol, atol=atol, max_steps=max_steps)
-
-        def _apply_minv(rho, W_matvec, x):
-            """Apply the truncated Neumann preconditioner :math:`M^{-1} x`.
-
-            ``M^{-1} x = x + rho * W (x + rho * W (x + ...))`` evaluated
-            via Horner-style nesting so each term reuses the previous
-            mat-vec result (``k`` total mat-vecs of ``W_matvec``).
-            """
-            out = x
-            term = x
-            for _ in range(neumann_k):
-                term = rho * W_matvec(term)
-                out = out + term
-            return out
-
-        def _solve(W_matvec, rho, b):
-            if use_precond:
-
-                def matvec(x):
-                    Ax = x - rho * W_matvec(x)
-                    return _apply_minv(rho, W_matvec, Ax)
-
-                rhs = _apply_minv(rho, W_matvec, b)
-            else:
-
-                def matvec(x):
-                    return x - rho * W_matvec(x)
-
-                rhs = b
-
-            structure = jax.ShapeDtypeStruct(rhs.shape, rhs.dtype)
-            operator = lx.FunctionLinearOperator(matvec, structure)
-            # ``throw=False`` so that non-convergence / near-singular
-            # systems return NaNs rather than raising Equinox runtime
-            # errors. NUTS rejects steps with non-finite log-prob or
-            # gradient, which is the correct behaviour at the edge of
-            # the stationary region. Raising would flood stderr with
-            # tracebacks on every rejected leapfrog proposal.
-            solution = lx.linear_solve(operator, rhs, _make_solver(), throw=False)
-            return solution.value
-
-        def forward(rho, b):
-            return _solve(lambda x: W_bcoo @ x, rho, b)
-
-        def vjp(rho, eta, g):
-            # Adjoint system: A^T v = g. Left-preconditioning with
-            # M^{-T} = sum_j rho^j (W^T)^j leaves the solution unchanged
-            # and accelerates convergence the same way as the forward path.
-            v = _solve(lambda x: W_T_bcoo @ x, rho, g)
-            grad_rho = jnp.vdot(v, W_bcoo @ eta)
-            return grad_rho, v
-
-        return forward, vjp
-
     # ------------------------------------------------------------------
     # Cross-sectional SAR sparse Op — JAX native GMRES with BCOO
     # ------------------------------------------------------------------
@@ -1253,14 +991,6 @@ def register_jax_dispatch() -> bool:
 
             return sparse_sar_solve
 
-        if resolved == "lineax":
-            forward, _ = _build_lineax_sar_paths(op)
-
-            def sparse_sar_solve(rho, b):
-                return forward(rho, b)
-
-            return sparse_sar_solve
-
         if resolved == "jax_gmres":
             forward, _ = _build_jax_gmres_sar_paths(op)
 
@@ -1269,50 +999,44 @@ def register_jax_dispatch() -> bool:
 
             return sparse_sar_solve
 
-        if resolved == "klujax" or (
-            sar_solver != "auto" and sparse_backend == "klujax"
-        ):
-            import klujax  # local: the module-level var is only set for sparse_backend="klujax"
-
-            n = op._n
-            # Build the aligned COO value vectors of A(ρ) = I − ρW over the
-            # structural union of I and W — never densify W (O(nnz), not O(n²);
-            # a dense n×n at n=20k would be ~3.2 GB in this scalable-solver path).
-            eye_coo = sp.eye(n, format="coo", dtype=np.float64)
-            W_coo = op._W.tocoo()
-            _rows = np.concatenate([eye_coo.row, W_coo.row])
-            _cols = np.concatenate([eye_coo.col, W_coo.col])
-
-            def _aligned(parts):
-                c = sp.coo_matrix((np.concatenate(parts), (_rows, _cols)), shape=(n, n))
-                c.sum_duplicates()
-                return c
-
-            eye_c = _aligned([np.ones(eye_coo.nnz), np.zeros(W_coo.nnz)])
-            w_c = _aligned([np.zeros(eye_coo.nnz), W_coo.data])
-            Ai = jnp.asarray(np.asarray(eye_c.row, dtype=np.int32))
-            Aj = jnp.asarray(np.asarray(eye_c.col, dtype=np.int32))
-            const_vals = jnp.asarray(eye_c.data, dtype=jnp.float64)
-            w_vals = jnp.asarray(w_c.data, dtype=jnp.float64)
-            # Sparsity pattern is fixed for A(rho)=I-rho*W, so analyze once and
-            # reuse symbolic metadata across all solves.
-            symbolic = klujax.analyze(Ai, Aj, n)
-
-            def sparse_sar_solve(rho, b):
-                Ax = const_vals - rho * w_vals
-                return klujax.solve_with_symbol(Ai, Aj, Ax, b, symbolic)
-
-            return sparse_sar_solve
-
         if resolved == "cholgraph":
             import cholgraph as _chj
 
-            from ._logdet._chol_cheb import _d_symmetrize
-
             n = op._n
-            # D-symmetrise W: raises ValueError if not symmetrizable.
-            W_sym_sp = _d_symmetrize(op._W)  # csc_matrix, symmetric
+            try:
+                from ._logdet._chol_cheb import _d_symmetrize
 
+                # D-symmetrise W: raises ValueError if not symmetrizable.
+                W_sym_sp = _d_symmetrize(op._W)  # csc_matrix, symmetric
+            except ValueError:
+                # Directed / non-symmetrizable W → cholgraph KLU (asymmetric LU).
+                # Fixed COO pattern for A(ρ) = I − ρW over the I ∪ W union; W is
+                # never densified (O(nnz)).  cholgraph caches the analysis.
+                eye_coo = sp.eye(n, format="coo", dtype=np.float64)
+                W_coo = op._W.tocoo()
+                _rows = np.concatenate([eye_coo.row, W_coo.row])
+                _cols = np.concatenate([eye_coo.col, W_coo.col])
+
+                def _aligned(parts):
+                    c = sp.coo_matrix(
+                        (np.concatenate(parts), (_rows, _cols)), shape=(n, n)
+                    )
+                    c.sum_duplicates()
+                    return c
+
+                eye_c = _aligned([np.ones(eye_coo.nnz), np.zeros(W_coo.nnz)])
+                w_c = _aligned([np.zeros(eye_coo.nnz), W_coo.data])
+                Ai = jnp.asarray(np.asarray(eye_c.row, dtype=np.int32))
+                Aj = jnp.asarray(np.asarray(eye_c.col, dtype=np.int32))
+                const_vals = jnp.asarray(eye_c.data, dtype=jnp.float64)
+                w_vals = jnp.asarray(w_c.data, dtype=jnp.float64)
+
+                def sparse_sar_solve(rho, b):
+                    return _chj.lu_solve(Ai, Aj, const_vals - rho * w_vals, b)
+
+                return sparse_sar_solve
+
+            # Symmetrizable W → cholgraph SPD Cholesky.
             # Build COO pattern for I − ρW_sym (upper triangle + diagonal).
             W_sym_coo = W_sym_sp.tocoo()
             mask_upper = W_sym_coo.row <= W_sym_coo.col
@@ -1390,14 +1114,6 @@ def register_jax_dispatch() -> bool:
 
         if resolved == "eigen":
             _, vjp = _build_eigen_sar_paths(op)
-
-            def sparse_sar_vjp(rho, eta, g):
-                return vjp(rho, eta, g)
-
-            return sparse_sar_vjp
-
-        if resolved == "lineax":
-            _, vjp = _build_lineax_sar_paths(op)
 
             def sparse_sar_vjp(rho, eta, g):
                 return vjp(rho, eta, g)

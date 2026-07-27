@@ -59,9 +59,9 @@ def _default_logdet_value_and_grad(kron, probes):
 
 
 def _jax_logdet_value_and_grad(kron, probes, n_quad=8):
-    """JAX-native value+grad closure — klujax solves, JIT-compiled via equinox.
+    """JAX-native value+grad closure — cholgraph solves, JIT-compiled via equinox.
 
-    All P probes are solved in a single batched klujax call, and the Hutchinson
+    All P probes are solved in a single batched cholgraph call, and the Hutchinson
     accumulation + ray integration are done in JAX.  The entire function is
     JIT-compiled, eliminating Python overhead per MALA step.
     """
@@ -797,15 +797,15 @@ def attach_flow_log_abs_det(
                 )
             return out
     else:
-        from bayespecon._jax_dispatch import _klujax_available
+        from bayespecon._jax_dispatch import _cholgraph_available
 
         rng = np.random.default_rng(seed)
         probes = rng.choice([-1.0, 1.0], size=(kron.N, int(n_probes))).astype(
             np.float64
         )
 
-        if _klujax_available():
-            # JAX-native path: JIT-compiled, reuses klujax symbolic analysis
+        if _cholgraph_available():
+            # JAX-native path: JIT-compiled, reuses cholgraph's cached analysis
             from ..._logdet._flow_resolvent import _make_flow_kron_jax
 
             jax_fn = _make_flow_kron_jax(kron, probes, n_quad=n_quad)

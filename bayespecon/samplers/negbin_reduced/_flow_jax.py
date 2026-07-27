@@ -1,4 +1,4 @@
-r"""JAX/klujax sparse solve primitives for the unrestricted flow NB Gibbs sampler.
+r"""JAX/cholgraph sparse solve primitives for the unrestricted flow NB Gibbs sampler.
 
 The unrestricted origin–destination flow model has system matrix
 
@@ -11,17 +11,17 @@ non-D-symmetrizable), so no Cholesky applies; and it is far too large to
 densify (``N \times N`` with ``N = n^2``).  The numpy chain factorises the
 sparse ``A`` on the host every time a ``\rho`` moves (see
 ``_flow._solve_A_unrestricted``).  This module provides the JAX-native
-equivalent: a single ``klujax`` symbolic analysis reused across the whole
+equivalent: a single ``cholgraph`` symbolic analysis reused across the whole
 run, with per-``\rho`` numeric refactor-and-solve that is JIT-compatible and
 autodiff-capable — the enabling piece for a GPU-friendly flow backend.
 
 The crucial invariant is that **the sparsity pattern of ``A`` is constant**
 across ``\rho`` (it is the structural union of ``I, W_d, W_o, W_w``).  We
 build that shared pattern once and carry four value vectors aligned to it, so
-each solve only rescales values and calls ``klujax.solve_with_symbol`` — the
+each solve only rescales values and calls ``cholgraph.lu_solve`` — the
 symbolic factorisation (AMD ordering + elimination tree) is never redone.
 
-Keeping this alongside the numpy host path is intentional: klujax shines on
+Keeping this alongside the numpy host path is intentional: cholgraph shines on
 GPU, while host KLU/UMFPACK remains competitive on CPU.
 """
 
@@ -167,8 +167,8 @@ def _make_flow_solvers(ctx):
     ``cholgraph.lu_solve`` is vmap-safe and reuses its numeric factorisation via
     a content-addressed cache: the m+1 solves of a Krylov basis at a fixed
     (ρ_d,ρ_o,ρ_w) pay one ``klu_factor`` and m cheap solves — per chain — even
-    under ``jax.vmap`` over chains.  (Replaced klujax, whose numeric-handle reuse
-    segfaults under ``jit(vmap(...))``; see ``set_lu_cache_size``.)
+    under ``jax.vmap`` over chains, which stays vmap-safe under ``jit(vmap(...))``;
+    see ``set_lu_cache_size``.
     """
     import cholgraph
     import jax.numpy as jnp
@@ -412,8 +412,8 @@ def run_chains_jax_flow(
 
     All chains run together under ``jax.vmap`` (like the reduced-form SAR-NB and
     logit paths).  The non-symmetric LU solve goes through ``cholgraph.lu_solve``
-    (SuiteSparse KLU) — vmap-safe with numeric factor-reuse — replacing klujax,
-    whose numeric-handle reuse segfaults under ``jit(vmap(...))``.  The three ρ
+    (SuiteSparse KLU) — vmap-safe with numeric factor-reuse under
+    ``jit(vmap(...))``.  The three ρ
     slices are Krylov-only (no per-candidate direct solve, which under vmap would
     run for every candidate).  ``W`` is never densified; the exact PG draw uses
     the host callback.

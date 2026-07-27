@@ -1,27 +1,28 @@
 """Pólya–Gamma Gibbs sampler for the zero-inflated SAR-NB model.
 
-Orchestrates the 8-block Gibbs sweep:
+Orchestrates the 9-block Gibbs sweep:
 
-  Selection equation (structural-form SAR-logit):
-    1. ω^sel | η^sel, d       (PG augmentation, h = 1)
-    2. η^sel | ω^sel, λ, γ    (spatial-normal draw, σ² = 1)
-    3. γ     | η^sel, λ       (conjugate normal)
-    4. λ     | γ, ω^sel, d    (collapsed 1-D slice, η^sel integrated out)
+  Selection equation (reduced-form SAR-logit):
+    1. ω^sel | η^sel          (PG augmentation, h = 1; η^sel = (I−λW)⁻¹Zγ)
+    2. λ     | γ, ω^sel, z    (β-marginalised 1-D slice; Jacobian cancels)
+    3. γ     | ω^sel, λ, z    (conjugate normal via Z̃ = A_λ^{-1} Z)
 
   Zero allocation:
-    5. z_i | y_i, η^cnt_i, η^sel_i, α   (Bernoulli draw for y_i = 0)
+    4. z_i | y_i, η^cnt_i, η^sel_i, α   (Bernoulli draw for y_i = 0)
 
   Count equation (reduced-form SAR-NB):
-    6. ω^cnt | η^cnt, α, y, z  (PG augmentation, z-masked)
-    7. β     | ω^cnt, ρ, α, y, z  (conjugate normal via X̃ = A_ρ^{-1} X)
-    8. ρ     | ω^cnt, α, y, z  (β-marginalised 1-D slice, z-masked)
-    9. α     | y, η^cnt, z     (1-D slice on log(α))
+    5. ω^cnt | η^cnt, α, y, z  (PG augmentation, z-masked)
+    6. β     | ω^cnt, ρ, α, y, z  (conjugate normal via X̃ = A_ρ^{-1} X)
+    7. ρ     | ω^cnt, α, y, z  (β-marginalised 1-D slice, z-masked)
+    8. α     | y, η^cnt, z     (1-D slice on log(α))
 
-The selection equation is the structural-form SAR-logit from
-:mod:`bayespecon.samplers.logit._core`. The count equation is the
-reduced-form SAR-NB from :mod:`bayespecon.samplers.negbin_reduced._core`.
-The zero-allocation block (5) is the only genuinely new algorithmic
-content.
+**Both** equations are reduced-form: the selection is the reduced-form
+SAR-logit from :mod:`bayespecon.samplers.logit_reduced._core` (spatial lag on
+the linear predictor, no latent field — the ``|I−λW|`` Jacobian cancels when γ
+is marginalised out), and the count is the reduced-form SAR-NB from
+:mod:`bayespecon.samplers.negbin_reduced._core`.  This matches the JAX backend
+(:mod:`bayespecon.samplers.zinb._jax`) block-for-block, so both backends fit the
+*same* model.  The zero-allocation block (4) is the only genuinely new content.
 
 References
 ----------
@@ -44,21 +45,15 @@ import scipy.sparse as sp
 from ...models.priors import ZINBGibbsPriors
 from .._utils._polyagamma import sample_polyagamma
 from .._utils._spatial_normal import CholmodFactor
-from ..logit._core import (
-    LogitGibbsCache,
-    LogitGibbsPriors,
-    LogitGibbsState,
-)
-from ..logit._core import (
+from ..logit._core import LogitGibbsPriors
+from ..logit_reduced._core import ReducedLogitGibbsState
+from ..logit_reduced._core import (
     _sample_beta as _sample_gamma_sel,
 )
-from ..logit._core import (
-    _sample_eta as _sample_eta_sel,
-)
-from ..logit._core import (
+from ..logit_reduced._core import (
     _sample_omega as _sample_omega_sel,
 )
-from ..logit._core import (
+from ..logit_reduced._core import (
     _sample_rho as _sample_lam,
 )
 from ..negbin._core import GibbsPriors as _NBGibbsPriors
@@ -134,9 +129,9 @@ class ZINBGibbsState:
 class ZINBGibbsCache(NamedTuple):
     """Precomputed data that doesn't change across sweeps."""
 
-    # Selection equation cache (mirrors LogitGibbsCache)
-    sel_cache: LogitGibbsCache
-    # Count equation cache (mirrors ReducedGibbsCache)
+    # Selection equation cache (reduced-form SAR-logit; ReducedGibbsCache on W_sel)
+    sel_cache: ReducedGibbsCache
+    # Count equation cache (reduced-form SAR-NB; ReducedGibbsCache on W_cnt)
     cnt_cache: ReducedGibbsCache
     # Data
     y: np.ndarray  # (n,) observed counts
@@ -319,9 +314,8 @@ def run_zinb_chain(
         z=init.z.copy(),
     )
 
-    # Build logit sub-state for calling logit blocks
-    sel_state = LogitGibbsState(
-        eta=state.eta_sel,
+    # Build reduced-form logit sub-state for the selection blocks
+    sel_state = ReducedLogitGibbsState(
         beta=state.gamma,
         rho=state.lam,
         omega=state.omega_sel,
@@ -338,78 +332,100 @@ def run_zinb_chain(
     sel_cache = cache.sel_cache
     cnt_cache = cache.cnt_cache
 
-    # CHOLMOD solver for the count equation (built once per chain)
-    cholmod_solver = None
-    if (
-        cnt_cache.cholmod_pattern is not None
-        and cnt_cache.W_sym is not None
-        and cnt_cache.WtW is not None
-    ):
-        cholmod_factor = CholmodFactor(cnt_cache.cholmod_pattern)
-        cholmod_solver = _CholmodNormalEqSolver(
-            cholmod_factor=cholmod_factor,
-            W_csc=cnt_cache.W_csc,
-            W_sym=cnt_cache.W_sym,
-            WtW=cnt_cache.WtW,
-            n=n,
-        )
+    def _build_cholmod_solver(rg_cache):
+        """CHOLMOD normal-equations solver for a ReducedGibbsCache (or None)."""
+        if (
+            rg_cache.cholmod_pattern is not None
+            and rg_cache.W_sym is not None
+            and rg_cache.WtW is not None
+        ):
+            return _CholmodNormalEqSolver(
+                cholmod_factor=CholmodFactor(rg_cache.cholmod_pattern),
+                W_csc=rg_cache.W_csc,
+                W_sym=rg_cache.W_sym,
+                WtW=rg_cache.WtW,
+                n=n,
+            )
+        return None
 
-    # Detect intercept column in X for reparameterisation
+    # CHOLMOD solvers for both equations (built once per chain, worker-side)
+    cholmod_solver = _build_cholmod_solver(cnt_cache)
+    sel_cholmod_solver = _build_cholmod_solver(sel_cache)
+
+    # Detect intercept columns for the δ₀ = β₀/(1−ρ) reparameterisation.
     intercept_col = -1
     for _j in range(k):
         if np.all(X[:, _j] == 1.0):
             intercept_col = _j
             break
+    sel_intercept_col = -1
+    for _j in range(p):
+        if np.all(Z[:, _j] == 1.0):
+            sel_intercept_col = _j
+            break
 
     for i in range(total_iters):
-        # ── SELECTION EQUATION (4 blocks) ──────────────────────────────
+        # ── SELECTION EQUATION (reduced-form SAR-logit, 3 blocks) ──────
         # CRITICAL: The selection equation models the *latent* corridor
         # activity z, NOT the observed d = 1(y > 0).  Using d conflates
         # structural zeros with NB sampling zeros, biasing γ and λ.
+        #
+        # Reduced form: η^sel = (I − λW_sel)⁻¹ Zγ (deterministic, no latent
+        # field).  Mirrors the JAX backend and the reduced-NB count blocks:
+        # ω^sel = PG(1, η^sel); λ is a β-marginalised slice (Jacobian cancels);
+        # γ is conjugate given Z̃ = A_λ^{-1} Z.
+        z_float = state.z.astype(np.float64)
 
-        # Block 1: ω^sel | η^sel, z   (z = latent allocation, not d)
+        # η^sel at the current λ (CHOLMOD-reused solve).
+        try:
+            _sel_solver = _make_solver(
+                state.lam, sel_cache.W_csc, n, cholmod_solver=sel_cholmod_solver
+            )
+            state.eta_sel = _sel_solver.solve(Z @ state.gamma)
+        except (RuntimeError, ValueError):
+            state.eta_sel = Z @ state.gamma
+
+        # Block 1: ω^sel | η^sel   (PG(1, η^sel))
         state.omega_sel = _sample_omega_sel(state.eta_sel, rng=rng)
         sel_state.omega = state.omega_sel
-
-        # Block 2: η^sel | ω^sel, λ, γ, z
-        state.eta_sel, _ = _sample_eta_sel(
-            sel_state,
-            state.z.astype(np.float64),
-            Z,
-            W_sel_sparse,
-            rng=rng,
-            cache=sel_cache,
-        )
-        sel_state.eta = state.eta_sel
-
-        # Recompute A_λ η^sel for the γ draw (no matrix build)
-        A_lam_eta_sel = state.eta_sel - state.lam * (W_sel_sparse @ state.eta_sel)
-
-        # Block 3: γ | η^sel, λ
-        ZtZ = sel_cache.XtX  # reused: Z^T Z stored as XtX in logit cache
-        state.gamma = _sample_gamma_sel(
-            sel_state,
-            Z,
-            ZtZ,
-            sel_priors,
-            A_lam_eta_sel,
-            rng=rng,
-        )
+        sel_state.rho = state.lam
         sel_state.beta = state.gamma
 
-        # Block 4: λ | γ, ω^sel, z
+        # Block 2: λ | γ, ω^sel, z   (β-marginalised 1-D slice, response z)
         state.lam, _ = _sample_lam(
             sel_state,
             sel_cache,
-            sel_priors,
-            state.z.astype(np.float64),
+            z_float,
             Z,
+            sel_priors,
             rng=rng,
-            log_density_current=None,
             sweep_idx=i,
             tune=tune,
+            basis=None,
+            intercept_col=sel_intercept_col,
         )
         sel_state.rho = state.lam
+
+        # Block 3: γ | ω^sel, λ, z   (conjugate normal via Z̃ = A_λ^{-1} Z)
+        try:
+            _sel_solver = _make_solver(
+                state.lam, sel_cache.W_csc, n, cholmod_solver=sel_cholmod_solver
+            )
+            Ztilde = _sel_solver.solve(Z)
+        except (RuntimeError, ValueError):
+            Ztilde = Z
+        state.gamma = _sample_gamma_sel(
+            state.gamma,
+            Ztilde,
+            state.omega_sel,
+            z_float,
+            sel_priors,
+            rng=rng,
+            rho=state.lam,
+            intercept_col=sel_intercept_col,
+        )
+        sel_state.beta = state.gamma
+        state.eta_sel = Ztilde @ state.gamma
 
         # ── ZERO ALLOCATION (1 block) ─────────────────────────────────
 
@@ -548,7 +564,7 @@ def run_zinb_chain(
                 ll_nb = _nb_loglik_pointwise(y, eta_cnt, state.alpha)
                 ll_nb = np.where(state.z == 1, ll_nb, 0.0)
                 # Logit log-lik for the selection equation
-                from ..logit._core import _logit_loglik_pointwise
+                from ..logit_reduced._core import _logit_loglik_pointwise
 
                 ll_sel = _logit_loglik_pointwise(d, state.eta_sel)
                 log_lik_samples[idx] = ll_nb + ll_sel

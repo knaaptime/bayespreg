@@ -84,10 +84,7 @@ def _make_sparse_solvers(sparse_ctx):
     numeric factorisation: the fill-reducing analysis is cached by pattern, and
     a content-addressed LU factor cache keyed on ``Ax`` means the m+1 solves of
     a Krylov basis at a fixed ρ pay one ``klu_factor`` and m cheap solves — per
-    chain — even under ``jax.vmap`` over chains.  (This replaced klujax, whose
-    ``factor`` + ``solve_with_numeric`` reuse path segfaults under
-    ``jit(vmap(...))`` and whose ``solve_with_symbol`` is vmap-safe but re-factors
-    on every solve, ~3× slower than numpy.)  See ``set_lu_cache_size`` — the
+    chain — even under ``jax.vmap`` over chains.  See ``set_lu_cache_size`` — the
     factor cache must be ≥ the chain count for the reuse to land.
     """
     import cholgraph
@@ -147,7 +144,7 @@ def _build_krylov_basis_jax(solve1, X_jax, matvec_W, n, k, degree):
     ``W @ V_j`` products go through the sparse ``matvec_W`` (BCOO) and each
     solve through the unary ``solve1``.  Taking ``solve1`` as a unary
     ``rhs -> A_c⁻¹ rhs`` decouples the basis from how ``A_c`` is parameterised
-    (single-ρ SAR vs 3-ρ flow) and from the klujax call convention.
+    (single-ρ SAR vs 3-ρ flow) and from the cholgraph call convention.
 
     Parameters
     ----------
@@ -230,7 +227,7 @@ def _rho_log_density_marginal_jax(
     """β-marginalised log-density of ρ for the reduced form.
 
     Evaluates U(ρ) via the Krylov basis when |Δρ| ≤ dmax,
-    otherwise falls back to a direct sparse klujax solve (``solve_at``).
+    otherwise falls back to a direct sparse cholgraph solve (``solve_at``).
     This matches the NumPy path's direct-solve fallback and ensures the
     slice sampler can explore the full ρ support.
 
@@ -258,7 +255,7 @@ def _rho_log_density_marginal_jax(
 
     U_krylov = _eval_U_from_basis_jax(V_stack, drho)
 
-    # Direct sparse solve fallback (klujax; correct for any ρ)
+    # Direct sparse solve fallback (cholgraph; correct for any ρ)
     has_fallback = (X_jax is not None) and (solve_at is not None)
     if has_fallback:
         U_direct = solve_at(rho_val, X_jax)
@@ -485,9 +482,9 @@ def _make_reduced_gibbs_step(
     X_jax : jax.numpy.ndarray of shape (n, k)
         Design matrix (JAX array).
     sparse_ctx : dict
-        Sparse klujax context from :func:`_build_sparse_ctx`: keys ``Ai``,
+        Sparse cholgraph context from :func:`_build_sparse_ctx`: keys ``Ai``,
         ``Aj``, ``eye_vals``, ``w_vals`` (aligned COO of ``I − ρW``),
-        ``symbolic`` (cached klujax symbolic factorisation) and ``W_bcoo``
+        ``symbolic`` (cached cholgraph symbolic factorisation) and ``W_bcoo``
         (BCOO ``W`` for matvecs).  ``W`` is never densified.
     n : int
         Number of spatial units.
@@ -536,7 +533,7 @@ def _make_reduced_gibbs_step(
         def _draw_pg(hh, zz, kk):
             return jax_polyagamma(hh, zz, key=kk, method="callback")
 
-    # ── Sparse klujax solve closures (W is never densified; vmap-safe) ──
+    # ── Sparse cholgraph solve closures (W is never densified; vmap-safe) ──
     _solve, _matvec_W = _make_sparse_solvers(sparse_ctx)
 
     # Prior hyperparameters
@@ -588,7 +585,7 @@ def _make_reduced_gibbs_step(
         key_rho, key_beta, key_alpha = jax.random.split(key, 3)
 
         # ── Block 0: ω ~ PG(y + α, η) ──
-        # η = (I − ρW)⁻¹ Xβ at the current ρ (sparse klujax; W never densified).
+        # η = (I − ρW)⁻¹ Xβ at the current ρ (sparse cholgraph; W never densified).
         eta = _solve(rho, X_jax @ beta)
         key, key_pg = jax.random.split(key)
         h = jnp.maximum(y_jax + alpha, 1e-3)

@@ -305,72 +305,17 @@ def test_sampler_resolution_with_jax_present():
     )
 
 
-def test_klujax_backend_selected_when_installed(monkeypatch):
-    pytest.importorskip("klujax")
-    from bayespecon._jax_dispatch import _select_jax_sparse_backend
-
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "klujax")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-    _select_jax_sparse_backend.cache_clear()
-    assert _select_jax_sparse_backend() == "klujax"
-
-
-def test_sparse_sar_jax_klujax_path_runs(monkeypatch):
-    pytest.importorskip("klujax")
-
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "klujax")
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "klujax")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-    _reset_jax_dispatch_caches()
-    from bayespecon._jax_dispatch import register_jax_dispatch
-
-    register_jax_dispatch()
-
-    W = _line_W(5)
-    op = SparseSARSolveOp(W)
-    rho = pt.dscalar("rho")
-    b = pt.dvector("b")
-    eta = op(rho, b)
-
-    f_c = pytensor.function([rho, b], eta)
-    f_j = pytensor.function([rho, b], eta, mode="JAX")
-
-    rng = np.random.default_rng(9)
-    b_val = rng.standard_normal(5)
-
-    np.testing.assert_allclose(
-        np.asarray(f_c(0.2, b_val)),
-        np.asarray(f_j(0.2, b_val)),
-        atol=1e-10,
-        rtol=1e-10,
-    )
-
-
 def test_jax_auto_prefers_cholgraph_when_available(monkeypatch):
     from bayespecon._jax_dispatch import _select_jax_sparse_backend
 
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
     monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: True)
-    monkeypatch.setattr("bayespecon._jax_dispatch._klujax_available", lambda: True)
     monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
 
     _select_jax_sparse_backend.cache_clear()
     assert _select_jax_sparse_backend() == "cholgraph"
     _select_jax_sparse_backend.cache_clear()
-
-
-def test_jax_auto_prefers_klujax_when_available(monkeypatch):
-    from bayespecon._jax_dispatch import _select_jax_sparse_backend
-
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
-    monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: False)
-    monkeypatch.setattr("bayespecon._jax_dispatch._klujax_available", lambda: True)
-    monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
-
-    _select_jax_sparse_backend.cache_clear()
-    assert _select_jax_sparse_backend() == "klujax"
 
 
 def test_jax_auto_falls_to_callback_when_only_umfpack_available(monkeypatch):
@@ -379,7 +324,6 @@ def test_jax_auto_falls_to_callback_when_only_umfpack_available(monkeypatch):
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
     monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: False)
-    monkeypatch.setattr("bayespecon._jax_dispatch._klujax_available", lambda: False)
     monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
 
     _select_jax_sparse_backend.cache_clear()
@@ -397,7 +341,6 @@ def test_jax_auto_falls_to_callback_scipy_when_no_optional_backends(monkeypatch)
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
     monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: False)
-    monkeypatch.setattr("bayespecon._jax_dispatch._klujax_available", lambda: False)
     monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: False)
 
     _select_jax_sparse_backend.cache_clear()
@@ -423,9 +366,6 @@ def _reset_jax_dispatch_caches() -> None:
     previously registered dispatcher closures.
     """
     from bayespecon._jax_dispatch import (
-        _select_jax_sar_lineax_neumann_k,
-        _select_jax_sar_lineax_precond,
-        _select_jax_sar_lineax_solver,
         _select_jax_sar_solver,
         _select_jax_sparse_backend,
         register_jax_dispatch,
@@ -433,9 +373,6 @@ def _reset_jax_dispatch_caches() -> None:
 
     _select_jax_sparse_backend.cache_clear()
     _select_jax_sar_solver.cache_clear()
-    _select_jax_sar_lineax_solver.cache_clear()
-    _select_jax_sar_lineax_precond.cache_clear()
-    _select_jax_sar_lineax_neumann_k.cache_clear()
     register_jax_dispatch.cache_clear()
 
 
@@ -454,7 +391,7 @@ def _setup_jax_gmres_dispatch(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_jax_gmres_solver_env(monkeypatch, lineax_env_reset):
+def test_jax_gmres_solver_env(monkeypatch, sar_env_reset):
     from bayespecon._jax_dispatch import _select_jax_sar_solver
 
     monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "jax_gmres")
@@ -463,7 +400,7 @@ def test_jax_gmres_solver_env(monkeypatch, lineax_env_reset):
     assert _select_jax_sar_solver() == "jax_gmres"
 
 
-def test_sparse_sar_jax_gmres_forward_parity(monkeypatch, lineax_env_reset):
+def test_sparse_sar_jax_gmres_forward_parity(monkeypatch, sar_env_reset):
     """JAX GMRES forward solve must match C-backend reference."""
     _setup_jax_gmres_dispatch(monkeypatch)
 
@@ -487,7 +424,7 @@ def test_sparse_sar_jax_gmres_forward_parity(monkeypatch, lineax_env_reset):
     )
 
 
-def test_sparse_sar_jax_gmres_grad_parity(monkeypatch, lineax_env_reset):
+def test_sparse_sar_jax_gmres_grad_parity(monkeypatch, sar_env_reset):
     """Reverse-mode gradient parity for JAX GMRES path."""
     _setup_jax_gmres_dispatch(monkeypatch)
 
@@ -511,7 +448,7 @@ def test_sparse_sar_jax_gmres_grad_parity(monkeypatch, lineax_env_reset):
         np.testing.assert_allclose(np.asarray(c), np.asarray(j), atol=1e-7, rtol=1e-7)
 
 
-def test_sparse_sar_jax_eigen_autodiff_vs_manual_vjp(monkeypatch, lineax_env_reset):
+def test_sparse_sar_jax_eigen_autodiff_vs_manual_vjp(monkeypatch, sar_env_reset):
     """JAX autodiff through the pure-JAX eigen forward must match manual VJP.
 
     The eigen path is pure dense JAX (complex128 eigendecomposition +
@@ -578,16 +515,7 @@ def test_sparse_sar_jax_eigen_autodiff_vs_manual_vjp(monkeypatch, lineax_env_res
     np.testing.assert_allclose(jax_b, np.asarray(c_b), atol=1e-10, rtol=1e-10)
 
 
-def test_jax_auto_falls_to_jax_gmres_when_no_lineax(monkeypatch):
-    from bayespecon._jax_dispatch import _resolve_auto_sar_solver
-
-    monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: False)
-    monkeypatch.setattr("bayespecon._jax_dispatch._klujax_available", lambda: False)
-    monkeypatch.setattr("bayespecon._jax_dispatch._lineax_available", lambda: False)
-    assert _resolve_auto_sar_solver(100) == "jax_gmres"
-
-
-def test_jax_gmres_high_rho_correctness(monkeypatch, lineax_env_reset):
+def test_jax_gmres_high_rho_correctness(monkeypatch, sar_env_reset):
     """JAX GMRES must match dense reference for moderate-to-high rho."""
     _setup_jax_gmres_dispatch(monkeypatch)
 
@@ -611,20 +539,19 @@ def test_jax_gmres_high_rho_correctness(monkeypatch, lineax_env_reset):
 
 
 @pytest.fixture
-def lineax_env_reset():
+def sar_env_reset():
     """Reset JAX-dispatch caches before and after each Lineax test."""
     _reset_jax_dispatch_caches()
     yield
     _reset_jax_dispatch_caches()
 
 
-def test_jax_sar_solver_auto_preserves_existing_backend(monkeypatch, lineax_env_reset):
+def test_jax_sar_solver_auto_preserves_existing_backend(monkeypatch, sar_env_reset):
     from bayespecon._jax_dispatch import _select_jax_sar_solver
 
     monkeypatch.delenv("BAYESPECON_JAX_SAR_SOLVER", raising=False)
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
-    monkeypatch.setattr("bayespecon._jax_dispatch._klujax_available", lambda: False)
     monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
 
     _reset_jax_dispatch_caches()
@@ -633,295 +560,6 @@ def test_jax_sar_solver_auto_preserves_existing_backend(monkeypatch, lineax_env_
     assert _select_jax_sar_solver() == "auto"
 
 
-def test_jax_sar_solver_explicit_lineax(monkeypatch, lineax_env_reset):
-    pytest.importorskip("lineax")
-    from bayespecon._jax_dispatch import _select_jax_sar_solver
-
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-
-    _reset_jax_dispatch_caches()
-    assert _select_jax_sar_solver() == "lineax"
-
-
-def test_jax_sar_solver_lineax_missing_strict_raises(monkeypatch, lineax_env_reset):
-    from bayespecon._jax_dispatch import _select_jax_sar_solver
-
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-    monkeypatch.setattr("bayespecon._jax_dispatch._lineax_available", lambda: False)
-
-    _reset_jax_dispatch_caches()
-    with pytest.raises(ImportError):
-        _select_jax_sar_solver()
-
-
-def test_jax_sar_lineax_subsolver_default(monkeypatch, lineax_env_reset):
-    from bayespecon._jax_dispatch import _select_jax_sar_lineax_solver
-
-    monkeypatch.delenv("BAYESPECON_JAX_SAR_LINEAX_SOLVER", raising=False)
-    _reset_jax_dispatch_caches()
-    assert _select_jax_sar_lineax_solver() == "bicgstab"
-
-
-def test_jax_sar_lineax_subsolver_gmres(monkeypatch, lineax_env_reset):
-    from bayespecon._jax_dispatch import _select_jax_sar_lineax_solver
-
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_SOLVER", "gmres")
-    _reset_jax_dispatch_caches()
-    assert _select_jax_sar_lineax_solver() == "gmres"
-
-
-def _setup_lineax_dispatch(monkeypatch, sub_solver="bicgstab"):
-    pytest.importorskip("lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_SOLVER", sub_solver)
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-    _reset_jax_dispatch_caches()
-    from bayespecon._jax_dispatch import register_jax_dispatch
-
-    register_jax_dispatch()
-
-
-@pytest.mark.parametrize("sub_solver", ["bicgstab", "gmres"])
-def test_sparse_sar_jax_lineax_forward_parity(
-    monkeypatch, lineax_env_reset, sub_solver
-):
-    _setup_lineax_dispatch(monkeypatch, sub_solver=sub_solver)
-
-    W = _line_W(8)
-    op = SparseSARSolveOp(W)
-    rho = pt.dscalar("rho")
-    b = pt.dvector("b")
-    eta = op(rho, b)
-
-    f_c = pytensor.function([rho, b], eta)
-    f_j = pytensor.function([rho, b], eta, mode="JAX")
-
-    rng = np.random.default_rng(11)
-    b_val = rng.standard_normal(8)
-
-    np.testing.assert_allclose(
-        np.asarray(f_c(0.3, b_val)),
-        np.asarray(f_j(0.3, b_val)),
-        atol=1e-7,
-        rtol=1e-7,
-    )
-
-
-@pytest.mark.parametrize("sub_solver", ["bicgstab", "gmres"])
-def test_sparse_sar_jax_lineax_grad_parity(monkeypatch, lineax_env_reset, sub_solver):
-    """Reverse-mode gradient parity — the key correctness gate."""
-    _setup_lineax_dispatch(monkeypatch, sub_solver=sub_solver)
-
-    W = _line_W(8)
-    op = SparseSARSolveOp(W)
-    rho = pt.dscalar("rho")
-    b = pt.dvector("b")
-    eta = op(rho, b)
-    loss = pt.sum(eta * eta)
-    grads = [pytensor.grad(loss, v) for v in (rho, b)]
-
-    f_c = pytensor.function([rho, b], grads)
-    f_j = pytensor.function([rho, b], grads, mode="JAX")
-
-    rng = np.random.default_rng(12)
-    b_val = rng.standard_normal(8)
-
-    c_out = f_c(0.25, b_val)
-    j_out = f_j(0.25, b_val)
-    for c, j in zip(c_out, j_out):
-        np.testing.assert_allclose(np.asarray(c), np.asarray(j), atol=1e-7, rtol=1e-7)
-
-
-def test_sparse_sar_jax_lineax_convergence_failure(monkeypatch, lineax_env_reset):
-    """Capping the solver must not raise — ``throw=False`` returns silently.
-
-    With ``throw=False`` inside the Lineax solve, a non-converged or
-    near-singular system produces an arithmetic result (often NaN/Inf,
-    but never a raised exception). NUTS will reject leapfrog steps with
-    non-finite log-prob, which is the desired behaviour at the boundary
-    of the stationary region.
-    """
-    pytest.importorskip("lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_SOLVER", "bicgstab")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-    _reset_jax_dispatch_caches()
-
-    # Monkeypatch the BiCGStab constructor used inside the closure to force
-    # max_steps=1 so any non-trivial RHS triggers non-convergence.
-    import lineax as lx
-
-    real_bicgstab = lx.BiCGStab
-
-    def _capped(*args, **kwargs):
-        kwargs["max_steps"] = 1
-        return real_bicgstab(*args, **kwargs)
-
-    monkeypatch.setattr(lx, "BiCGStab", _capped)
-
-    from bayespecon._jax_dispatch import register_jax_dispatch
-
-    register_jax_dispatch()
-
-    # Larger system + rho near 1 → ill-conditioned, exercises the
-    # ``throw=False`` "do not raise" contract.
-    W = _line_W(64)
-    op = SparseSARSolveOp(W)
-    rho = pt.dscalar("rho")
-    b = pt.dvector("b")
-    eta = op(rho, b)
-    f_j = pytensor.function([rho, b], eta, mode="JAX")
-
-    rng = np.random.default_rng(13)
-    b_val = rng.standard_normal(64)
-
-    # Must not raise. Output may be NaN/Inf or merely inaccurate; both
-    # are acceptable — the contract is only that the program continues.
-    out = np.asarray(f_j(0.999, b_val))
-    assert out.shape == (64,)
-
-
 # ---------------------------------------------------------------------------
 # Lineax SAR-solver path — Neumann-series preconditioner (Phase D)
 # ---------------------------------------------------------------------------
-
-
-def test_jax_sar_lineax_precond_default(monkeypatch, lineax_env_reset):
-    from bayespecon._jax_dispatch import (
-        _select_jax_sar_lineax_neumann_k,
-        _select_jax_sar_lineax_precond,
-    )
-
-    monkeypatch.delenv("BAYESPECON_JAX_SAR_LINEAX_PRECOND", raising=False)
-    monkeypatch.delenv("BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K", raising=False)
-    _reset_jax_dispatch_caches()
-    assert _select_jax_sar_lineax_precond() == "neumann"
-    assert _select_jax_sar_lineax_neumann_k() == 3
-
-
-def test_jax_sar_lineax_precond_disabled(monkeypatch, lineax_env_reset):
-    from bayespecon._jax_dispatch import _select_jax_sar_lineax_precond
-
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_PRECOND", "none")
-    _reset_jax_dispatch_caches()
-    assert _select_jax_sar_lineax_precond() == "none"
-
-
-def test_jax_sar_lineax_neumann_k_override(monkeypatch, lineax_env_reset):
-    from bayespecon._jax_dispatch import _select_jax_sar_lineax_neumann_k
-
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K", "5")
-    _reset_jax_dispatch_caches()
-    assert _select_jax_sar_lineax_neumann_k() == 5
-
-
-def test_jax_sar_lineax_neumann_k_invalid_strict_raises(monkeypatch, lineax_env_reset):
-    from bayespecon._jax_dispatch import _select_jax_sar_lineax_neumann_k
-
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K", "not-an-int")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-    _reset_jax_dispatch_caches()
-    with pytest.raises(ValueError):
-        _select_jax_sar_lineax_neumann_k()
-
-
-def _setup_lineax_dispatch_precond(
-    monkeypatch, *, precond: str, neumann_k: int = 3, sub_solver: str = "bicgstab"
-) -> None:
-    pytest.importorskip("lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_SOLVER", sub_solver)
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_PRECOND", precond)
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_LINEAX_NEUMANN_K", str(neumann_k))
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
-    _reset_jax_dispatch_caches()
-    from bayespecon._jax_dispatch import register_jax_dispatch
-
-    register_jax_dispatch()
-
-
-@pytest.mark.parametrize("precond", ["neumann", "none"])
-def test_sparse_sar_jax_lineax_precond_forward_parity(
-    monkeypatch, lineax_env_reset, precond
-):
-    """Preconditioned and unpreconditioned paths must agree with C reference."""
-    _setup_lineax_dispatch_precond(monkeypatch, precond=precond, neumann_k=3)
-
-    W = _line_W(12)
-    op = SparseSARSolveOp(W)
-    rho = pt.dscalar("rho")
-    b = pt.dvector("b")
-    eta = op(rho, b)
-
-    f_c = pytensor.function([rho, b], eta)
-    f_j = pytensor.function([rho, b], eta, mode="JAX")
-
-    rng = np.random.default_rng(21)
-    b_val = rng.standard_normal(12)
-    np.testing.assert_allclose(
-        np.asarray(f_c(0.55, b_val)),
-        np.asarray(f_j(0.55, b_val)),
-        atol=1e-7,
-        rtol=1e-7,
-    )
-
-
-@pytest.mark.parametrize("precond", ["neumann", "none"])
-def test_sparse_sar_jax_lineax_precond_grad_parity(
-    monkeypatch, lineax_env_reset, precond
-):
-    """Preconditioning must not alter the analytic VJP solution."""
-    _setup_lineax_dispatch_precond(monkeypatch, precond=precond, neumann_k=3)
-
-    W = _line_W(12)
-    op = SparseSARSolveOp(W)
-    rho = pt.dscalar("rho")
-    b = pt.dvector("b")
-    eta = op(rho, b)
-    loss = pt.sum(eta * eta)
-    grads = [pytensor.grad(loss, v) for v in (rho, b)]
-
-    f_c = pytensor.function([rho, b], grads)
-    f_j = pytensor.function([rho, b], grads, mode="JAX")
-
-    rng = np.random.default_rng(22)
-    b_val = rng.standard_normal(12)
-    for c, j in zip(f_c(0.55, b_val), f_j(0.55, b_val)):
-        np.testing.assert_allclose(np.asarray(c), np.asarray(j), atol=1e-7, rtol=1e-7)
-
-
-@pytest.mark.parametrize("rho_val", [0.55, 0.85, 0.97])
-def test_sparse_sar_jax_lineax_precond_high_rho_correctness(
-    monkeypatch, lineax_env_reset, rho_val
-):
-    """Neumann-preconditioned solve must match the dense reference for
-    :math:`\\rho` ranging from moderate to near-singular.
-
-    This is the primary correctness gate for Phase D: the empirical
-    failure mode users hit ("lineax often fails near :math:`\\rho \\to 1`")
-    is replaced by a path that stays correct across the full prior
-    support. ``max_steps`` is left at the dispatch default (``10 * n``)
-    so the preconditioner is responsible for *speed*; this test only
-    asserts *correctness* on systems where the bare path is known to
-    misbehave.
-    """
-    _setup_lineax_dispatch_precond(monkeypatch, precond="neumann", neumann_k=3)
-
-    n = 64
-    W = _line_W(n)
-    rng = np.random.default_rng(int(rho_val * 1000))
-    b_val = rng.standard_normal(n)
-
-    A_dense = np.eye(n) - rho_val * W.toarray()
-    eta_ref = np.linalg.solve(A_dense, b_val)
-
-    op = SparseSARSolveOp(W)
-    rho_pt = pt.dscalar("rho")
-    b_pt = pt.dvector("b")
-    eta = op(rho_pt, b_pt)
-    f_j = pytensor.function([rho_pt, b_pt], eta, mode="JAX")
-
-    out = np.asarray(f_j(rho_val, b_val))
-    np.testing.assert_allclose(out, eta_ref, atol=1e-6, rtol=1e-6)

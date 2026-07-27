@@ -26,7 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 viz = ["graphviz"]
-backend = ['dm-tree', 'klujax', 'blackjax', 'numpyro', 'nutpie', 'lineax', 'equinox', 'optimistix', 'cholgraph']
+backend = ['dm-tree', 'blackjax', 'numpyro', 'nutpie', 'equinox', 'cholgraph']
 cv = ["geovalidate"]
 
 [tool.setuptools.packages.find]
