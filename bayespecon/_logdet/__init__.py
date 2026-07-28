@@ -14,10 +14,13 @@ Auto-selection: ``"eigenvalue"`` for n ≤ 500, ``"cheb_stochastic"`` otherwise.
 """
 
 from ._aaa import (
+    AAAContext,
     AAAPrecompute,
+    CholAAAContext,
     aaa_logdet_eval,
     aaa_logdet_eval_vec,
     aaa_logdet_precompute,
+    chol_aaa_logdet_precompute,
 )
 from ._cheb_stochastic import (
     ChebStochasticPrecompute,

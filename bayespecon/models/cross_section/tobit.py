@@ -53,8 +53,8 @@ def _batched_sar_mean(W_sp, rho_f, rhs, n):
     from ..._jax_dispatch import _sparsax_available
 
     if _sparsax_available():
-        import sparsax
         import jax.numpy as jnp
+        import sparsax
 
         from ..._jax_dispatch import ensure_x64
 

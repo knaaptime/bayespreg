@@ -119,6 +119,20 @@ def make_logdet_numpy_fn(
 
         return _aaa_numpy
 
+    if method == "chol_aaa":
+        from ._aaa import aaa_logdet_eval, chol_aaa_logdet_precompute
+
+        # Cholesky-based AAA: same rational approximant as "aaa" but exact
+        # values come from sparse Cholesky of the D-symmetrised system,
+        # which is ~2× cheaper than KLU for symmetrizable W.
+        pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+
+        def _chol_aaa_numpy(r):
+            val = aaa_logdet_eval(pre, float(r))
+            return val if T == 1 else T * val
+
+        return _chol_aaa_numpy
+
     if method == "slq":
         # SLQ precompute → Chebyshev coefficients → Clenshaw evaluation
         pre = slq_logdet_precompute(W_sparse)
@@ -204,6 +218,15 @@ def make_logdet_grad_numpy_fn(
         from ._aaa import aaa_logdet_precompute
 
         pre = aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+        sp_z = pre.support_points
+        sp_f = pre.support_values
+        w = pre.weights
+        return lambda r: _scale(logdet_grad_aaa(float(r), sp_z, sp_f, w))
+
+    if method == "chol_aaa":
+        from ._aaa import chol_aaa_logdet_precompute
+
+        pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
         sp_z = pre.support_points
         sp_f = pre.support_values
         w = pre.weights
@@ -319,6 +342,27 @@ def make_logdet_grad_numpy_vec_fn(
 
         return _vec_aaa_grad
 
+    if method == "chol_aaa":
+        from ._aaa import chol_aaa_logdet_precompute
+
+        pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+        z = pre.support_points.astype(np.float64)
+        f = pre.support_values.astype(np.float64)
+        w = pre.weights.astype(np.float64)
+
+        def _vec_chol_aaa_grad(rho_arr):
+            rho_arr = np.asarray(rho_arr, dtype=np.float64)
+            diff = rho_arr[:, None] - z[None, :]
+            inv = w[None, :] / diff
+            inv2 = w[None, :] / diff**2
+            n_val = (inv * f[None, :]).sum(axis=1)
+            d_val = inv.sum(axis=1)
+            dn = -(inv2 * f[None, :]).sum(axis=1)
+            dd = -inv2.sum(axis=1)
+            return _scale((dn * d_val - n_val * dd) / d_val**2)
+
+        return _vec_chol_aaa_grad
+
     raise ValueError(f"Unsupported logdet method: {method!r}")
 
 
@@ -388,6 +432,17 @@ def make_logdet_numpy_vec_fn(
             return vals if T == 1 else T * vals
 
         return _vec_aaa
+
+    if method == "chol_aaa":
+        from ._aaa import aaa_logdet_eval_vec, chol_aaa_logdet_precompute
+
+        pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+
+        def _vec_chol_aaa(rho_arr: np.ndarray) -> np.ndarray:
+            vals = aaa_logdet_eval_vec(pre, np.asarray(rho_arr, dtype=np.float64))
+            return vals if T == 1 else T * vals
+
+        return _vec_chol_aaa
 
     if method == "slq":
         # SLQ precompute → Chebyshev coefficients → vectorized Clenshaw

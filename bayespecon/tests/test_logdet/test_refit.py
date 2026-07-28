@@ -49,7 +49,10 @@ def _knn(n: int = 400, k: int = 4, seed: int = 0) -> sp.csr_matrix:
     rng = np.random.default_rng(seed)
     rows = np.repeat(np.arange(n), k)
     cols = np.concatenate(
-        [rng.choice(np.delete(np.arange(n), i), size=k, replace=False) for i in range(n)]
+        [
+            rng.choice(np.delete(np.arange(n), i), size=k, replace=False)
+            for i in range(n)
+        ]
     )
     A = sp.coo_matrix((np.ones(n * k), (rows, cols)), shape=(n, n)).tocsr()
     A.data[:] = 1.0
@@ -206,7 +209,9 @@ class TestRefitter:
         W_dir = _knn()
         fn, vec_fn, info = LogdetRefitter(W_dir, "aaa").refit(0.5, 0.7, 0.0, 0.95)
         grid = np.linspace(0.51, 0.69, 13)
-        np.testing.assert_allclose(vec_fn(grid), [fn(float(r)) for r in grid], atol=1e-9)
+        np.testing.assert_allclose(
+            vec_fn(grid), [fn(float(r)) for r in grid], atol=1e-9
+        )
         assert info.order >= 2
 
     def test_context_is_reused_across_refits(self, W):

@@ -34,9 +34,9 @@ import numpy as np
 import scipy.sparse as sp
 
 from ..._lazy_deps import az
-from ...samplers._utils._sparsax_utils import resolve_pg_jax_backend
 from ...samplers._utils._idata import gibbs_to_inference_data
 from ...samplers._utils._slice import SliceWidthState
+from ...samplers._utils._sparsax_utils import resolve_pg_jax_backend
 from ...samplers._utils._spatial_normal import CholmodFactor
 from ...samplers.gaussian._chain_runner import run_chains
 from ...samplers.logit import (

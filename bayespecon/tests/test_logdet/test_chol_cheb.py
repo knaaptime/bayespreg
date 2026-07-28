@@ -120,11 +120,15 @@ class TestAdaptiveOrder:
 
         This is the whole point of the rule: the old table returned 15 for both.
         """
-        assert cheb_order_for_tolerance(0.55, 0.65, 10_000) * 2 < cheb_order_for_tolerance(0.1, 0.8, 10_000)
+        assert cheb_order_for_tolerance(
+            0.55, 0.65, 10_000
+        ) * 2 < cheb_order_for_tolerance(0.1, 0.8, 10_000)
 
     def test_order_is_nearly_independent_of_n(self):
         """The default target is relative to ``|J| ~ O(n)``, so ``m`` barely moves."""
-        orders = {cheb_order_for_tolerance(0.1, 0.8, n) for n in (20, 400, 10_000, 60_000)}
+        orders = {
+            cheb_order_for_tolerance(0.1, 0.8, n) for n in (20, 400, 10_000, 60_000)
+        }
         assert max(orders) - min(orders) <= 1
 
     def test_auto_order_used_when_none(self, small_W):
@@ -164,9 +168,7 @@ class TestAdaptiveOrder:
     def test_selected_order_meets_its_target(self, small_W, small_eigs):
         """The rule's contract: the auto order actually delivers ``tol``."""
         for lo, hi, tol in [(0.1, 0.8, 1e-8), (0.55, 0.65, 1e-8), (-0.5, 0.9, 1e-6)]:
-            pre = chol_cheb_logdet_precompute(
-                small_W, rho_min=lo, rho_max=hi, tol=tol
-            )
+            pre = chol_cheb_logdet_precompute(small_W, rho_min=lo, rho_max=hi, tol=tol)
             grid = np.linspace(lo, hi, 41)
             exact = np.array(
                 [np.sum(np.log(np.abs(1.0 - r * small_eigs))) for r in grid]
@@ -306,15 +308,18 @@ class TestFactory:
         assert abs(fn(rho) - exact) < 1e-6
 
     def test_auto_select_midrange(self):
-        """Auto-select should pick cheb_cholesky for n in (500, 60000]."""
+        """Auto-select should pick chol_aaa for n in (500, 60000] when W is symmetric."""
         from bayespecon._logdet import resolve_logdet_method
 
-        assert resolve_logdet_method(None, n=501) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=1000) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=10000) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=20000) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=60000) == "cheb_cholesky"
+        # Without W, the default falls to chol_aaa (symmetric assumption).
+        assert resolve_logdet_method(None, n=501) == "chol_aaa"
+        assert resolve_logdet_method(None, n=1000) == "chol_aaa"
+        assert resolve_logdet_method(None, n=10000) == "chol_aaa"
+        assert resolve_logdet_method(None, n=20000) == "chol_aaa"
+        assert resolve_logdet_method(None, n=60000) == "chol_aaa"
         assert resolve_logdet_method(None, n=200000) == "cheb_stochastic"
+        # cheb_cholesky remains available as an explicit opt-in.
+        assert resolve_logdet_method("cheb_cholesky", n=10000) == "cheb_cholesky"
 
 
 # ---------------------------------------------------------------------------

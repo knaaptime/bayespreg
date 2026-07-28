@@ -14,10 +14,11 @@ Five methods are supported:
 
 When ``logdet_method`` is ``None`` the method is auto-selected:
 ``"eigenvalue"`` for n ≤ ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500),
-``"cheb_cholesky"`` for n ≤ ``BAYESPECON_LOGDET_CHEB_MAX_N`` (default 60000)
+``"chol_aaa"`` for n ≤ ``BAYESPECON_LOGDET_CHEB_MAX_N`` (default 60000)
 when ``W`` is symmetric (undirected graph), ``"aaa"`` when ``W`` is
 non-symmetric (directed graph), otherwise ``"cheb_stochastic"``
 (geometric convergence, same cost as Barry-Pace).
+``"cheb_cholesky"`` (Chebyshev interpolation via Cholesky) and
 ``"slq"`` and ``"chebyshev"`` are available as explicit opt-ins.
 """
 
@@ -50,6 +51,7 @@ class LogDetMethod(str, Enum):
     CHEB_STOCHASTIC = "cheb_stochastic"
     CHEB_CHOLESKY = "cheb_cholesky"
     AAA = "aaa"
+    CHOL_AAA = "chol_aaa"
     TRACES = "traces"
     CHOLMOD = "cholmod"  # JAX-native sparse CHOLMOD logdet (requires sparsax)
 
@@ -63,6 +65,7 @@ LogDetMethodName = Literal[
     "cheb_stochastic",
     "cheb_cholesky",
     "aaa",
+    "chol_aaa",
     "traces",
     "cholmod",
 ]
@@ -225,10 +228,12 @@ def _auto_logdet_method(n: int, W=None) -> str:
     if n <= eigen_cutoff:
         return "eigenvalue"
     if n <= cheb_cutoff:
-        # Check W symmetry: cheb_cholesky for symmetric (undirected graph),
+        # Check W symmetry: chol_aaa for symmetric (undirected graph),
         # aaa for non-symmetric (directed graph: KNN, travel time, migration).
+        # chol_aaa combines CHOLMOD's cheaper factorization with AAA's
+        # root-exponential convergence — the best of both.
         if _is_symmetric_W(W):
-            return "cheb_cholesky"
+            return "chol_aaa"
         else:
             return "aaa"
     # Stochastic Chebyshev (Han et al. 2015): geometric convergence via

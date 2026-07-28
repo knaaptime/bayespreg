@@ -300,8 +300,8 @@ def flow_logdet_grad(
         from bayespecon._jax_dispatch import _sparsax_available
 
         if _sparsax_available():
-            import sparsax
             import jax.numpy as jnp
+            import sparsax
 
             ensure_x64()
             rows, cols, const_vals, coef_d, coef_o, coef_w = kron._resolvent_T_pattern()

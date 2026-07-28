@@ -118,9 +118,9 @@ def make_flow_solve(pattern: dict):
     ``Ax(ρ)``.  ``rhs`` may be a vector ``(N,)`` or matrix ``(N, k)`` (batched
     solve — used for ``X̃ = A⁻¹X``).
     """
-    import sparsax
     import jax
     import jax.numpy as jnp
+    import sparsax
 
     from bayespecon._jax_dispatch import ensure_x64
 
@@ -170,8 +170,8 @@ def _make_flow_solvers(ctx):
     under ``jax.vmap`` over chains, which stays vmap-safe under ``jit(vmap(...))``;
     see ``set_lu_cache_size``.
     """
-    import sparsax
     import jax.numpy as jnp
+    import sparsax
 
     Ai = jnp.asarray(ctx["Ai"], jnp.int32)
     Aj = jnp.asarray(ctx["Aj"], jnp.int32)

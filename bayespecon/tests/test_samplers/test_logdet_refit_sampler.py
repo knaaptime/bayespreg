@@ -153,11 +153,19 @@ def test_sem_refits_on_lambda(data):
     """The refit must key off whichever parameter the family calls spatial."""
     y, X, W = data
     model = SEM(
-        y=y, X=X, W=W, priors={"lam_lower": 0.0, "lam_upper": 0.95},
-        logdet_method="cheb_cholesky", logdet_refit=True,
+        y=y,
+        X=X,
+        W=W,
+        priors={"lam_lower": 0.0, "lam_upper": 0.95},
+        logdet_method="cheb_cholesky",
+        logdet_refit=True,
     )
     idata = model.fit(
-        draws=800, tune=600, chains=2, random_seed=7, progressbar=False,
+        draws=800,
+        tune=600,
+        chains=2,
+        random_seed=7,
+        progressbar=False,
         gibbs_backend="numpy",
     )
     lo, hi = idata.attrs["logdet_refit_window"]

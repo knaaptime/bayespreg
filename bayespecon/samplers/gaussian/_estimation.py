@@ -29,7 +29,6 @@ from ..._logdet._refit import (
     DEFAULT_PAD_SD,
     LogdetRefitter,
     boundary_warning,
-    refit_window,
 )
 
 _log = logging.getLogger(__name__)

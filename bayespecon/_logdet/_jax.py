@@ -317,11 +317,28 @@ def make_logdet_jax_fn(
         def _jax_aaa(rho):
             import jax.numpy as jnp
 
-            return _bary(
-                rho, (jnp.asarray(sp_z), jnp.asarray(sp_f), jnp.asarray(w))
-            )
+            return _bary(rho, (jnp.asarray(sp_z), jnp.asarray(sp_f), jnp.asarray(w)))
 
         return _jax_aaa
+
+    if method == "chol_aaa":
+        from ._aaa import chol_aaa_logdet_precompute
+
+        # Same as "aaa" but precompute via sparse Cholesky of the D-symmetrised
+        # system (~2× cheaper than KLU for symmetrizable W).
+        pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+        sp_z = pre.support_points.astype(np.float64)
+        sp_f = pre.support_values.astype(np.float64)
+        w = pre.weights.astype(np.float64)
+
+        _bary = make_logdet_jax_param_fn("aaa", T=T)
+
+        def _jax_chol_aaa(rho):
+            import jax.numpy as jnp
+
+            return _bary(rho, (jnp.asarray(sp_z), jnp.asarray(sp_f), jnp.asarray(w)))
+
+        return _jax_chol_aaa
 
     if method == "cholmod":
         # JAX-native exact logdet via sparsax sparse CHOLMOD.
@@ -393,8 +410,8 @@ def make_logdet_jax_fn(
                 _diag_idx_direct[_Ai_direct[k_idx]] = k_idx
 
         def _jax_cholmod(rho):
-            import sparsax
             import jax.numpy as jnp
+            import sparsax
 
             Ai = jnp.asarray(_Ai_direct, dtype=jnp.int32)
             Aj = jnp.asarray(_Aj_direct, dtype=jnp.int32)
@@ -415,5 +432,5 @@ def make_logdet_jax_fn(
     raise ValueError(
         f"Method '{method}' has no JAX implementation. "
         "Use 'eigenvalue', 'chebyshev', 'cheb_stochastic', "
-        "'cheb_cholesky', 'aaa', 'cholmod', or 'slq'."
+        "'cheb_cholesky', 'aaa', 'chol_aaa', 'cholmod', or 'slq'."
     )

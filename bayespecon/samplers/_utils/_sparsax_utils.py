@@ -138,8 +138,8 @@ def make_sparsax_ops(Ai, Aj, n: int):
     ``Ai``/``Aj`` are the fixed COO indices (int32); ``b`` may be ``(n,)`` or
     ``(n, n_rhs)``.
     """
-    import sparsax as _chj
     import jax.numpy as jnp
+    import sparsax as _chj
 
     Ai = jnp.asarray(Ai, dtype=jnp.int32)
     Aj = jnp.asarray(Aj, dtype=jnp.int32)
@@ -243,8 +243,6 @@ def resolve_pg_jax_backend(backend, *, W_sparse, W_sym, WtW, n, logdet_bounds):
         # Pass the raw (row-standardised) W; the helper derives W+Wᵀ and WᵀW
         # internally.  Passing W_sym here would double the symmetric part and
         # corrupt WᵀW.
-        jax_parts["sparsax_pattern"] = precompute_sparsax_pattern(
-            W_sparse.tocsc(), n
-        )
+        jax_parts["sparsax_pattern"] = precompute_sparsax_pattern(W_sparse.tocsc(), n)
 
     return method, jax_parts

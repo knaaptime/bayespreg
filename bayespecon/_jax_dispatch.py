@@ -94,9 +94,7 @@ def _warn_jax_auto_fallback_once(missing: str, target: str) -> None:
     if missing == "sksparse.umfpack":
         install_hint = " Install 'scikit-sparse' to enable the UMFPACK callback path."
     elif missing == "sparsax":
-        install_hint = (
-            " Install 'sparsax' to enable the JAX-native SuiteSparse (CHOLMOD/KLU) path."
-        )
+        install_hint = " Install 'sparsax' to enable the JAX-native SuiteSparse (CHOLMOD/KLU) path."
     warnings.warn(
         "BAYESPECON_JAX_SPARSE_BACKEND=auto selected fallback backend "
         f"'{target}' because optional dependency '{missing}' is not installed. "

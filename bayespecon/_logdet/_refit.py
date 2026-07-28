@@ -59,7 +59,7 @@ _log = logging.getLogger(__name__)
 #: ``eigenvalue`` is excluded because it is already exact and interval-free;
 #: the stochastic estimators are excluded because their error is dominated by
 #: probe noise rather than by the interval, so narrowing it buys nothing.
-REFITTABLE_METHODS = frozenset({"cheb_cholesky", "aaa"})
+REFITTABLE_METHODS = frozenset({"cheb_cholesky", "aaa", "chol_aaa"})
 
 #: Default padding, in warmup posterior standard deviations.
 DEFAULT_PAD_SD = 10.0
@@ -274,6 +274,10 @@ class LogdetRefitter:
                 from ._aaa import AAAContext
 
                 self._context = AAAContext(self.W_sparse)
+            elif self.method == "chol_aaa":
+                from ._aaa import CholAAAContext
+
+                self._context = CholAAAContext(self.W_sparse)
             else:
                 raise ValueError(f"Method {self.method!r} does not support refitting.")
         return self._context

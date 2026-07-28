@@ -15,6 +15,7 @@ CANONICAL_METHODS = {
     "cheb_stochastic",
     "cheb_cholesky",
     "aaa",
+    "chol_aaa",
     "traces",
     "cholmod",
 }
@@ -42,9 +43,9 @@ def test_resolve_accepts_canonical_names(name):
 
 def test_resolve_none_auto_selects():
     assert resolve_logdet_method(None, n=100) == "eigenvalue"
-    assert resolve_logdet_method(None, n=1000) == "cheb_cholesky"
-    assert resolve_logdet_method(None, n=10000) == "cheb_cholesky"
-    assert resolve_logdet_method(None, n=50000) == "cheb_cholesky"
+    assert resolve_logdet_method(None, n=1000) == "chol_aaa"
+    assert resolve_logdet_method(None, n=10000) == "chol_aaa"
+    assert resolve_logdet_method(None, n=50000) == "chol_aaa"
     assert resolve_logdet_method(None, n=200000) == "cheb_stochastic"
 
 
@@ -63,13 +64,13 @@ def test_resolve_none_auto_selects_nonsymmetric_W():
 
     assert resolve_logdet_method(None, n=n, W=W_nonsym) == "aaa"
 
-    # Symmetric W should still select cheb_cholesky
+    # Symmetric W should select chol_aaa (Cholesky-based AAA)
     W_sym = sp.csr_matrix((vals, (rows, cols)), shape=(n, n))
     W_sym = W_sym + W_sym.T
-    assert resolve_logdet_method(None, n=n, W=W_sym) == "cheb_cholesky"
+    assert resolve_logdet_method(None, n=n, W=W_sym) == "chol_aaa"
 
-    # No W provided defaults to cheb_cholesky
-    assert resolve_logdet_method(None, n=n) == "cheb_cholesky"
+    # No W provided defaults to chol_aaa (symmetric assumption)
+    assert resolve_logdet_method(None, n=n) == "chol_aaa"
 
 
 def test_resolve_unknown_method_raises():

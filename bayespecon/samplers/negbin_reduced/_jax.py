@@ -87,8 +87,8 @@ def _make_sparse_solvers(sparse_ctx):
     chain — even under ``jax.vmap`` over chains.  See ``set_lu_cache_size`` — the
     factor cache must be ≥ the chain count for the reuse to land.
     """
-    import sparsax
     import jax.numpy as jnp
+    import sparsax
 
     Ai = jnp.asarray(sparse_ctx["Ai"], jnp.int32)
     Aj = jnp.asarray(sparse_ctx["Aj"], jnp.int32)
