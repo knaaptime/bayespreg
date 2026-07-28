@@ -150,7 +150,7 @@ def _make_gibbs_step_with_data(
     pg_n_terms,
     n_probes,
     lanczos_deg,
-    cholgraph_pattern=None,
+    sparsax_pattern=None,
 ):
     """Build a JIT-compiled Gibbs step with data bound into the closure.
 
@@ -174,7 +174,7 @@ def _make_gibbs_step_with_data(
         Number of regression coefficients.
     W_sym_dense : jax.numpy.ndarray of shape (n, n) or None
         Dense (W + W^T).  Only needed for the dense-Cholesky fallback
-        (``cholgraph_pattern is None``); pass ``None`` on the sparse path.
+        (``sparsax_pattern is None``); pass ``None`` on the sparse path.
     WtW_dense : jax.numpy.ndarray of shape (n, n) or None
         Dense W^T W.  Only needed for the dense-Cholesky fallback.
     logdet_jax : callable
@@ -214,7 +214,7 @@ def _make_gibbs_step_with_data(
 
     ensure_x64()
 
-    use_cholgraph = cholgraph_pattern is not None
+    use_sparsax = sparsax_pattern is not None
 
     # Sparse W matvecs — never densify W: W @ x and Wᵀ @ x go through BCOO
     # (O(nnz), O(nnz) memory) instead of a dense n×n materialisation.
@@ -225,8 +225,8 @@ def _make_gibbs_step_with_data(
         return Wt_bcoo @ x
 
     # Dense (W+Wᵀ) and WᵀW are only needed to assemble the dense P in the
-    # no-cholgraph fallback; skip building them on the sparse path.
-    if not use_cholgraph:
+    # no-sparsax fallback; skip building them on the sparse path.
+    if not use_sparsax:
         W_sym = jnp.asarray(W_sym_dense, dtype=jnp.float64)
         WtW = jnp.asarray(WtW_dense, dtype=jnp.float64)
     # Prior hyperparameters
@@ -241,21 +241,21 @@ def _make_gibbs_step_with_data(
     # Prior precision for beta
     beta_prior_prec = jnp.diag(1.0 / beta_sigma2_jax)
 
-    # ── cholgraph setup (optional sparse SPD Cholesky path) ──
-    if use_cholgraph:
-        _Ai = jnp.asarray(cholgraph_pattern["Ai"], dtype=jnp.int32)
-        _Aj = jnp.asarray(cholgraph_pattern["Aj"], dtype=jnp.int32)
-        _W_sym_vals = jnp.asarray(cholgraph_pattern["W_sym_vals"], dtype=jnp.float64)
-        _WtW_vals = jnp.asarray(cholgraph_pattern["WtW_vals"], dtype=jnp.float64)
-        _diag_idx = jnp.asarray(cholgraph_pattern["diag_idx"], dtype=jnp.int32)
-        _nnz = len(cholgraph_pattern["Ai"])
-        _n_static = int(cholgraph_pattern["n"])
+    # ── sparsax setup (optional sparse SPD Cholesky path) ──
+    if use_sparsax:
+        _Ai = jnp.asarray(sparsax_pattern["Ai"], dtype=jnp.int32)
+        _Aj = jnp.asarray(sparsax_pattern["Aj"], dtype=jnp.int32)
+        _W_sym_vals = jnp.asarray(sparsax_pattern["W_sym_vals"], dtype=jnp.float64)
+        _WtW_vals = jnp.asarray(sparsax_pattern["WtW_vals"], dtype=jnp.float64)
+        _diag_idx = jnp.asarray(sparsax_pattern["diag_idx"], dtype=jnp.int32)
+        _nnz = len(sparsax_pattern["Ai"])
+        _n_static = int(sparsax_pattern["n"])
         # Factor-once closures: the η-draw and each ρ-density eval do exactly ONE
         # numeric factorization (matching numpy's CholmodFactor reuse), via
-        # cholgraph 0.4 `sample_gaussian` / `factor_solve` (0.3 fallback inside).
-        from .._utils._cholgraph_utils import make_cholgraph_ops
+        # sparsax 0.4 `sample_gaussian` / `factor_solve` (0.3 fallback inside).
+        from .._utils._sparsax_utils import make_sparsax_ops
 
-        _eta_sample, _solve_logdet = make_cholgraph_ops(_Ai, _Aj, _n_static)
+        _eta_sample, _solve_logdet = make_sparsax_ops(_Ai, _Aj, _n_static)
 
         def _assemble_Ax(omega, rho_val, inv_s2):
             """Assemble COO values for P = I/σ² + diag(ω) − (ρ/σ²)(W+Wᵀ) + (ρ²/σ²)WᵀW."""
@@ -301,7 +301,7 @@ def _make_gibbs_step_with_data(
         kappa = (y_jax - alpha) / 2.0
         rhs = Xbeta * inv_s2 - rho * Wt_matvec(Xbeta) * inv_s2 + kappa
 
-        if use_cholgraph:
+        if use_sparsax:
             Ax = _assemble_Ax(omega_new, rho, inv_s2)
             z_eta = jax.random.normal(key_eta, shape=(n,), dtype=jnp.float64)
             # Mean + correlated draw ~ N(P⁻¹ rhs, P⁻¹) from ONE factorization.
@@ -358,7 +358,7 @@ def _make_gibbs_step_with_data(
             """
             rhs_r = Xbeta_r * inv_s2_r - rho_val * Wt_Xbeta_r * inv_s2_r + kappa_r
 
-            if use_cholgraph:
+            if use_sparsax:
                 Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
                 # Solve + logdet from one factorization (factor_solve on 0.4).
                 m, log_det_P = _solve_logdet(Ax_r, rhs_r)
@@ -1006,7 +1006,7 @@ def run_chains_jax_vectorized(
     n_probes: int = 5,
     lanczos_deg: int = 15,
     progressbar: bool = True,
-    cholgraph_pattern=None,
+    sparsax_pattern=None,
 ) -> list[dict]:
     """Run multiple SAR-NB Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1056,7 +1056,7 @@ def run_chains_jax_vectorized(
         pg_n_terms=pg_n_terms,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
-        cholgraph_pattern=cholgraph_pattern,
+        sparsax_pattern=sparsax_pattern,
     )
 
     init_states = _stack_nb_inits(inits)

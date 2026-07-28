@@ -26,6 +26,53 @@ from ._config import resolve_logdet_method
 from ._slq import slq_logdet_precompute
 
 
+def jax_logdet_chebyshev_traced(rho, coeffs, rmin, rmax):
+    """Clenshaw evaluation with ``coeffs``/``rmin``/``rmax`` as *traced* values.
+
+    :func:`jax_logdet_chebyshev` bakes the coefficients in as compile-time
+    constants and unrolls the recurrence in Python, so changing them — or
+    changing their length — forces a full retrace.  That is fine when the
+    interpolant is fixed for the life of a chain, and it is the faster option
+    when it is: the unrolled form has no loop overhead.
+
+    It is not fine for a warmup-adaptive refit, which replaces the interpolant
+    partway through a run.  On a Gibbs chain the retrace costs on the order of a
+    second — an order of magnitude more than the refit's own factorisations —
+    which would make the refit a net loss on this backend.  This variant keeps
+    everything traced and drives the recurrence with ``lax.fori_loop`` over a
+    fixed-capacity array, so a refit changes array *values* only and the
+    compiled step is reused unchanged.
+
+    Zero-padding is exact, not an approximation: Clenshaw's ``b`` terms are
+    initialised to zero and a run of zero coefficients leaves them at zero, so
+    padding a degree-``m`` series out to capacity ``M`` reproduces the same
+    ``b_m = b_{m+1} = 0`` the unpadded recurrence starts from.  Pass a capacity
+    at least as large as any order the refit may select.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    c = jnp.asarray(coeffs, dtype=jnp.float64)
+    m = c.shape[0]
+    x = (2.0 * rho - rmax - rmin) / (rmax - rmin)
+
+    if m == 0:
+        return jnp.zeros_like(rho)
+    if m == 1:
+        return jnp.broadcast_to(c[0], jnp.shape(x)) * jnp.ones_like(x)
+
+    def body(i, carry):
+        b_curr, b_next = carry
+        k = m - 1 - i  # descends m-2 .. 1
+        return (2.0 * x * b_curr - b_next + c[k], b_curr)
+
+    b_curr = jnp.broadcast_to(c[m - 1], jnp.shape(x))
+    b_next = jnp.zeros_like(x)
+    b_curr, b_next = jax.lax.fori_loop(1, m - 1, body, (b_curr, b_next))
+
+    return c[0] + x * b_curr - b_next
+
+
 def jax_logdet_chebyshev(
     rho,
     coeffs: np.ndarray,
@@ -56,6 +103,63 @@ def jax_logdet_chebyshev(
     return c[0] + x * b_curr - b_next
 
 
+def make_logdet_jax_param_fn(method: str, T: int = 1):
+    """Return ``fn(rho, params) -> logdet`` for a refittable method.
+
+    The counterpart to :func:`make_logdet_jax_fn` for samplers that swap the
+    interpolant mid-run.  Where that factory closes over the precomputed
+    coefficients — making them compile-time constants, so any change forces a
+    retrace — this one takes them as an argument, so a caller can carry them in
+    the sampler state and substitute a refit without recompiling the step.
+
+    ``params`` comes from :meth:`~._refit.LogdetRefitter.jax_params` and is
+    zero-padded to a fixed capacity, so its shapes never change either.
+
+    Parameters
+    ----------
+    method : str
+        ``"cheb_cholesky"`` (Chebyshev coefficients) or ``"aaa"`` (barycentric
+        support points, values and weights).
+    T : int, default 1
+        Panel replication factor applied to the result.
+
+    Returns
+    -------
+    callable
+        ``(rho, params) -> jax.numpy.ndarray``, differentiable and
+        JIT-compatible.
+    """
+    T = int(T)
+
+    if method == "cheb_cholesky":
+
+        def _cheb(rho, params):
+            coeffs, rmin, rmax = params
+            val = jax_logdet_chebyshev_traced(rho, coeffs, rmin, rmax)
+            return val if T == 1 else T * val
+
+        return _cheb
+
+    if method == "aaa":
+
+        def _aaa(rho, params):
+            import jax.numpy as jnp
+
+            z_j, f_j, w_j = params
+            # Padded entries carry w_j = 0 at a z_j far outside the interval,
+            # so they contribute nothing and never divide by zero.
+            diff = rho - z_j
+            val = jnp.sum(w_j * f_j / diff) / jnp.sum(w_j / diff)
+            return val if T == 1 else T * val
+
+        return _aaa
+
+    raise ValueError(
+        f"make_logdet_jax_param_fn does not support method {method!r}; "
+        "only 'cheb_cholesky' and 'aaa' carry a refittable parameterisation."
+    )
+
+
 def make_logdet_jax_fn(
     W,
     method: str | None = None,
@@ -67,8 +171,8 @@ def make_logdet_jax_fn(
 
     Supports ``"eigenvalue"``, ``"chebyshev"``, ``"cheb_stochastic"``,
     ``"cheb_cholesky"``, ``"aaa"``, ``"cholmod"``, and ``"slq"``.
-    ``"cholmod"`` uses ``cholgraph`` for exact sparse CHOLMOD logdet
-    (requires the ``cholgraph`` package; CPU-only).
+    ``"cholmod"`` uses ``sparsax`` for exact sparse CHOLMOD logdet
+    (requires the ``sparsax`` package; CPU-only).
     """
     T = int(T)
 
@@ -206,35 +310,33 @@ def make_logdet_jax_fn(
         sp_f = pre.support_values.astype(np.float64)
         w = pre.weights.astype(np.float64)
 
+        # Same barycentric formula as the refittable form; the only difference
+        # is that the support arrays are fixed here, so bind them and reuse it.
+        _bary = make_logdet_jax_param_fn("aaa", T=T)
+
         def _jax_aaa(rho):
             import jax.numpy as jnp
 
-            z_j = jnp.asarray(sp_z)
-            f_j = jnp.asarray(sp_f)
-            w_j = jnp.asarray(w)
-
-            diff = rho - z_j
-            n_val = jnp.sum(w_j * f_j / diff)
-            d_val = jnp.sum(w_j / diff)
-            val = n_val / d_val
-            return val if T == 1 else T * val
+            return _bary(
+                rho, (jnp.asarray(sp_z), jnp.asarray(sp_f), jnp.asarray(w))
+            )
 
         return _jax_aaa
 
     if method == "cholmod":
-        # JAX-native exact logdet via cholgraph sparse CHOLMOD.
+        # JAX-native exact logdet via sparsax sparse CHOLMOD.
         # Requires W to be D-symmetrizable (row-standardised undirected
         # graph): W = D⁻¹A with symmetric A → W_sym = D^{1/2} W D^{-1/2}
         # is symmetric with the same eigenvalues, so I−ρW_sym is SPD
-        # for |ρ| < 1 and cholgraph.logdet applies directly.
+        # for |ρ| < 1 and sparsax.logdet applies directly.
         # If W is not D-symmetrizable (directed graph), this raises
         # ValueError — use logdet_method="aaa" for such matrices.
-        from .._jax_dispatch import _cholgraph_available
+        from .._jax_dispatch import _sparsax_available
 
-        if not _cholgraph_available():
+        if not _sparsax_available():
             raise ImportError(
-                "logdet method 'cholmod' requires the 'cholgraph' package. "
-                "Install it with: pip install cholgraph"
+                "logdet method 'cholmod' requires the 'sparsax' package. "
+                "Install it with: pip install sparsax"
             )
 
         from ._chol_cheb import _d_symmetrize
@@ -243,7 +345,7 @@ def make_logdet_jax_fn(
         W_sym_sp = _d_symmetrize(W_sparse)  # csc_matrix, symmetric
 
         # Build the COO pattern for I − ρW_sym.
-        # cholgraph reads only Ai <= Aj entries (upper triangle),
+        # sparsax reads only Ai <= Aj entries (upper triangle),
         # so we include the upper triangle of W_sym plus all diagonal
         # entries (for the I in I − ρW_sym, since W_sym has zero diagonal
         # for graphs without self-loops).
@@ -291,7 +393,7 @@ def make_logdet_jax_fn(
                 _diag_idx_direct[_Ai_direct[k_idx]] = k_idx
 
         def _jax_cholmod(rho):
-            import cholgraph
+            import sparsax
             import jax.numpy as jnp
 
             Ai = jnp.asarray(_Ai_direct, dtype=jnp.int32)
@@ -305,7 +407,7 @@ def make_logdet_jax_fn(
             diag_vals = diag_vals.at[diag_idx].set(1.0)
             Ax = Ax + diag_vals
 
-            val = cholgraph.logdet(Ai, Aj, Ax, _n_static)
+            val = sparsax.logdet(Ai, Aj, Ax, _n_static)
             return val if T == 1 else T * val
 
         return _jax_cholmod

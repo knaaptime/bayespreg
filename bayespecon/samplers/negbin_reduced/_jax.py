@@ -59,7 +59,7 @@ def _build_sparse_ctx(W_sparse, n) -> dict:
 
     Returns the constant COO pattern of ``I − ρW`` with aligned value vectors
     (so ``Ax(ρ) = eye_vals − ρ·w_vals``) and a BCOO ``W`` for sparse matvecs.
-    The fill-reducing symbolic analysis is cached inside cholgraph, keyed on the
+    The fill-reducing symbolic analysis is cached inside sparsax, keyed on the
     (constant) sparsity pattern, so it is computed once and reused for every
     numeric factorisation across the whole run.
     """
@@ -77,17 +77,17 @@ def _make_sparse_solvers(sparse_ctx):
 
     Returns ``(solve, matvec_W)`` where
 
-    - ``solve(rho, rhs)`` → ``(I − ρW)⁻¹ rhs`` via ``cholgraph.lu_solve`` (KLU),
+    - ``solve(rho, rhs)`` → ``(I − ρW)⁻¹ rhs`` via ``sparsax.lu_solve`` (KLU),
     - ``matvec_W(v)`` → ``W @ v`` via BCOO.
 
-    ``cholgraph.lu_solve`` (SuiteSparse KLU) is vmap-safe *and* reuses its
+    ``sparsax.lu_solve`` (SuiteSparse KLU) is vmap-safe *and* reuses its
     numeric factorisation: the fill-reducing analysis is cached by pattern, and
     a content-addressed LU factor cache keyed on ``Ax`` means the m+1 solves of
     a Krylov basis at a fixed ρ pay one ``klu_factor`` and m cheap solves — per
     chain — even under ``jax.vmap`` over chains.  See ``set_lu_cache_size`` — the
     factor cache must be ≥ the chain count for the reuse to land.
     """
-    import cholgraph
+    import sparsax
     import jax.numpy as jnp
 
     Ai = jnp.asarray(sparse_ctx["Ai"], jnp.int32)
@@ -97,7 +97,7 @@ def _make_sparse_solvers(sparse_ctx):
     W_bcoo = sparse_ctx["W_bcoo"]
 
     def solve(rho, rhs):
-        return cholgraph.lu_solve(Ai, Aj, eye_vals - rho * w_vals, rhs)
+        return sparsax.lu_solve(Ai, Aj, eye_vals - rho * w_vals, rhs)
 
     def matvec_W(v):
         return W_bcoo @ v
@@ -144,7 +144,7 @@ def _build_krylov_basis_jax(solve1, X_jax, matvec_W, n, k, degree):
     ``W @ V_j`` products go through the sparse ``matvec_W`` (BCOO) and each
     solve through the unary ``solve1``.  Taking ``solve1`` as a unary
     ``rhs -> A_c⁻¹ rhs`` decouples the basis from how ``A_c`` is parameterised
-    (single-ρ SAR vs 3-ρ flow) and from the cholgraph call convention.
+    (single-ρ SAR vs 3-ρ flow) and from the sparsax call convention.
 
     Parameters
     ----------
@@ -227,7 +227,7 @@ def _rho_log_density_marginal_jax(
     """β-marginalised log-density of ρ for the reduced form.
 
     Evaluates U(ρ) via the Krylov basis when |Δρ| ≤ dmax,
-    otherwise falls back to a direct sparse cholgraph solve (``solve_at``).
+    otherwise falls back to a direct sparse sparsax solve (``solve_at``).
     This matches the NumPy path's direct-solve fallback and ensures the
     slice sampler can explore the full ρ support.
 
@@ -255,7 +255,7 @@ def _rho_log_density_marginal_jax(
 
     U_krylov = _eval_U_from_basis_jax(V_stack, drho)
 
-    # Direct sparse solve fallback (cholgraph; correct for any ρ)
+    # Direct sparse solve fallback (sparsax; correct for any ρ)
     has_fallback = (X_jax is not None) and (solve_at is not None)
     if has_fallback:
         U_direct = solve_at(rho_val, X_jax)
@@ -482,9 +482,9 @@ def _make_reduced_gibbs_step(
     X_jax : jax.numpy.ndarray of shape (n, k)
         Design matrix (JAX array).
     sparse_ctx : dict
-        Sparse cholgraph context from :func:`_build_sparse_ctx`: keys ``Ai``,
+        Sparse sparsax context from :func:`_build_sparse_ctx`: keys ``Ai``,
         ``Aj``, ``eye_vals``, ``w_vals`` (aligned COO of ``I − ρW``),
-        ``symbolic`` (cached cholgraph symbolic factorisation) and ``W_bcoo``
+        ``symbolic`` (cached sparsax symbolic factorisation) and ``W_bcoo``
         (BCOO ``W`` for matvecs).  ``W`` is never densified.
     n : int
         Number of spatial units.
@@ -533,7 +533,7 @@ def _make_reduced_gibbs_step(
         def _draw_pg(hh, zz, kk):
             return jax_polyagamma(hh, zz, key=kk, method="callback")
 
-    # ── Sparse cholgraph solve closures (W is never densified; vmap-safe) ──
+    # ── Sparse sparsax solve closures (W is never densified; vmap-safe) ──
     _solve, _matvec_W = _make_sparse_solvers(sparse_ctx)
 
     # Prior hyperparameters
@@ -585,7 +585,7 @@ def _make_reduced_gibbs_step(
         key_rho, key_beta, key_alpha = jax.random.split(key, 3)
 
         # ── Block 0: ω ~ PG(y + α, η) ──
-        # η = (I − ρW)⁻¹ Xβ at the current ρ (sparse cholgraph; W never densified).
+        # η = (I − ρW)⁻¹ Xβ at the current ρ (sparse sparsax; W never densified).
         eta = _solve(rho, X_jax @ beta)
         key, key_pg = jax.random.split(key)
         h = jnp.maximum(y_jax + alpha, 1e-3)
@@ -958,13 +958,13 @@ def run_chains_jax_reduced(
     X_jax = jnp.asarray(X, dtype=jnp.float64)
     sparse_ctx = _build_sparse_ctx(W_sparse, n)
 
-    # cholgraph's KLU factor cache must hold at least one factor per chain (each
+    # sparsax's KLU factor cache must hold at least one factor per chain (each
     # chain has its own ρ) for the Krylov basis to reuse the factorisation
     # across its m+1 solves under vmap; size generously to also cover the
     # separate ρ_new (X̃) solve and occasional slice fallbacks per sweep.
-    import cholgraph
+    import sparsax
 
-    cholgraph.set_lu_cache_size(max(32, 6 * chains))
+    sparsax.set_lu_cache_size(max(32, 6 * chains))
 
     slice_width_jax = jnp.float64(slice_width)
 
@@ -972,10 +972,10 @@ def run_chains_jax_reduced(
         jax_seeds = list(range(chains))
 
     # Build the Gibbs step once; all chains run together under jax.vmap.  The
-    # step is vmap-safe because its non-symmetric solves use cholgraph.lu_solve
+    # step is vmap-safe because its non-symmetric solves use sparsax.lu_solve
     # (SuiteSparse KLU): vmap-safe and factor-reusing, so the basis costs one
     # klu_factor + m solves per chain.  This matches logit's
-    # run_chains_jax_vectorized (which uses cholgraph's Cholesky for SPD W).
+    # run_chains_jax_vectorized (which uses sparsax's Cholesky for SPD W).
     gibbs_step = _make_reduced_gibbs_step(
         y_jax=y_jax,
         X_jax=X_jax,
@@ -1076,7 +1076,7 @@ def _reduced_pointwise_loglik(
 ):
     """Per-draw pointwise NB log-likelihood via sparse ``(I−ρW)⁻¹`` solves.
 
-    Prefers cholgraph's KLU LU solve (one cached symbolic analysis, values
+    Prefers sparsax's KLU LU solve (one cached symbolic analysis, values
     rescaled per draw) over a scipy factorisation loop; never densifies ``W``.
     Runs off-vmap on the host.
     """
@@ -1087,13 +1087,13 @@ def _reduced_pointwise_loglik(
     log_lik = np.empty((n_keep, n), dtype=np.float64)
 
     try:
-        import cholgraph
+        import sparsax
 
-        _has_cholgraph = True
+        _has_sparsax = True
     except ImportError:
-        _has_cholgraph = False
+        _has_sparsax = False
 
-    if _has_cholgraph:
+    if _has_sparsax:
         I_coo = _sp.eye(n, format="coo")
         W_coo = W_sparse.tocoo()
         rows = np.concatenate([I_coo.row, W_coo.row])
@@ -1113,7 +1113,7 @@ def _reduced_pointwise_loglik(
         for i in range(n_keep):
             Ax = const_vals - rho_samples[i] * w_vals
             eta_i = np.asarray(
-                cholgraph.lu_solve(Ai, Aj, Ax, X @ beta_samples[i]),
+                sparsax.lu_solve(Ai, Aj, Ax, X @ beta_samples[i]),
                 dtype=np.float64,
             )
             a = alpha_samples[i]

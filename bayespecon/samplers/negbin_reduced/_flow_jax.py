@@ -1,4 +1,4 @@
-r"""JAX/cholgraph sparse solve primitives for the unrestricted flow NB Gibbs sampler.
+r"""JAX/sparsax sparse solve primitives for the unrestricted flow NB Gibbs sampler.
 
 The unrestricted origin–destination flow model has system matrix
 
@@ -11,17 +11,17 @@ non-D-symmetrizable), so no Cholesky applies; and it is far too large to
 densify (``N \times N`` with ``N = n^2``).  The numpy chain factorises the
 sparse ``A`` on the host every time a ``\rho`` moves (see
 ``_flow._solve_A_unrestricted``).  This module provides the JAX-native
-equivalent: a single ``cholgraph`` symbolic analysis reused across the whole
+equivalent: a single ``sparsax`` symbolic analysis reused across the whole
 run, with per-``\rho`` numeric refactor-and-solve that is JIT-compatible and
 autodiff-capable — the enabling piece for a GPU-friendly flow backend.
 
 The crucial invariant is that **the sparsity pattern of ``A`` is constant**
 across ``\rho`` (it is the structural union of ``I, W_d, W_o, W_w``).  We
 build that shared pattern once and carry four value vectors aligned to it, so
-each solve only rescales values and calls ``cholgraph.lu_solve`` — the
+each solve only rescales values and calls ``sparsax.lu_solve`` — the
 symbolic factorisation (AMD ordering + elimination tree) is never redone.
 
-Keeping this alongside the numpy host path is intentional: cholgraph shines on
+Keeping this alongside the numpy host path is intentional: sparsax shines on
 GPU, while host KLU/UMFPACK remains competitive on CPU.
 """
 
@@ -113,12 +113,12 @@ def build_sar_pattern(W: sp.spmatrix, n: int) -> dict:
 def make_flow_solve(pattern: dict):
     """Build a JIT-compiled ``solve(ρ_d, ρ_o, ρ_w, rhs) -> A(ρ)⁻¹ rhs``.
 
-    Uses ``cholgraph.lu_solve`` (SuiteSparse KLU): the fill-reducing analysis is
+    Uses ``sparsax.lu_solve`` (SuiteSparse KLU): the fill-reducing analysis is
     cached by the shared pattern, so each call only rebuilds the value vector
     ``Ax(ρ)``.  ``rhs`` may be a vector ``(N,)`` or matrix ``(N, k)`` (batched
     solve — used for ``X̃ = A⁻¹X``).
     """
-    import cholgraph
+    import sparsax
     import jax
     import jax.numpy as jnp
 
@@ -136,7 +136,7 @@ def make_flow_solve(pattern: dict):
     @jax.jit
     def solve(rho_d, rho_o, rho_w, rhs):
         Ax = eye_vals - rho_d * wd_vals - rho_o * wo_vals - rho_w * ww_vals
-        return cholgraph.lu_solve(Ai, Aj, Ax, rhs)
+        return sparsax.lu_solve(Ai, Aj, Ax, rhs)
 
     return solve
 
@@ -146,7 +146,7 @@ def build_flow_ctx(Wd, Wo, Ww, N) -> dict:
 
     Bundles the shared COO pattern (:func:`build_flow_pattern`) and BCOO copies
     of the three lag matrices for sparse matvecs.  The fill-reducing symbolic
-    analysis is cached inside cholgraph, keyed on the (constant) pattern.
+    analysis is cached inside sparsax, keyed on the (constant) pattern.
     """
     from jax.experimental import sparse as jsparse
 
@@ -161,16 +161,16 @@ def _make_flow_solvers(ctx):
     """Build sparse-LU solve closures for ``A(ρ_d,ρ_o,ρ_w) = I−ρ_dWd−ρ_oWo−ρ_wWw``.
 
     Returns ``(solve, matvec)`` where ``solve(ρ_d,ρ_o,ρ_w,rhs)`` →
-    ``A(ρ)⁻¹ rhs`` via ``cholgraph.lu_solve`` (SuiteSparse KLU) and ``matvec``
+    ``A(ρ)⁻¹ rhs`` via ``sparsax.lu_solve`` (SuiteSparse KLU) and ``matvec``
     is a dict ``{"d","o","w"}`` of sparse (BCOO) lag matvecs.
 
-    ``cholgraph.lu_solve`` is vmap-safe and reuses its numeric factorisation via
+    ``sparsax.lu_solve`` is vmap-safe and reuses its numeric factorisation via
     a content-addressed cache: the m+1 solves of a Krylov basis at a fixed
     (ρ_d,ρ_o,ρ_w) pay one ``klu_factor`` and m cheap solves — per chain — even
     under ``jax.vmap`` over chains, which stays vmap-safe under ``jit(vmap(...))``;
     see ``set_lu_cache_size``.
     """
-    import cholgraph
+    import sparsax
     import jax.numpy as jnp
 
     Ai = jnp.asarray(ctx["Ai"], jnp.int32)
@@ -183,7 +183,7 @@ def _make_flow_solvers(ctx):
 
     def solve(rho_d, rho_o, rho_w, rhs):
         Ax = eye_vals - rho_d * wd_vals - rho_o * wo_vals - rho_w * ww_vals
-        return cholgraph.lu_solve(Ai, Aj, Ax, rhs)
+        return sparsax.lu_solve(Ai, Aj, Ax, rhs)
 
     matvec = {
         "d": lambda v: Wd_bcoo @ v,
@@ -411,7 +411,7 @@ def run_chains_jax_flow(
     """Run the unrestricted flow NB Gibbs sampler on the JAX backend.
 
     All chains run together under ``jax.vmap`` (like the reduced-form SAR-NB and
-    logit paths).  The non-symmetric LU solve goes through ``cholgraph.lu_solve``
+    logit paths).  The non-symmetric LU solve goes through ``sparsax.lu_solve``
     (SuiteSparse KLU) — vmap-safe with numeric factor-reuse under
     ``jit(vmap(...))``.  The three ρ
     slices are Krylov-only (no per-candidate direct solve, which under vmap would
@@ -451,15 +451,15 @@ def run_chains_jax_flow(
     if jax_seeds is None:
         jax_seeds = list(range(chains))
 
-    # cholgraph's KLU factor cache must hold each chain's distinct factors live
+    # sparsax's KLU factor cache must hold each chain's distinct factors live
     # across the sweep's several solves (η, the 3 directional bases, X̃) for the
     # vmapped reuse to land; size generously per chain.
-    import cholgraph
+    import sparsax
 
-    cholgraph.set_lu_cache_size(max(32, 8 * chains))
+    sparsax.set_lu_cache_size(max(32, 8 * chains))
 
     # All chains run together under jax.vmap — vmap-safe now that the LU solve is
-    # cholgraph.lu_solve (factor-reusing) and the ρ slices are Krylov-only.
+    # sparsax.lu_solve (factor-reusing) and the ρ slices are Krylov-only.
     state0 = {
         "beta": jnp.asarray(np.stack([i.beta for i in inits]), dtype=jnp.float64),
         "rho_d": jnp.asarray([float(i.rho_d) for i in inits], dtype=jnp.float64),

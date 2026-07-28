@@ -1,7 +1,7 @@
 r"""JAX reduced-form SAR-logit Pólya–Gamma Gibbs sampler.
 
 Reuses the reduced-form SAR-NB machinery (``..negbin_reduced._jax``): the sparse
-``(I−ρW)⁻¹`` solve (cholgraph KLU, never densified), the shift-invert Krylov
+``(I−ρW)⁻¹`` solve (sparsax KLU, never densified), the shift-invert Krylov
 basis, the device-parallel (pmap) runner.  Only the Pólya–Gamma augmentation
 differs — Bernoulli (h = 1, κ = y − ½, working response κ/ω, no α) instead of
 Negative-Binomial.
@@ -233,9 +233,9 @@ def run_chains_jax_reduced_logit(
     X_jax = jnp.asarray(X, dtype=jnp.float64)
     sparse_ctx = _build_sparse_ctx(W_sparse, n)
 
-    import cholgraph
+    import sparsax
 
-    cholgraph.set_lu_cache_size(max(32, 6 * chains))
+    sparsax.set_lu_cache_size(max(32, 6 * chains))
 
     slice_width_jax = jnp.float64(slice_width)
     if jax_seeds is None:

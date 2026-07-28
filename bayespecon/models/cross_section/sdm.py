@@ -70,11 +70,30 @@ class SDM(GaussianLikelihoodMixin, SpatialModel):
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`. ``None`` (default)
         auto-selects by size: ``"eigenvalue"`` for ``n <= 500``; for
-        ``500 < n <= 20000``, ``"cheb_cholesky"`` (exact, sparse Cholesky
+        ``500 < n <= 60000``, ``"cheb_cholesky"`` (exact, sparse Cholesky
         at Chebyshev nodes) when ``W`` is symmetric else ``"aaa"`` (AAA
-        rational approximation); ``"cheb_stochastic"`` for ``n > 20000``.
+        rational approximation); ``"cheb_stochastic"`` for ``n > 60000``.
         Explicit opt-ins: ``"chebyshev"`` (Barry-Pace) and ``"slq"``
         (stochastic Lanczos quadrature).
+    logdet_refit : bool, default False
+        Rebuild the log-determinant interpolant partway through warmup, on
+        the range the chains have found rather than the interval implied by
+        the prior.  A post-warmup range is typically one to two orders of
+        magnitude narrower, which needs far fewer interpolation nodes and
+        drives the approximation error over the posterior's support down to
+        the factorisation's roundoff floor.  Applies to ``"cheb_cholesky"``
+        and ``"aaa"``; ignored otherwise.
+
+        Off by default because it is not free of consequences: the
+        interpolant is only valid on its interval, so the refit window
+        becomes the sampler's support.  The window is padded by
+        ``logdet_refit_pad_sd`` warmup standard deviations, recorded in
+        ``idata.attrs["logdet_refit_window"]``, and a warning is raised if
+        the retained draws ever reach an edge the refit introduced.
+    logdet_refit_pad_sd : float, default 10.0
+        Padding for the refit window, in warmup posterior standard
+        deviations.  At the default the truncated tail is ~1e-23 under
+        normality, and the padding costs a node or two at most.
     robust : bool, default False
         If True, replace the Normal error with Student-t. See *Robust
         regression* below.

@@ -14,7 +14,7 @@ Five methods are supported:
 
 When ``logdet_method`` is ``None`` the method is auto-selected:
 ``"eigenvalue"`` for n ≤ ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500),
-``"cheb_cholesky"`` for n ≤ ``BAYESPECON_LOGDET_CHEB_MAX_N`` (default 20000)
+``"cheb_cholesky"`` for n ≤ ``BAYESPECON_LOGDET_CHEB_MAX_N`` (default 60000)
 when ``W`` is symmetric (undirected graph), ``"aaa"`` when ``W`` is
 non-symmetric (directed graph), otherwise ``"cheb_stochastic"``
 (geometric convergence, same cost as Barry-Pace).
@@ -51,7 +51,7 @@ class LogDetMethod(str, Enum):
     CHEB_CHOLESKY = "cheb_cholesky"
     AAA = "aaa"
     TRACES = "traces"
-    CHOLMOD = "cholmod"  # JAX-native sparse CHOLMOD logdet (requires cholgraph)
+    CHOLMOD = "cholmod"  # JAX-native sparse CHOLMOD logdet (requires sparsax)
 
 
 VALID_LOGDET_METHODS: frozenset[str] = frozenset(m.value for m in LogDetMethod)
@@ -188,24 +188,32 @@ def _auto_logdet_method(n: int, W=None) -> str:
     """Auto-select based on matrix dimension n and W symmetry.
 
     - ``eigenvalue`` for n ≤ eigen_cutoff (default 500): exact O(n³) eigendecomposition.
-    - ``cheb_cholesky`` for n ≤ cheb_cutoff (default 20000) when W is symmetric:
+    - ``cheb_cholesky`` for n ≤ cheb_cutoff (default 60000) when W is symmetric:
       exact logdet via sparse Cholesky at Chebyshev nodes with symbolic reuse.
-      Measured setup (2D rook, adaptive order): ~194ms at n=10k, ~1.0s at n=40k,
-      ~2.2s at n=60k.  Accuracy: 3e-6 (n=10k) to 2e-5 (n=60k).  Eval: ~1.3μs/ρ
-      via Clenshaw.
+      Measured setup (2D rook, ρ ∈ [0.1, 0.8], 2026-07): ~96ms at n=10k, ~583ms
+      at n=40k, ~1.18s at n=60k.  Accuracy: 4.6e-7 (n=10k) to 2.6e-6 (n=60k).
+      Eval: ~1.7μs/ρ via Clenshaw.
     - ``aaa`` for n ≤ cheb_cutoff when W is non-symmetric (directed graph):
       exact logdet via sparse LU (KLU with symbolic reuse) at adaptively-selected
       AAA support points.  Rational approximation converges exponentially near
-      singularities.  Uses an adaptive coarse grid of 16–30 LU factorisations
-      (16 for narrow intervals clear of ±1), selecting ~7 support points.
-      Measured setup ~152ms at n=10k; eval ~5μs/ρ; error 1e-9 to 2e-8.
+      singularities.  Uses an adaptive coarse grid of 8–30 LU factorisations,
+      sized from the interval's Bernstein-ellipse rate, selecting ~7 support
+      points.  Measured setup ~157ms at n=10k; eval ~5μs/ρ; error 1e-8 to 5e-8.
     - ``cheb_stochastic`` for n > cheb_cutoff: stochastic Chebyshev expansion.
-      Lower setup cost (~53ms at n=10k) but carries stochastic error ~0.2-1.9
-      with 50 probes, ~0.5-3.5 with 200.  Eval: ~55μs/ρ.  Use when factorisation
+      Lower setup cost (~62ms at n=10k, ~328ms at n=60k) but carries stochastic
+      error 0.7 to 3.5 with 200 probes.  Eval: ~57μs/ρ.  Use when factorisation
       fill-in makes exact setup too expensive.
+
+    The ``cheb_cutoff`` default of 60,000 is where the benchmark ends, not where
+    the exact path stops paying.  It was raised from 20,000 after vectorising the
+    symmetrizing-diagonal recovery roughly halved Cholesky setup: at n = 60,000
+    the exact path now costs ~850ms more than the stochastic one for six orders
+    of magnitude less error, which is negligible against any chain that runs for
+    seconds.  Raise it further via ``BAYESPECON_LOGDET_CHEB_MAX_N`` if Cholesky
+    fill-in on your graph stays affordable past that.
     """
     eigen_cutoff_raw = os.getenv("BAYESPECON_LOGDET_EIGEN_MAX_N", "500")
-    cheb_cutoff_raw = os.getenv("BAYESPECON_LOGDET_CHEB_MAX_N", "20000")
+    cheb_cutoff_raw = os.getenv("BAYESPECON_LOGDET_CHEB_MAX_N", "60000")
     try:
         eigen_cutoff = max(1, int(eigen_cutoff_raw))
     except ValueError:
@@ -213,7 +221,7 @@ def _auto_logdet_method(n: int, W=None) -> str:
     try:
         cheb_cutoff = max(eigen_cutoff + 1, int(cheb_cutoff_raw))
     except ValueError:
-        cheb_cutoff = 20000
+        cheb_cutoff = 60000
     if n <= eigen_cutoff:
         return "eigenvalue"
     if n <= cheb_cutoff:

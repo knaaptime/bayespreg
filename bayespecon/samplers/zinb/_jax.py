@@ -11,7 +11,7 @@ Composes the two reduced-form jax samplers already built:
   zeros contribute nothing: ``ω_cnt = ε`` and the working ``y`` is set to ``α``
   so ``κ = 0`` there);
 
-linked by the latent indicator ``z``.  Both equations use cholgraph-KLU solves
+linked by the latent indicator ``z``.  Both equations use sparsax-KLU solves
 (never densified), the on-device Pólya-Gamma draw (pgjax), and run each chain on
 its own CPU device via ``jax.pmap``.
 """
@@ -258,10 +258,10 @@ def run_chains_jax_zinb(
     sel_ctx = _build_sparse_ctx(W_sel_sparse, n)
     cnt_ctx = _build_sparse_ctx(W_cnt_sparse, n)
 
-    import cholgraph
+    import sparsax
 
     # two patterns (W_sel, W_cnt) x chains x a few distinct rho/lam per sweep
-    cholgraph.set_lu_cache_size(max(64, 12 * chains))
+    sparsax.set_lu_cache_size(max(64, 12 * chains))
 
     slice_width_jax = jnp.float64(slice_width)
     if jax_seeds is None:

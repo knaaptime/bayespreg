@@ -95,7 +95,25 @@ from .._utils._jax_base import make_jax_state_class
 
 JAXGaussianGibbsState = make_jax_state_class(
     "JAXGaussianGibbsState",
-    ("beta", "sigma2", "rho", "slice_w", "slice_L", "slice_R"),
+    (
+        "beta",
+        "sigma2",
+        "rho",
+        "slice_w",
+        "slice_L",
+        "slice_R",
+        # The Jacobian interpolant and the ρ support travel in the state rather
+        # than in the step's closure so a warmup-adaptive refit can substitute
+        # them between the two scan phases without recompiling — the same
+        # mechanism the slice width already uses.  ``logdet_params`` is an
+        # opaque, method-specific pytree of fixed-shape arrays (see
+        # :meth:`bayespecon._logdet._refit.LogdetRefitter.jax_params`); it is
+        # ``None`` when the run uses a fixed interpolant, in which case the
+        # step falls back to its closed-over evaluator.
+        "logdet_params",
+        "rho_lo",
+        "rho_hi",
+    ),
 )
 
 
@@ -198,6 +216,7 @@ def _make_gaussian_gibbs_step(
     WXtWX,
     priors,
     model_type: str,
+    logdet_param_fn=None,
 ):
     """Build a JIT-compiled Gaussian Gibbs step with data bound into the closure.
 
@@ -263,8 +282,6 @@ def _make_gaussian_gibbs_step(
     )
     sigma2_alpha_jax = jnp.float64(priors.sigma2_alpha)
     sigma2_beta_jax = jnp.float64(priors.sigma2_beta)
-    rho_lower_jax = jnp.float64(priors.rho_lower)
-    rho_upper_jax = jnp.float64(priors.rho_upper)
 
     # Prior precision for beta
     beta_prior_prec = jnp.diag(1.0 / beta_sigma2_jax)
@@ -289,6 +306,19 @@ def _make_gaussian_gibbs_step(
         """
         sigma2 = state.sigma2
         rho = state.rho  # holds λ for SEM/SDEM
+
+        # The interpolant and the ρ support are read from the state, so a
+        # warmup refit can swap them between scan phases without a retrace.
+        # With no parameterised evaluator the state carries the prior bounds
+        # and ``logdet_params is None``, and this reduces to the closure form.
+        rho_lo = state.rho_lo
+        rho_hi = state.rho_hi
+        if logdet_param_fn is None:
+            _logdet_of = logdet_jax
+        else:
+
+            def _logdet_of(param_val):
+                return logdet_param_fn(param_val, state.logdet_params)
 
         key_beta, key_sigma2, key_rho = jax.random.split(key, 3)
 
@@ -340,9 +370,9 @@ def _make_gaussian_gibbs_step(
                 Xtr = XTy - param_val * XTWy
                 rss = r_dot_r - Xtr @ jax.scipy.linalg.cho_solve(XtX_cho_jax, Xtr)
                 rss = jnp.maximum(rss, 1e-300)
-                logdet = logdet_jax(param_val)
+                logdet = _logdet_of(param_val)
                 log_prior = jnp.where(
-                    (param_val >= rho_lower_jax) & (param_val <= rho_upper_jax),
+                    (param_val >= rho_lo) & (param_val <= rho_hi),
                     0.0,
                     -jnp.inf,
                 )
@@ -360,11 +390,11 @@ def _make_gaussian_gibbs_step(
                 rss = yty_star - Xty_star @ XtX_star_inv_Xty
                 rss = jnp.maximum(rss, 1e-300)
 
-                logdet = logdet_jax(param_val)
+                logdet = _logdet_of(param_val)
                 logdet_XtX = jnp.linalg.slogdet(XtX_star)[1]
 
                 log_prior = jnp.where(
-                    (param_val >= rho_lower_jax) & (param_val <= rho_upper_jax),
+                    (param_val >= rho_lo) & (param_val <= rho_hi),
                     0.0,
                     -jnp.inf,
                 )
@@ -381,8 +411,8 @@ def _make_gaussian_gibbs_step(
         rho_new, _, L_final, R_final, _ = jax_slice_sample_1d_adaptive(
             log_density_spatial,
             rho,
-            rho_lower_jax,
-            rho_upper_jax,
+            rho_lo,
+            rho_hi,
             key=key_rho,
             w=state.slice_w,
             L_prev=state.slice_L,
@@ -396,6 +426,9 @@ def _make_gaussian_gibbs_step(
             beta=beta_new,
             sigma2=sigma2_new,
             rho=rho_new,
+            logdet_params=state.logdet_params,  # swapped in Python between phases
+            rho_lo=rho_lo,
+            rho_hi=rho_hi,
             slice_w=state.slice_w,  # width adapted in Python between phases
             slice_L=L_final,
             slice_R=R_final,
@@ -498,6 +531,8 @@ def run_chain_jax_gaussian(
     progressbar: bool = True,
     chain_id: int = 0,
     progress_manager: object | None = None,
+    logdet_param_fn=None,
+    logdet_params=None,
 ):
     """Run one chain of the full-JIT JAX Gaussian Gibbs sampler.
 
@@ -597,6 +632,9 @@ def run_chain_jax_gaussian(
         beta=jnp.asarray(init.beta, dtype=jnp.float64),
         sigma2=jnp.float64(init.sigma2),
         rho=jnp.float64(init.rho),
+        logdet_params=logdet_params,
+        rho_lo=jnp.float64(priors.rho_lower),
+        rho_hi=jnp.float64(priors.rho_upper),
         slice_w=jnp.float64(slice_width),
         # Initialize persistent interval to support bounds (no prior info)
         slice_L=jnp.float64(priors.rho_lower),
@@ -633,6 +671,7 @@ def run_chain_jax_gaussian(
         WXtWX=_consts["WXtWX"],
         priors=priors,
         model_type=model_type,
+        logdet_param_fn=logdet_param_fn,
     )
 
     key = jax.random.PRNGKey(rng.integers(2**31))
@@ -744,6 +783,9 @@ def run_chains_jax_gibbs_vectorized(
     model_type: str = "sar",
     slice_width: float | None = None,
     progressbar: bool = True,
+    logdet_param_fn=None,
+    logdet_params=None,
+    refit_hook=None,
 ) -> list[dict]:
     """Run multiple JAX Gibbs chains via ``jax.vmap``.
 
@@ -846,6 +888,7 @@ def run_chains_jax_gibbs_vectorized(
         WXtWX=_consts["WXtWX"],
         priors=priors,
         model_type=model_type,
+        logdet_param_fn=logdet_param_fn,
     )
 
     # Convert NumPy initial states to JAX states, then batch into a
@@ -855,6 +898,9 @@ def run_chains_jax_gibbs_vectorized(
             beta=jnp.asarray(init.beta, dtype=jnp.float64),
             sigma2=jnp.float64(init.sigma2),
             rho=jnp.float64(init.rho),
+            logdet_params=logdet_params,
+            rho_lo=jnp.float64(priors.rho_lower),
+            rho_hi=jnp.float64(priors.rho_upper),
             slice_w=jnp.float64(slice_width),
             slice_L=jnp.float64(priors.rho_lower),
             slice_R=jnp.float64(priors.rho_upper),
@@ -906,19 +952,78 @@ def run_chains_jax_gibbs_vectorized(
             state = init_states
             chunk_keys = warmup_keys
             iter_done = 0
+            # Warmup ρ, kept only when a refit will consume it.
+            refit_at = tune // 2 if refit_hook is not None else None
+            warm_rho: list[np.ndarray] = []
             while iter_done < tune:
                 step = min(warmup_chunk, tune - iter_done)
                 if step == warmup_chunk:
-                    state, chunk_keys, _, _, _, _ = warmup_vmap(state, chunk_keys)
+                    state, chunk_keys, rhos_w, _, _, _ = warmup_vmap(state, chunk_keys)
                 else:
-                    state, chunk_keys, _, _, _, _ = jax.vmap(
+                    state, chunk_keys, rhos_w, _, _, _ = jax.vmap(
                         lambda s_, k_: _warmup_chunk(s_, k_, step)
                     )(state, chunk_keys)
                 jax.block_until_ready(state.rho)
+                if refit_at is not None:
+                    warm_rho.append(np.asarray(rhos_w))
                 iter_done += step
                 if pm is not None:
                     for c in range(chains):
                         pm.update(c, iter_done - 1, tuning=True, accept=None)
+
+                # ── Warmup Jacobian refit ──
+                # Rebuild the interpolant on the ρ range the chains found, then
+                # substitute it into the state.  Because the interpolant and the
+                # ρ support are traced state rather than closure constants, and
+                # the new arrays are zero-padded to the same capacity, the
+                # compiled step is reused — no retrace.  Everything after this
+                # point, including the rest of warmup, runs under the refit
+                # interpolant, so the kernel is frozen well before the first
+                # retained draw.
+                if refit_at is not None and iter_done >= refit_at:
+                    pooled = np.concatenate(warm_rho, axis=0)  # (iters, chains)
+                    # Chains start at ρ = 0; the early transient would stretch
+                    # the window back to the initial value, so use the tail.
+                    pooled = pooled[len(pooled) // 2 :].ravel()
+                    refit = refit_hook(pooled)
+                    refit_at = None
+                    warm_rho = []
+                    if refit is not None:
+                        new_params, lo, hi = refit
+                        import equinox as eqx
+
+                        bcast = jax.tree.map(
+                            lambda a: jnp.broadcast_to(a, (chains, *jnp.shape(a))),
+                            new_params,
+                        )
+                        lo_b = jnp.full((chains,), lo, dtype=jnp.float64)
+                        hi_b = jnp.full((chains,), hi, dtype=jnp.float64)
+                        state = eqx.tree_at(
+                            lambda st: (
+                                st.rho,
+                                st.logdet_params,
+                                st.rho_lo,
+                                st.rho_hi,
+                                st.slice_w,
+                                st.slice_L,
+                                st.slice_R,
+                            ),
+                            state,
+                            (
+                                # A chain may have stepped outside the window in
+                                # the chunk after the draws that defined it.
+                                jnp.clip(state.rho, lo_b, hi_b),
+                                bcast,
+                                lo_b,
+                                hi_b,
+                                # Rescale the slice width and reset the
+                                # persistent interval to the new, much narrower
+                                # support.
+                                jnp.full((chains,), (hi - lo) * 0.1, jnp.float64),
+                                lo_b,
+                                hi_b,
+                            ),
+                        )
 
             final_states = state
         else:

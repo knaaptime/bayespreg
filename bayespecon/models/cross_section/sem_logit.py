@@ -34,7 +34,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from ..._lazy_deps import az
-from ...samplers._utils._cholgraph_utils import resolve_pg_jax_backend
+from ...samplers._utils._sparsax_utils import resolve_pg_jax_backend
 from ...samplers._utils._idata import gibbs_to_inference_data
 from ...samplers._utils._slice import SliceWidthState
 from ...samplers._utils._spatial_normal import CholmodFactor
@@ -273,7 +273,7 @@ class SEMLogit(SpatialModel):
         W_sym_dense = _jax_parts["W_sym_dense"]
         WtW_dense = _jax_parts["WtW_dense"]
         logdet_jax = _jax_parts["logdet_jax"]
-        cholgraph_pattern = _jax_parts["cholgraph_pattern"]
+        sparsax_pattern = _jax_parts["sparsax_pattern"]
 
         cache = SEMLogitGibbsCache(
             W_sparse=W_sparse,
@@ -334,7 +334,7 @@ class SEMLogit(SpatialModel):
                 n_probes=n_probes,
                 lanczos_deg=lanczos_deg,
                 progressbar=progressbar,
-                cholgraph_pattern=cholgraph_pattern,
+                sparsax_pattern=sparsax_pattern,
             )
         else:
 

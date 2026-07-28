@@ -44,7 +44,8 @@ def test_resolve_none_auto_selects():
     assert resolve_logdet_method(None, n=100) == "eigenvalue"
     assert resolve_logdet_method(None, n=1000) == "cheb_cholesky"
     assert resolve_logdet_method(None, n=10000) == "cheb_cholesky"
-    assert resolve_logdet_method(None, n=50000) == "cheb_stochastic"
+    assert resolve_logdet_method(None, n=50000) == "cheb_cholesky"
+    assert resolve_logdet_method(None, n=200000) == "cheb_stochastic"
 
 
 def test_resolve_none_auto_selects_nonsymmetric_W():

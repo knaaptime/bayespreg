@@ -53,8 +53,8 @@ class GibbsEntry:
     auto_backend
         Which backend ``gibbs_backend="auto"`` prefers.  ``"jax"`` (default)
         selects JAX when installed and supported, else NumPy — the JAX Gibbs
-        path uses the sparse cholgraph solve (it never densifies ``W``; a dense
-        fallback runs only when cholgraph is unavailable or on GPU).  ``"numpy"``
+        path uses the sparse sparsax solve (it never densifies ``W``; a dense
+        fallback runs only when sparsax is unavailable or on GPU).  ``"numpy"``
         pins ``auto`` to NumPy regardless of JAX availability — for families with
         no JAX backend, or where the CHOLMOD path is intentionally the default.
     options

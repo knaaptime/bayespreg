@@ -242,11 +242,11 @@ def test_simulate_sar_negbin_output_contract():
 
 @pytest.mark.requires_jax
 def test_sar_negbin_jax_logp_grad(monkeypatch):
-    """End-to-end smoke: SAR-NB logp + grad compile under JAX (cholgraph SAR)."""
+    """End-to-end smoke: SAR-NB logp + grad compile under JAX (sparsax SAR)."""
     pytest.importorskip("jax")
-    pytest.importorskip("cholgraph")
+    pytest.importorskip("sparsax")
 
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "cholgraph")
+    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "sparsax")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
 
     from bayespecon._jax_dispatch import (

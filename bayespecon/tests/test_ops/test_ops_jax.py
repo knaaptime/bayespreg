@@ -305,16 +305,16 @@ def test_sampler_resolution_with_jax_present():
     )
 
 
-def test_jax_auto_prefers_cholgraph_when_available(monkeypatch):
+def test_jax_auto_prefers_sparsax_when_available(monkeypatch):
     from bayespecon._jax_dispatch import _select_jax_sparse_backend
 
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
-    monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: True)
+    monkeypatch.setattr("bayespecon._jax_dispatch._sparsax_available", lambda: True)
     monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
 
     _select_jax_sparse_backend.cache_clear()
-    assert _select_jax_sparse_backend() == "cholgraph"
+    assert _select_jax_sparse_backend() == "sparsax"
     _select_jax_sparse_backend.cache_clear()
 
 
@@ -323,7 +323,7 @@ def test_jax_auto_falls_to_callback_when_only_umfpack_available(monkeypatch):
 
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
-    monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: False)
+    monkeypatch.setattr("bayespecon._jax_dispatch._sparsax_available", lambda: False)
     monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
 
     _select_jax_sparse_backend.cache_clear()
@@ -340,7 +340,7 @@ def test_jax_auto_falls_to_callback_scipy_when_no_optional_backends(monkeypatch)
 
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
-    monkeypatch.setattr("bayespecon._jax_dispatch._cholgraph_available", lambda: False)
+    monkeypatch.setattr("bayespecon._jax_dispatch._sparsax_available", lambda: False)
     monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: False)
 
     _select_jax_sparse_backend.cache_clear()

@@ -55,10 +55,10 @@ def _jax_available() -> bool:
 
 
 @lru_cache(maxsize=1)
-def _cholgraph_available() -> bool:
-    """Return ``True`` when optional ``cholgraph`` is importable.
+def _sparsax_available() -> bool:
+    """Return ``True`` when optional ``sparsax`` is importable.
 
-    ``cholgraph`` exposes CHOLMOD sparse SPD Cholesky as JIT-compatible
+    ``sparsax`` exposes CHOLMOD sparse SPD Cholesky as JIT-compatible
     JAX primitives (``solve``, ``logdet``, ``update_solve``) with custom
     VJP gradients and vmap batching.  It is CPU-only and requires
     ``jax_enable_x64=True``.
@@ -67,10 +67,10 @@ def _cholgraph_available() -> bool:
     installs — e.g. a stale editable install whose source tree has moved —
     count as unavailable instead of crashing at op-registration time.
     """
-    if importlib.util.find_spec("cholgraph") is None:
+    if importlib.util.find_spec("sparsax") is None:
         return False
     try:
-        importlib.import_module("cholgraph")
+        importlib.import_module("sparsax")
     except Exception:
         return False
     return True
@@ -93,9 +93,9 @@ def _warn_jax_auto_fallback_once(missing: str, target: str) -> None:
     install_hint = ""
     if missing == "sksparse.umfpack":
         install_hint = " Install 'scikit-sparse' to enable the UMFPACK callback path."
-    elif missing == "cholgraph":
+    elif missing == "sparsax":
         install_hint = (
-            " Install 'cholgraph' to enable the JAX-native sparse SPD Cholesky path."
+            " Install 'sparsax' to enable the JAX-native SuiteSparse (CHOLMOD/KLU) path."
         )
     warnings.warn(
         "BAYESPECON_JAX_SPARSE_BACKEND=auto selected fallback backend "
@@ -112,8 +112,8 @@ def _select_jax_sparse_backend() -> str:
 
     Environment
     -----------
-    BAYESPECON_JAX_SPARSE_BACKEND : {"auto", "callback", "cholgraph"}
-        Default ``auto``. ``auto`` prefers ``cholgraph`` (JAX-native SuiteSparse:
+    BAYESPECON_JAX_SPARSE_BACKEND : {"auto", "callback", "sparsax"}
+        Default ``auto``. ``auto`` prefers ``sparsax`` (JAX-native SuiteSparse:
         CHOLMOD for SPD, KLU for asymmetric) when available, else ``callback``.
     BAYESPECON_JAX_SPARSE_STRICT : {"0", "1", "false", "true"}
         If truthy, missing requested optional backends raise ImportError.
@@ -127,29 +127,29 @@ def _select_jax_sparse_backend() -> str:
     }
 
     if requested in {"", "auto"}:
-        if _cholgraph_available():
-            return "cholgraph"
+        if _sparsax_available():
+            return "sparsax"
         # JAX path fallback chain:
-        #   1) cholgraph (JAX-native SuiteSparse: CHOLMOD/KLU)
+        #   1) sparsax (JAX-native SuiteSparse: CHOLMOD/KLU)
         #   2) callback + umfpack
         #   3) callback + scipy
         # The callback solver selection is handled in ops._select_sparse_backend.
         if _umfpack_available():
-            _warn_jax_auto_fallback_once("cholgraph", "callback+umfpack")
+            _warn_jax_auto_fallback_once("sparsax", "callback+umfpack")
         else:
-            _warn_jax_auto_fallback_once("cholgraph", "callback+scipy")
+            _warn_jax_auto_fallback_once("sparsax", "callback+scipy")
             _warn_jax_auto_fallback_once("sksparse.umfpack", "callback+scipy")
         return "callback"
 
     if requested in {"callback", "scipy", "pure_callback"}:
         return "callback"
 
-    if requested in {"cholmod", "cholgraph"}:
-        if _cholgraph_available():
-            return "cholgraph"
+    if requested == "sparsax":
+        if _sparsax_available():
+            return "sparsax"
         msg = (
-            "BAYESPECON_JAX_SPARSE_BACKEND=cholgraph requested, but optional "
-            "dependency 'cholgraph' is not installed. Falling back to callback backend."
+            "BAYESPECON_JAX_SPARSE_BACKEND=sparsax requested, but optional "
+            "dependency 'sparsax' is not installed. Falling back to callback backend."
         )
         if strict:
             raise ImportError(msg)
@@ -158,12 +158,12 @@ def _select_jax_sparse_backend() -> str:
 
     msg = (
         f"Unknown BAYESPECON_JAX_SPARSE_BACKEND='{requested}'. "
-        "Valid values are: auto, callback, cholgraph. Falling back to auto."
+        "Valid values are: auto, callback, sparsax. Falling back to auto."
     )
     if strict:
         raise ValueError(msg)
     warnings.warn(msg, RuntimeWarning)
-    return "cholgraph" if _cholgraph_available() else "callback"
+    return "sparsax" if _sparsax_available() else "callback"
 
 
 def _strict_env() -> bool:
@@ -176,20 +176,20 @@ def _strict_env() -> bool:
 
 
 @lru_cache(maxsize=1)
-def _cholmod_jax_enabled() -> bool:
-    """Return ``True`` unless the cholgraph JAX Gibbs path is opted *out*.
+def _sparsax_jax_enabled() -> bool:
+    """Return ``True`` unless the sparsax JAX Gibbs path is opted *out*.
 
     Environment
     -----------
-    BAYESPECON_JAX_CHOLMOD : {"0", "1", "false", "true", ...}
-        Default **enabled**.  When ``cholgraph`` is installed (checked
-        separately via :func:`_cholgraph_available`), the JAX Gibbs samplers
-        use its sparse SPD Cholesky instead of the dense ``jnp.linalg.cholesky``
-        stopgap.  Set to a falsy value (``0``/``false``/``no``/``off``) to force
-        the dense path — useful for benchmarking, debugging, or GPU experiments
-        (cholgraph is CPU-only).
+    BAYESPECON_JAX_SPARSAX : {"0", "1", "false", "true", ...}
+        Default **enabled**.  When ``sparsax`` is installed (checked
+        separately via :func:`_sparsax_available`), the JAX Gibbs samplers use
+        its native SuiteSparse solvers (CHOLMOD for SPD, KLU for asymmetric)
+        instead of the dense ``jnp.linalg.cholesky`` stopgap.  Set to a falsy
+        value (``0``/``false``/``no``/``off``) to force the dense path — useful
+        for benchmarking, debugging, or GPU experiments (sparsax is CPU-only).
     """
-    return os.environ.get("BAYESPECON_JAX_CHOLMOD", "1").strip().lower() not in {
+    return os.environ.get("BAYESPECON_JAX_SPARSAX", "1").strip().lower() not in {
         "0",
         "false",
         "no",
@@ -198,7 +198,7 @@ def _cholmod_jax_enabled() -> bool:
 
 
 # Threshold above which the auto solver switches from eigen to the sparse
-# (cholgraph) path.  Eigen uses O(N^2) memory (two N×N complex128 matrices)
+# (sparsax) path.  Eigen uses O(N^2) memory (two N×N complex128 matrices)
 # and O(N^3) eigendecomposition time, which becomes prohibitive for very
 # large N; the sparse path is O(nnz).
 #
@@ -223,16 +223,16 @@ def _resolve_auto_sar_solver(n: int) -> str:
        (default 0, i.e. opt-in only). The eigen path materialises three
        N×N complex128 matrices plus a dense N×N float64 W and triggers
        multi-minute XLA compile times for n > ~500, so we keep it gated.
-    2. ``cholgraph`` when installed (default; disable via
-       ``BAYESPECON_JAX_CHOLMOD=0``).  Sparse SuiteSparse solve via JAX FFI —
+    2. ``sparsax`` when installed (default; disable via
+       ``BAYESPECON_JAX_SPARSAX=0``).  Sparse SuiteSparse solve via JAX FFI —
        CHOLMOD Cholesky for D-symmetrizable W, KLU (asymmetric LU) for directed
        W — with its own VJP.  CPU-only.
     3. ``jax_gmres`` as the final fallback (matrix-free iterative solve).
     """
     if n <= _JAX_SAR_EIGEN_N_MAX:
         return "eigen"
-    if _cholmod_jax_enabled() and _cholgraph_available():
-        return "cholgraph"
+    if _sparsax_jax_enabled() and _sparsax_available():
+        return "sparsax"
     return "jax_gmres"
 
 
@@ -240,7 +240,7 @@ def _resolve_auto_sar_solver(n: int) -> str:
 def _select_jax_sar_solver() -> str:
     """Resolve the JAX SAR solver from env vars.
 
-    Returns one of ``"auto"``, ``"eigen"``, ``"callback"``, ``"cholgraph"``,
+    Returns one of ``"auto"``, ``"eigen"``, ``"callback"``, ``"sparsax"``,
     ``"jax_gmres"``.
 
     ``"auto"`` is resolved to a concrete solver at Op registration time
@@ -248,11 +248,11 @@ def _select_jax_sar_solver() -> str:
 
     Environment
     -----------
-    BAYESPECON_JAX_SAR_SOLVER : {"auto", "eigen", "callback", "cholgraph", "jax_gmres"}
+    BAYESPECON_JAX_SAR_SOLVER : {"auto", "eigen", "callback", "sparsax", "jax_gmres"}
         Default ``auto``. ``auto`` selects ``eigen`` when
         N ≤ ``BAYESPECON_JAX_SAR_EIGEN_N_MAX`` (default 0, i.e. opt-in),
-        otherwise ``cholgraph`` when installed (default; disable via
-        ``BAYESPECON_JAX_CHOLMOD=0``), else ``jax_gmres``.
+        otherwise ``sparsax`` when installed (default; disable via
+        ``BAYESPECON_JAX_SPARSAX=0``), else ``jax_gmres``.
     BAYESPECON_JAX_SAR_EIGEN_N_MAX : int, default 0
         Maximum N for which ``auto`` selects the eigen path. Default
         0 disables eigen in ``auto`` because the dense materialisation
@@ -273,12 +273,12 @@ def _select_jax_sar_solver() -> str:
     if requested in {"callback", "scipy", "pure_callback"}:
         return "callback"
 
-    if requested in {"cholmod", "cholgraph"}:
-        if _cholgraph_available():
-            return "cholgraph"
+    if requested == "sparsax":
+        if _sparsax_available():
+            return "sparsax"
         msg = (
-            "BAYESPECON_JAX_SAR_SOLVER=cholgraph requested, but optional "
-            "dependency 'cholgraph' is not installed. Falling back to callback."
+            "BAYESPECON_JAX_SAR_SOLVER=sparsax requested, but optional "
+            "dependency 'sparsax' is not installed. Falling back to callback."
         )
         if strict:
             raise ImportError(msg)
@@ -290,7 +290,7 @@ def _select_jax_sar_solver() -> str:
 
     msg = (
         f"Unknown BAYESPECON_JAX_SAR_SOLVER='{requested}'. "
-        "Valid values are: auto, eigen, callback, cholgraph, jax_gmres. "
+        "Valid values are: auto, eigen, callback, sparsax, jax_gmres. "
         "Falling back to auto."
     )
     if strict:
@@ -354,19 +354,19 @@ def register_jax_dispatch() -> bool:
         """Equivalent to ``M.ravel(order='F')`` for a 2D array."""
         return M.T.reshape(-1)
 
-    def _kron_cholgraph_ctx(op):
-        """cholgraph KLU context for the separable-Kronecker regional solves.
+    def _kron_sparsax_ctx(op):
+        """sparsax KLU context for the separable-Kronecker regional solves.
 
         ``Ld = I − ρ_d W`` and ``Lo = I − ρ_o W`` are sparse (``W`` is sparse),
-        so we solve them with cholgraph's KLU (asymmetric sparse LU) instead of
+        so we solve them with sparsax's KLU (asymmetric sparse LU) instead of
         forming a dense ``n×n`` and calling ``jsla.solve``.  Both share the
-        ``I ∪ W`` pattern, whose fill-reducing analysis cholgraph computes once
+        ``I ∪ W`` pattern, whose fill-reducing analysis sparsax computes once
         and caches (content-addressed), reusing it across forward
         (``solve`` → ``lu_solve(Ai, Aj, ·)``) and adjoint
         (``tsolve`` → ``lu_solve(Aj, Ai, ·)``, the transpose via swapped COO
         indices) right-hand sides.  ``W`` is never densified.
         """
-        import cholgraph
+        import sparsax
         from jax.experimental import sparse as jsparse
 
         n = op._n
@@ -389,10 +389,10 @@ def register_jax_dispatch() -> bool:
         W_bcoo = jsparse.BCOO.from_scipy_sparse(op._W.tocsr())
 
         def solve(Ax, rhs):  # L x = rhs
-            return cholgraph.lu_solve(Ai, Aj, Ax, rhs)
+            return sparsax.lu_solve(Ai, Aj, Ax, rhs)
 
         def tsolve(Ax, rhs):  # Lᵀ x = rhs (transpose via swapped COO indices)
-            return cholgraph.lu_solve(Aj, Ai, Ax, rhs)
+            return sparsax.lu_solve(Aj, Ai, Ax, rhs)
 
         return n, eye_vals, w_vals, solve, tsolve, W_bcoo
 
@@ -402,8 +402,8 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(KroneckerFlowSolveOp)
     def _funcify_kron_solve(op, **kwargs):
-        if _cholgraph_available():
-            n, eye_vals, w_vals, solve, _tsolve, _W = _kron_cholgraph_ctx(op)
+        if _sparsax_available():
+            n, eye_vals, w_vals, solve, _tsolve, _W = _kron_sparsax_ctx(op)
 
             def kron_solve(rho_d, rho_o, b):
                 Hb = _reshape_F(b, (n, n))  # (n, n)
@@ -413,7 +413,7 @@ def register_jax_dispatch() -> bool:
 
             return kron_solve
 
-        # Dense fallback (cholgraph not installed).
+        # Dense fallback (sparsax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -435,8 +435,8 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(_KroneckerFlowVJPOp)
     def _funcify_kron_vjp(op, **kwargs):
-        if _cholgraph_available():
-            n, eye_vals, w_vals, _solve, tsolve, W_bcoo = _kron_cholgraph_ctx(op)
+        if _sparsax_available():
+            n, eye_vals, w_vals, _solve, tsolve, W_bcoo = _kron_sparsax_ctx(op)
 
             def kron_vjp(rho_d, rho_o, eta, g):
                 H_eta = _reshape_F(eta, (n, n))  # (n, n)
@@ -460,7 +460,7 @@ def register_jax_dispatch() -> bool:
 
             return kron_vjp
 
-        # Dense fallback (cholgraph not installed).
+        # Dense fallback (sparsax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -492,11 +492,11 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(KroneckerFlowSolveMatrixOp)
     def _funcify_kron_solve_matrix(op, **kwargs):
-        if _cholgraph_available():
-            n, eye_vals, w_vals, solve, _tsolve, _W = _kron_cholgraph_ctx(op)
+        if _sparsax_available():
+            n, eye_vals, w_vals, solve, _tsolve, _W = _kron_sparsax_ctx(op)
 
             def kron_solve_mat(rho_d, rho_o, B):
-                # ρ is shared across columns; cholgraph caches the factor for
+                # ρ is shared across columns; sparsax caches the factor for
                 # each distinct Ax, so the per-column vmap reuses it.
                 Ax_d = eye_vals - rho_d * w_vals
                 Ax_o = eye_vals - rho_o * w_vals
@@ -511,7 +511,7 @@ def register_jax_dispatch() -> bool:
 
             return kron_solve_mat
 
-        # Dense fallback (cholgraph not installed).
+        # Dense fallback (sparsax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -533,8 +533,8 @@ def register_jax_dispatch() -> bool:
 
     @jax_funcify.register(_KroneckerFlowVJPMatrixOp)
     def _funcify_kron_vjp_matrix(op, **kwargs):
-        if _cholgraph_available():
-            n, eye_vals, w_vals, _solve, tsolve, W_bcoo = _kron_cholgraph_ctx(op)
+        if _sparsax_available():
+            n, eye_vals, w_vals, _solve, tsolve, W_bcoo = _kron_sparsax_ctx(op)
 
             def kron_vjp_mat(rho_d, rho_o, H_eta, G):
                 Ax_d = eye_vals - rho_d * w_vals
@@ -560,7 +560,7 @@ def register_jax_dispatch() -> bool:
 
             return kron_vjp_mat
 
-        # Dense fallback (cholgraph not installed).
+        # Dense fallback (sparsax not installed).
         W_d = jnp.asarray(_dense(op._W))
         n = op._n
         I = jnp.eye(n, dtype=jnp.float64)
@@ -999,8 +999,8 @@ def register_jax_dispatch() -> bool:
 
             return sparse_sar_solve
 
-        if resolved == "cholgraph":
-            import cholgraph as _chj
+        if resolved == "sparsax":
+            import sparsax as _chj
 
             n = op._n
             try:
@@ -1009,9 +1009,9 @@ def register_jax_dispatch() -> bool:
                 # D-symmetrise W: raises ValueError if not symmetrizable.
                 W_sym_sp = _d_symmetrize(op._W)  # csc_matrix, symmetric
             except ValueError:
-                # Directed / non-symmetrizable W → cholgraph KLU (asymmetric LU).
+                # Directed / non-symmetrizable W → sparsax KLU (asymmetric LU).
                 # Fixed COO pattern for A(ρ) = I − ρW over the I ∪ W union; W is
-                # never densified (O(nnz)).  cholgraph caches the analysis.
+                # never densified (O(nnz)).  sparsax caches the analysis.
                 eye_coo = sp.eye(n, format="coo", dtype=np.float64)
                 W_coo = op._W.tocoo()
                 _rows = np.concatenate([eye_coo.row, W_coo.row])
@@ -1036,7 +1036,7 @@ def register_jax_dispatch() -> bool:
 
                 return sparse_sar_solve
 
-            # Symmetrizable W → cholgraph SPD Cholesky.
+            # Symmetrizable W → sparsax SPD Cholesky.
             # Build COO pattern for I − ρW_sym (upper triangle + diagonal).
             W_sym_coo = W_sym_sp.tocoo()
             mask_upper = W_sym_coo.row <= W_sym_coo.col

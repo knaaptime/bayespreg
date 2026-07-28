@@ -342,11 +342,11 @@ class TestNegativeBinomialSARFlowGibbs:
         assert "rho_w" in idata.posterior
 
     def test_gibbs_jax_backend_returns_inference_data(self):
-        """gibbs_backend='jax' (cholgraph-sparse chain) returns valid InferenceData."""
+        """gibbs_backend='jax' (sparsax-sparse chain) returns valid InferenceData."""
         import importlib.util
 
-        if importlib.util.find_spec("cholgraph") is None:
-            pytest.skip("cholgraph not installed")
+        if importlib.util.find_spec("sparsax") is None:
+            pytest.skip("sparsax not installed")
         from bayespecon.models.flow._flow import SARNegBinFlow
 
         data = _make_flow_data()

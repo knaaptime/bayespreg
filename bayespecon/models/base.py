@@ -143,6 +143,8 @@ class SpatialModel(SharedSpatialMethods, ABC):
         logdet_method: str | None = None,
         robust: bool = False,
         w_vars: Optional[list] = None,
+        logdet_refit: bool = False,
+        logdet_refit_pad_sd: float = 10.0,
     ):
         # Resolve typed priors (dataclass) and dict view.
         from .priors import BasePriors, priors_as_dict, resolve_priors
@@ -152,6 +154,8 @@ class SpatialModel(SharedSpatialMethods, ABC):
         self.priors = priors_as_dict(self.priors_obj)
         self.logdet_method = logdet_method
         self.robust = robust
+        self.logdet_refit = bool(logdet_refit)
+        self.logdet_refit_pad_sd = float(logdet_refit_pad_sd)
 
         self._idata: Optional[az.InferenceData] = None
         self._pymc_model: Optional[pm.Model] = None
@@ -593,17 +597,33 @@ class SpatialModel(SharedSpatialMethods, ABC):
         )
 
         # --- Build Gibbs sampler kwargs ---
+        # Must agree exactly with GibbsEstimation._make_refitter, which decides
+        # whether a refitter is actually created.
+        from .._logdet._refit import REFITTABLE_METHODS
+
+        refit_active = (
+            self.logdet_refit
+            and self._W_sparse is not None
+            and self._logdet_bounds.method in REFITTABLE_METHODS
+        )
         gibbs_kwargs: dict[str, Any] = dict(
             y=self._y,
             X=Z,
             W_sparse=self._W_sparse,
             priors=priors,
-            logdet_fn=self._logdet_numpy_fn,
-            logdet_vec_fn=self._logdet_numpy_vec_fn,
+            # With the refit on, the sampler builds a cheap scouting interpolant
+            # for warmup and replaces it partway through.  Forcing these lazy
+            # properties here would build a full-accuracy interpolant on the
+            # prior interval that nothing ever evaluates — on the full stability
+            # region that is 117 sparse Cholesky factorisations discarded.
+            logdet_fn=None if refit_active else self._logdet_numpy_fn,
+            logdet_vec_fn=None if refit_active else self._logdet_numpy_vec_fn,
             feature_names=feature_names,
             model_type=self._model_type,
             W_eigs=self._logdet_eigs,
             logdet_method=self._logdet_bounds.method,
+            logdet_refit=self.logdet_refit,
+            logdet_refit_pad_sd=self.logdet_refit_pad_sd,
         )
         # SAR/SDM need Wy; SEM/SDEM do not
         if self._jacobian_param == "rho":

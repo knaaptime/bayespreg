@@ -25,10 +25,10 @@ def _batched_sar_mean(W_sp, rho_f, rhs, n):
     r"""Batched latent mean ``mu[i] = (I - rho_f[i] W)^{-1} rhs[i]``.
 
     Host-side reconstruction (one solve per posterior draw) used by the Tobit
-    log-likelihood rebuilders.  Prefers cholgraph's cached KLU — the fixed
+    log-likelihood rebuilders.  Prefers sparsax's cached KLU — the fixed
     ``(I - rho W)`` sparsity pattern is analysed once and reused across draws
     (only the values rescale with ``rho``) — and falls back to a per-draw scipy
-    sparse solve when cholgraph is unavailable.
+    sparse solve when sparsax is unavailable.
 
     Parameters
     ----------
@@ -50,10 +50,10 @@ def _batched_sar_mean(W_sp, rho_f, rhs, n):
     s = rhs.shape[0]
     mu = np.empty((s, n), dtype=np.float64)
 
-    from ..._jax_dispatch import _cholgraph_available
+    from ..._jax_dispatch import _sparsax_available
 
-    if _cholgraph_available():
-        import cholgraph
+    if _sparsax_available():
+        import sparsax
         import jax.numpy as jnp
 
         from ..._jax_dispatch import ensure_x64
@@ -82,7 +82,7 @@ def _batched_sar_mean(W_sp, rho_f, rhs, n):
         for i in range(s):
             Ax = const_vals - float(rho_f[i]) * w_vals
             mu[i] = np.asarray(
-                cholgraph.lu_solve(Ai, Aj, Ax, jnp.asarray(rhs[i])), dtype=np.float64
+                sparsax.lu_solve(Ai, Aj, Ax, jnp.asarray(rhs[i])), dtype=np.float64
             )
         return mu
 

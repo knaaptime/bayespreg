@@ -12,7 +12,7 @@ enters the *linear predictor*, so the ``|I − ρW|`` Jacobian cancels when β i
 marginalised out and the system is *linear* in ρ.  That makes the ρ conditional
 Krylov-accelerable (no per-candidate solve) and the sweep arithmetic-heavy.  It
 reuses the reduced-NB machinery almost verbatim — the shift-invert Krylov basis,
-the CHOLMOD normal-equations solver (NumPy) / cholgraph sparse-LU (JAX), and the
+the CHOLMOD normal-equations solver (NumPy) / sparsax sparse-LU (JAX), and the
 device-parallel ``jax.pmap`` runner.
 
 Differences from the count model: the Pólya–Gamma draw uses h = 1 (Bernoulli),

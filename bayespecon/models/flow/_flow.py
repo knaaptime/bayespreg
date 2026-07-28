@@ -1685,7 +1685,7 @@ class _NegBinFlowMixin:
             exact count likelihood (much slower).
         gibbs_backend : {"numpy", "jax", "auto"}, default "numpy"
             Execution backend for the Gibbs sampler (only used when
-            ``sampler="gibbs"``).  ``"jax"`` runs the single-JIT cholgraph-sparse
+            ``sampler="gibbs"``).  ``"jax"`` runs the single-JIT sparsax-sparse
             chain (unrestricted 3-ρ model only; GPU-friendly); ``"numpy"`` uses
             the host CHOLMOD/KLU path.  ``"auto"`` currently resolves to
             ``"numpy"``.  The separable Kronecker model is NumPy-only.
