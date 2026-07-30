@@ -189,7 +189,7 @@ class TestSARFlowPanelRecovery:
         out = generate_panel_flow_data(
             n=PANEL_FLOW_N,
             T=PANEL_FLOW_T,
-            W=G,
+            G=G,
             rho_d=PF_RHO_D_TRUE,
             rho_o=PF_RHO_O_TRUE,
             rho_w=PF_RHO_W_TRUE,
