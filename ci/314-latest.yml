@@ -24,6 +24,7 @@ dependencies:
   - scikit-sparse
   - blackjax
   - numpyro
+  - equinox
   - pip
   - pip:
     - git+https://github.com/knaaptime/cholgraph

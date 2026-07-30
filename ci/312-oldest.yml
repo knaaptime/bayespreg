@@ -27,6 +27,7 @@ dependencies:
   - numpyro
   - polyagamma
   - scikit-sparse
+  - equinox
   - pip
   - pip:
     - git+https://github.com/knaaptime/cholgraph
