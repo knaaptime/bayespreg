@@ -15,10 +15,8 @@ dependencies:
   - lazy_loader
   - fastprogress
   - scikit-sparse
-  - optimistix
   # optional
 # - blackjax
 # - numpyro
 # - pip
 #   - pip:
-#     - klujax

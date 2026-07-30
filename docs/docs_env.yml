@@ -24,16 +24,13 @@ dependencies:
   - blackjax
   - numpyro
   - polyagamma
-  - scikit-umfpack
   - scikit-sparse
-  - optimistix
   - equinox
-  - lineax
   - jax
   - pip
   - pip:
-    - klujax
-    - git+https://github.com/knaaptime/cholgraph
+    - sparsax
+    - pgjax
 
   # docs
   - numpydoc

@@ -286,7 +286,7 @@ without touching model code:
 * - `BAYESPECON_LOGDET_EIGEN_MAX_N`
   - largest `n` auto-routed to exact eigendecomposition (default 500)
 * - `BAYESPECON_LOGDET_CHEB_MAX_N`
-  - largest `n` auto-routed to an exact interpolating method (default 20000)
+  - largest `n` auto-routed to an exact interpolating method (default 60000)
 * - `BAYESPECON_SPARSE_BACKEND`
   - force a sparse solver instead of auto-detecting
 * - `BAYESPECON_SPARSE_STRICT`

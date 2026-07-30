@@ -24,11 +24,10 @@ dependencies:
   - blackjax
   - numpyro
   - polyagamma
-  - scikit-umfpack
   - scikit-sparse
-  - optimistix
   - pip
   - pip:
-    - klujax
     - git+https://github.com/knaaptime/cholgraph
     - jax # force from pip to allow windows 
+    - sparsax
+    - pgjax

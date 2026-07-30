@@ -26,8 +26,8 @@ dependencies = [
 
 [project.optional-dependencies]
 viz = ["graphviz"]
-backend = ['dm-tree', 'blackjax', 'numpyro', 'nutpie', 'equinox', 'sparsax']
-cv = ["geovalidate"]
+backend = ['dm-tree', 'blackjax', 'numpyro', 'nutpie', 'equinox', 'sparsax', 'pgjax']
+cv = ["spml"]
 
 [tool.setuptools.packages.find]
 include = ["bayespecon", "bayespecon.*"]

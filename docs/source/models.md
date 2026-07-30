@@ -322,4 +322,4 @@ The spatial Jacobian $\log|I - \rho W|$ is evaluated at every MCMC draw. `bayesp
 | `slq` | opt-in | O(nnz·k) | O(m) | Stochastic Lanczos Quadrature, D-symmetrised |
 | `resolvent` | unrestricted flow models | — | O(LU) | Resolvent-Kronecker gradient sampler for the 3-ρ flow logdet |
 
-Override with `logdet_method="..."` on any model constructor. Cutoffs are configurable via `BAYESPECON_LOGDET_EIGEN_MAX_N` (default 500) and `BAYESPECON_LOGDET_CHEB_MAX_N` (default 2000).
+Override with `logdet_method="..."` on any model constructor. Cutoffs are configurable via `BAYESPECON_LOGDET_EIGEN_MAX_N` (default 500) and `BAYESPECON_LOGDET_CHEB_MAX_N` (default 60000).
