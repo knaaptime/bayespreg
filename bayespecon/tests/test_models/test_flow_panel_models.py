@@ -272,7 +272,7 @@ class TestSARFlowSeparablePanelRecovery:
         out = generate_panel_flow_data_separable(
             n=PANEL_FLOW_N,
             T=PANEL_FLOW_T,
-            W=G,
+            G=G,
             rho_d=PF_RHO_D_SEP_TRUE,
             rho_o=PF_RHO_O_SEP_TRUE,
             beta_d=PF_BETA_D_TRUE,
