@@ -680,6 +680,8 @@ def run_gaussian_chain(
     progressbar: bool = True,
     chain_id: int = 0,
     progress_manager: object | None = None,
+    return_state: bool = False,
+    store_log_lik: bool = True,
 ) -> dict[str, np.ndarray]:
     """Run one chain of the Gaussian spatial Gibbs sampler.
 
@@ -710,6 +712,14 @@ def run_gaussian_chain(
     progress_manager : object or None
         ``GibbsProgressBarManager`` instance. If provided,
         ``update()`` is called after each iteration.
+    return_state : bool, default False
+        Also return the final :class:`GaussianGibbsState` under the key
+        ``"_final_state"``, so the chain can be resumed by a later call.
+    store_log_lik : bool, default True
+        Compute the pointwise log-likelihood for each retained draw.  Set
+        ``False`` for a phase whose draws are discarded — it costs an O(n·k)
+        pass per iteration and an ``(n_keep, n)`` array that would otherwise be
+        pickled back from every parallel worker.
 
     Returns
     -------
@@ -730,7 +740,11 @@ def run_gaussian_chain(
     rho_samples = np.empty(n_keep, dtype=np.float64)
     beta_samples = np.empty((n_keep, k), dtype=np.float64)
     sigma_samples = np.empty(n_keep, dtype=np.float64)
-    log_lik_samples = np.empty((n_keep, n), dtype=np.float64)
+    log_lik_samples = (
+        np.empty((n_keep, n), dtype=np.float64)
+        if store_log_lik
+        else np.empty((0, 0), dtype=np.float64)
+    )
 
     # Copy initial state
     state = GaussianGibbsState(
@@ -820,7 +834,9 @@ def run_gaussian_chain(
             beta_samples[j] = state.beta
             sigma_samples[j] = np.sqrt(state.sigma2)
 
-            # Pointwise log-likelihood (including Jacobian/n)
+        # Pointwise log-likelihood (including Jacobian/n)
+        if store_log_lik and i >= tune and (i - tune) % thin == 0:
+            j = (i - tune) // thin
             sigma = np.sqrt(state.sigma2)
             if model_type in ("sar", "sdm"):
                 mu = state.rho * Wy + X @ state.beta
@@ -858,5 +874,15 @@ def run_gaussian_chain(
         "sigma": sigma_samples,
         "log_lik": log_lik_samples,
     }
+    if return_state:
+        # Lets a caller stop a chain, adapt something the chain depends on, and
+        # resume from where it left off — used by the warmup Jacobian refit,
+        # which pools ρ across chains partway through warmup and rebuilds the
+        # interpolant on the range they found.
+        result["_final_state"] = GaussianGibbsState(
+            beta=state.beta.copy(),
+            sigma2=state.sigma2,
+            rho=state.rho,
+        )
 
     return result

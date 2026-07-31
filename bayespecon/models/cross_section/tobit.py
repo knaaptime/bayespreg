@@ -21,6 +21,80 @@ from ..base import SpatialModel
 from ..priors import SARTobitPriors, SDMTobitPriors, SEMTobitPriors
 
 
+def _batched_sar_mean(W_sp, rho_f, rhs, n):
+    r"""Batched latent mean ``mu[i] = (I - rho_f[i] W)^{-1} rhs[i]``.
+
+    Host-side reconstruction (one solve per posterior draw) used by the Tobit
+    log-likelihood rebuilders.  Prefers sparsax's cached KLU — the fixed
+    ``(I - rho W)`` sparsity pattern is analysed once and reused across draws
+    (only the values rescale with ``rho``) — and falls back to a per-draw scipy
+    sparse solve when sparsax is unavailable.
+
+    Parameters
+    ----------
+    W_sp : scipy.sparse matrix, shape (n, n)
+        Spatial weights.
+    rho_f : ndarray, shape (s,)
+        Flattened spatial-parameter draws.
+    rhs : ndarray, shape (s, n)
+        Per-draw right-hand sides (e.g. ``Xβ`` or ``[X, WX]β``).
+    n : int
+        Number of observations.
+
+    Returns
+    -------
+    mu : ndarray, shape (s, n)
+    """
+    import scipy.sparse as _sp
+
+    s = rhs.shape[0]
+    mu = np.empty((s, n), dtype=np.float64)
+
+    from ..._jax_dispatch import _sparsax_available
+
+    if _sparsax_available():
+        import jax.numpy as jnp
+        import sparsax
+
+        from ..._jax_dispatch import ensure_x64
+
+        ensure_x64()
+        # Fixed COO pattern for (I - ρW): merge the I and W patterns so a single
+        # (Ai, Aj) with separate const/W value vectors drives every draw.
+        I_coo = _sp.eye(n, format="coo")
+        W_coo = W_sp.tocoo()
+        rows = np.concatenate([I_coo.row, W_coo.row])
+        cols = np.concatenate([I_coo.col, W_coo.col])
+        const_coo = _sp.coo_matrix(
+            (np.concatenate([np.ones(I_coo.nnz), np.zeros(W_coo.nnz)]), (rows, cols)),
+            shape=(n, n),
+        )
+        const_coo.sum_duplicates()
+        w_coo = _sp.coo_matrix(
+            (np.concatenate([np.zeros(I_coo.nnz), W_coo.data]), (rows, cols)),
+            shape=(n, n),
+        )
+        w_coo.sum_duplicates()
+        Ai = jnp.asarray(const_coo.row, dtype=jnp.int32)
+        Aj = jnp.asarray(const_coo.col, dtype=jnp.int32)
+        const_vals = jnp.asarray(const_coo.data, dtype=jnp.float64)
+        w_vals = jnp.asarray(w_coo.data, dtype=jnp.float64)
+        for i in range(s):
+            Ax = const_vals - float(rho_f[i]) * w_vals
+            mu[i] = np.asarray(
+                sparsax.lu_solve(Ai, Aj, Ax, jnp.asarray(rhs[i])), dtype=np.float64
+            )
+        return mu
+
+    from ..._ops._backend import _solve_sparse_vector
+
+    I_sp = _sp.eye(n, format="csc")
+    for i in range(s):
+        A_csc = (I_sp - rho_f[i] * W_sp).tocsc()
+        mu[i] = _solve_sparse_vector(A_csc, rhs[i])
+    return mu
+
+
 class _SpatialTobitBase(SpatialModel):
     """Shared helpers for spatial Tobit models."""
 
@@ -271,56 +345,7 @@ class SARTobit(_SpatialTobitBase):
         W_sp = self._W_sparse
         n = self._y.shape[0]
         Xb = beta_f @ self._X.T
-        mu = np.empty((s, n), dtype=np.float64)
-        # Prefer klujax (cached symbolic analysis, fast batched solve)
-        # over dense np.linalg.solve loop.
-        from ..._jax_dispatch import _klujax_available
-
-        if _klujax_available():
-            import klujax
-            import scipy.sparse as _sp
-
-            # Fixed COO pattern for (I - ρW): only values change with ρ
-            I_coo = _sp.eye(n, format="coo")
-            W_coo = W_sp.tocoo()
-            # Merge I and W patterns
-            all_rows = np.concatenate([I_coo.row, W_coo.row])
-            all_cols = np.concatenate([I_coo.col, W_coo.col])
-            shape = (n, n)
-            const_coo = _sp.coo_matrix(
-                (
-                    np.concatenate([np.ones(I_coo.nnz), np.zeros(W_coo.nnz)]),
-                    (all_rows, all_cols),
-                ),
-                shape=shape,
-            )
-            const_coo.sum_duplicates()
-            w_coo = _sp.coo_matrix(
-                (
-                    np.concatenate([np.zeros(I_coo.nnz), W_coo.data]),
-                    (all_rows, all_cols),
-                ),
-                shape=shape,
-            )
-            w_coo.sum_duplicates()
-            Ai = np.asarray(const_coo.row, dtype=np.int32)
-            Aj = np.asarray(const_coo.col, dtype=np.int32)
-            const_vals = np.asarray(const_coo.data, dtype=np.float64)
-            w_vals = np.asarray(w_coo.data, dtype=np.float64)
-            symbolic = klujax.analyze(Ai, Aj, n)
-            for i in range(s):
-                Ax = const_vals - rho_f[i] * w_vals
-                mu[i] = np.asarray(
-                    klujax.solve_with_symbol(Ai, Aj, Ax, Xb[i], symbolic),
-                    dtype=np.float64,
-                )
-        else:
-            from ..._ops._backend import _solve_sparse_vector
-
-            I_sp = _sp.eye(n, format="csc")
-            for i in range(s):
-                A_csc = (I_sp - rho_f[i] * W_sp).tocsc()
-                mu[i] = _solve_sparse_vector(A_csc, Xb[i])
+        mu = _batched_sar_mean(W_sp, rho_f, Xb, n)
         nu_f = idata.posterior["nu"].values.reshape(s) if self.robust else None
         ll = _tobit_pointwise_loglik(
             self._y, mu, sigma_f, self._censored_mask, self.censoring, nu_f
@@ -624,53 +649,7 @@ class SDMTobit(_SpatialTobitBase):
         sigma_f = sigma.reshape(s)
         W_sp = self._W_sparse
         Zb = beta_f @ Z.T
-        mu = np.empty((s, n), dtype=np.float64)
-        # Prefer klujax (cached symbolic analysis) over dense solve loop
-        from ..._jax_dispatch import _klujax_available
-
-        if _klujax_available():
-            import klujax
-            import scipy.sparse as _sp
-
-            I_coo = _sp.eye(n, format="coo")
-            W_coo = W_sp.tocoo()
-            all_rows = np.concatenate([I_coo.row, W_coo.row])
-            all_cols = np.concatenate([I_coo.col, W_coo.col])
-            shape = (n, n)
-            const_coo = _sp.coo_matrix(
-                (
-                    np.concatenate([np.ones(I_coo.nnz), np.zeros(W_coo.nnz)]),
-                    (all_rows, all_cols),
-                ),
-                shape=shape,
-            )
-            const_coo.sum_duplicates()
-            w_coo = _sp.coo_matrix(
-                (
-                    np.concatenate([np.zeros(I_coo.nnz), W_coo.data]),
-                    (all_rows, all_cols),
-                ),
-                shape=shape,
-            )
-            w_coo.sum_duplicates()
-            Ai = np.asarray(const_coo.row, dtype=np.int32)
-            Aj = np.asarray(const_coo.col, dtype=np.int32)
-            const_vals = np.asarray(const_coo.data, dtype=np.float64)
-            w_vals = np.asarray(w_coo.data, dtype=np.float64)
-            symbolic = klujax.analyze(Ai, Aj, n)
-            for i in range(s):
-                Ax = const_vals - rho_f[i] * w_vals
-                mu[i] = np.asarray(
-                    klujax.solve_with_symbol(Ai, Aj, Ax, Zb[i], symbolic),
-                    dtype=np.float64,
-                )
-        else:
-            from ..._ops._backend import _solve_sparse_vector
-
-            I_sp = _sp.eye(n, format="csc")
-            for i in range(s):
-                A_csc = (I_sp - rho_f[i] * W_sp).tocsc()
-                mu[i] = _solve_sparse_vector(A_csc, Zb[i])
+        mu = _batched_sar_mean(W_sp, rho_f, Zb, n)
         nu_f = idata.posterior["nu"].values.reshape(s) if self.robust else None
         ll = _tobit_pointwise_loglik(
             self._y, mu, sigma_f, self._censored_mask, self.censoring, nu_f

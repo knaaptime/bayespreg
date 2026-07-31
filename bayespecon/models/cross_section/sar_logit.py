@@ -1,19 +1,25 @@
-r"""Structural-form SAR-logit with Pólya–Gamma Gibbs sampler.
+r"""Reduced-form SAR-logit with Pólya–Gamma Gibbs sampler.
 
 .. math::
 
     y_i \sim \mathrm{Bernoulli}(\mathrm{logit}^{-1}(\eta_i)), \quad
-    \eta = \rho W \eta + X\beta + \nu, \quad
-    \nu \sim N(0, I)
+    \eta = (I - \rho W)^{-1} X\beta
 
-The logit link absorbs the error scale, so σ² is fixed at 1 and does
-not appear as a free parameter.  The Pólya–Gamma augmentation yields
-fully conjugate Gibbs updates for η, β, and ρ (via collapsed slice
-sampling).
+This is the canonical spatial binary model: the spatial lag enters the
+*linear predictor* as a deterministic mean-propagator (there is **no**
+latent noise field, so σ does not appear).  The ``|I − ρW|`` Jacobian
+cancels when β is marginalised out, making the ρ conditional linear and
+Krylov-accelerable.  The Pólya–Gamma augmentation yields fully conjugate
+Gibbs updates for β and ρ (via a collapsed slice sampler).
+
+Both backends fit the same model: ``gibbs_backend="jax"`` (the default via
+``"auto"``) runs each chain on its own CPU device via ``jax.pmap``;
+``"numpy"`` uses the CHOLMOD factorisation path.  For the *structural*
+latent-field SAR-logit, use :class:`SARLogitStructural`.
 
 Use this model when:
 - The response is binary (0/1).
-- You need spatial autocorrelation in the latent log-odds.
+- You need spatial autocorrelation in the log-odds.
 - NUTS is slow or unreliable for the spatial parameter ρ.
 
 References
@@ -31,24 +37,27 @@ import numpy as np
 import scipy.sparse as sp
 
 from ..._lazy_deps import az
-from ...samplers._utils._cholgraph_utils import resolve_pg_jax_backend
 from ...samplers._utils._idata import gibbs_to_inference_data
 from ...samplers._utils._slice import SliceWidthState
-from ...samplers._utils._spatial_normal import CholmodFactor
 from ...samplers.gaussian._chain_runner import run_chains
-from ...samplers.logit import (
-    LogitGibbsCache,
-    LogitGibbsPriors,
-    LogitGibbsState,
+from ...samplers.logit import LogitGibbsPriors
+from ...samplers.logit_reduced import (
+    ReducedLogitGibbsState,
     run_chain,
+    run_chains_jax_reduced_logit,
 )
-from ...samplers.logit._jax import run_chains_jax_vectorized
+from ...samplers.negbin_reduced._core import (
+    _KRYLOV_DEGREE_DEFAULT,
+    _KRYLOV_DMAX_DEFAULT,
+    ReducedGibbsCache,
+    _make_cholmod_pattern,
+)
 from ..base import SpatialModel
 from ..priors import SARLogitPriors, resolve_priors
 
 
 class SARLogit(SpatialModel):
-    """Bayesian structural-form SAR-logit with Pólya–Gamma Gibbs sampler.
+    """Bayesian reduced-form SAR-logit with Pólya–Gamma Gibbs sampler.
 
     Parameters
     ----------
@@ -85,10 +94,12 @@ class SARLogit(SpatialModel):
 
     Notes
     -----
-    The structural form parameterises the latent log-odds as
-    ``eta = rho * W @ eta + X @ beta + nu`` with ``nu ~ N(0, I)``,
-    and augments the logistic likelihood with Pólya–Gamma auxiliary
-    variables to obtain fully conjugate Gibbs updates for η and β.
+    The reduced form parameterises the log-odds as the deterministic
+    mean-propagator ``eta = (I - rho * W)^{-1} X @ beta`` (no latent noise
+    field), and augments the logistic likelihood with Pólya–Gamma auxiliary
+    variables to obtain fully conjugate Gibbs updates for β and a
+    β-marginalised collapsed slice update for ρ (the ``|I − ρW|`` Jacobian
+    cancels, so ρ is Krylov-accelerable).
 
     The sampler bypasses PyMC's NUTS entirely. It produces an
     ``arviz.InferenceData`` object compatible with all downstream
@@ -101,8 +112,7 @@ class SARLogit(SpatialModel):
 
     Because the logit link absorbs the error scale, σ² is fixed at 1
     and does not appear in the posterior.  The PG shape parameter is
-    always h = 1 (one trial per observation), so the Devroye method
-    is valid and typically fastest.
+    always h = 1 (one trial per observation).
     """
 
     _spatial_params: tuple[str, ...] = ("rho",)
@@ -134,28 +144,19 @@ class SARLogit(SpatialModel):
     _JAX_DENSE_THRESHOLD: int = 10000
 
     def _initialize_from_ols(self, rng):
-        """Warm-start the Gibbs sampler from a spatial profile likelihood.
+        """Warm-start the reduced-form Gibbs sampler from a spatial profile.
 
-        For each ρ on a coarse grid, computes X̃ = (I − ρW)⁻¹X and
-        the OLS estimate β̂ = (X̃ᵀX̃)⁻¹X̃ᵀy, then picks the (ρ, β)
-        that maximises the Gaussian log-likelihood on y (treating y as
-        continuous).  This places the chain near the posterior mode even
-        at high ρ, where starting at ρ = 0 can leave the chain stuck in
-        a wrong mode.
-
-        Falls back to a simple OLS on X (ρ = 0) if the grid search
-        fails for all ρ values.
+        For each ρ on a coarse grid, computes X̃ = (I − ρW)⁻¹X and the OLS
+        estimate β̂ = (X̃ᵀX̃)⁻¹X̃ᵀy (linear probability proxy), then picks the
+        (ρ, β) maximising the Gaussian log-likelihood on y.  Returns a
+        :class:`ReducedLogitGibbsState` (β, ρ, ω) — no latent η field.
         """
         y = self._y
         X = self._X
-        self._W_sparse.tocsr()
         W_csc = self._W_sparse.tocsc()
         n, k = X.shape
 
         # --- Profile-log-likelihood initialisation ---
-        # Search over a coarse ρ grid for the best starting point.
-        # For binary y, we use the linear probability model (OLS on y)
-        # as a proxy for the log-likelihood.
         _rho_grid = np.arange(0.05, 0.96, 0.05)
         _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
         for _rho_g in _rho_grid:
@@ -174,10 +175,8 @@ class SARLogit(SpatialModel):
             except Exception:
                 pass
 
-        # Jitter around the profile-loglik estimates.
-        # Use a smaller jitter for ρ than for β because the
-        # posterior is extremely peaked in ρ at high spatial
-        # autocorrelation.
+        # Jitter around the profile-loglik estimates (smaller for ρ — the
+        # posterior is extremely peaked in ρ at high spatial autocorrelation).
         _rho_jitter = 0.02
         beta_init = _best_beta + 0.1 * rng.standard_normal(k)
         rho_init = float(
@@ -188,21 +187,17 @@ class SARLogit(SpatialModel):
             )
         )
 
-        # η₀: (I − ρ₀W)⁻¹Xβ₀ — spatially structured starting values
+        # ω₀: draw from PG(1, η) at the profile η.
         try:
             _A_init = sp.eye(n, format="csc") - rho_init * W_csc
             eta_init = sp.linalg.spsolve(_A_init, X @ beta_init)
         except Exception:
-            # Fallback: no spatial structure
             eta_init = X @ beta_init
-
-        # ω₀: draw from PG(1, η)
         from ...samplers._utils._polyagamma import sample_polyagamma
 
         omega_init = sample_polyagamma(np.ones(n), eta_init, rng=rng)
 
-        return LogitGibbsState(
-            eta=eta_init,
+        return ReducedLogitGibbsState(
             beta=beta_init,
             rho=rho_init,
             omega=omega_init,
@@ -219,12 +214,13 @@ class SARLogit(SpatialModel):
         n_jobs: int = -1,
         progressbar: bool = True,
         backend: str = "numpy",
-        return_eta: bool = False,
-        pg_n_terms: int = 25,
-        n_probes: int = 5,
-        lanczos_deg: int = 15,
+        init_jitter: float = 0.1,
+        slice_width: float = 0.4,
+        krylov_degree: int = _KRYLOV_DEGREE_DEFAULT,
+        krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
+        timeout: float | None = None,
     ) -> az.InferenceData:
-        """Sample posterior via Pólya–Gamma block Gibbs.
+        r"""Sample the reduced-form posterior via Pólya–Gamma block Gibbs.
 
         Parameters
         ----------
@@ -235,38 +231,42 @@ class SARLogit(SpatialModel):
         thin : int
             Keep every ``thin``-th draw. Default 1 (no thinning).
         n_jobs : int
-            Number of parallel chains. -1 = all CPUs.
+            Number of parallel chains (NumPy path). -1 = all CPUs.
         progressbar : bool
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
-            Execution backend.  ``"numpy"`` uses the CHOLMOD factorisation
-            path (the default); ``"jax"`` uses the JAX-accelerated dense path
-            (requires float64; viable for n ≲ 10 000).
-        return_eta : bool
-            If True, store the full latent field η in the posterior.
-            Default False — η is n × draws × chains, which can be large.
-        pg_n_terms : int, default 25
-            Ignored (kept for API compatibility).  PG draws now use the
-            exact sum-of-exponentials method which does not require
-            truncation.  Only relevant on the JAX path.
-        n_probes : int, default 5
-            Number of Lanczos probe vectors for stochastic log|P|
-            estimation.  Only used on the JAX path.
-        lanczos_deg : int, default 15
-            Lanczos iteration depth for log|P| estimation.  Only used
-            on the JAX path.
+            Execution backend.  ``"jax"`` (the default via ``"auto"``) runs
+            each chain on its own CPU device via ``jax.pmap``; ``"numpy"``
+            uses the CHOLMOD factorisation path with adaptive slice sampling.
+        init_jitter : float, default 0.1
+            Std-dev of the Gaussian jitter applied to the profile-loglik
+            initial state.
+        slice_width : float, default 0.4
+            Stepping-out width for the ρ slice sampler (JAX path).
+        krylov_degree : int
+            Krylov basis degree for the shift-invert polynomial
+            approximation of :math:`(I - \rho W)^{-1} X` inside the ρ-slice
+            density.  Used by both backends.
+        krylov_dmax : float
+            Maximum :math:`|\Delta\rho|` for which the Krylov basis is used.
+        timeout : float or None, default None
+            Maximum wall-clock seconds for the NumPy parallel chains.
 
         Returns
         -------
         az.InferenceData
-            With posterior, log_likelihood, and observed_data groups.
+            With posterior (``rho``, ``beta``), log_likelihood, and
+            observed_data groups.
         """
-        y = self._y
-        X = self._X
-        W_sparse = self._W_sparse
+        y = np.asarray(self._y, dtype=np.float64)
+        X = np.ascontiguousarray(self._X, dtype=np.float64)
         n, k = X.shape
 
-        # Build priors from the typed priors object
+        bounds = self._logdet_bounds
+        rho_lower = float(bounds.rho_min)
+        rho_upper = float(bounds.rho_max)
+
+        # Build priors from the typed priors object.
         priors_obj = resolve_priors(
             self.priors if isinstance(self.priors, dict) else None,
             SARLogitPriors,
@@ -277,172 +277,113 @@ class SARLogit(SpatialModel):
         priors = LogitGibbsPriors(
             beta_mu=priors_obj.beta_mu,
             beta_sigma=priors_obj.beta_sigma,
-            rho_lower=self._logdet_bounds.rho_min,
-            rho_upper=self._logdet_bounds.rho_max,
+            rho_lower=rho_lower,
+            rho_upper=rho_upper,
         )
 
-        # Build cache
-        XtX = X.T @ X
+        W_csr = self._W_sparse.tocsr()
 
-        # Precompute matrix pieces for the precision expansion:
-        # P = I + diag(ω) - ρ*(W+W^T) + ρ²*W^T W  (σ² = 1)
-        W_sym = W_sparse + W_sparse.T
-        WtW = W_sparse.T @ W_sparse
+        # Per-chain seeds.
+        rng = np.random.default_rng(random_seed)
+        chain_seeds = [int(s) for s in rng.integers(0, 2**31, size=chains)]
 
-        # Create CHOLMOD factor for the precision matrix sparsity pattern.
-        _P0 = sp.eye(n, format="csr") + 0.5 * W_sym + 0.25 * WtW
-        cholmod_factor = CholmodFactor(_P0)
-
-        # Map the resolved backend onto the sampler's solve/logdet/sample paths.
-        method, _jax_parts = resolve_pg_jax_backend(
-            backend,
-            W_sparse=W_sparse,
-            W_sym=W_sym,
-            WtW=WtW,
-            n=n,
-            logdet_bounds=self._logdet_bounds,
-        )
-        solve_method = logdet_P_method = sample_method = method
-        W_sym_dense = _jax_parts["W_sym_dense"]
-        WtW_dense = _jax_parts["WtW_dense"]
-        logdet_jax = _jax_parts["logdet_jax"]
-        cholgraph_pattern = _jax_parts["cholgraph_pattern"]
-
-        cache = LogitGibbsCache(
-            W_sparse=W_sparse,
-            XtX=XtX,
-            logdet_fn=self._logdet_fn,
-            rho_lower=priors.rho_lower,
-            rho_upper=priors.rho_upper,
-            cholmod_factor=cholmod_factor,
-            W_sym=W_sym,
-            WtW=WtW,
-            WtX=np.asarray(W_sparse.T @ X, dtype=np.float64),
-            solve_method=solve_method,
-            logdet_P_method=logdet_P_method,
-            sample_method=sample_method,
-            W_sym_dense=W_sym_dense,
-            WtW_dense=WtW_dense,
-            logdet_jax=logdet_jax,
-            rho_adaptive_width=True,
-            rho_slice_width_state=SliceWidthState(w=0.2),
-        )
-
-        # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
-
-        # Define the per-chain function
-        _use_jax_full = sample_method in ("jax_dense", "cholmod_jax")
-
-        # JAX dense path: run all chains in parallel via jax.vmap.  This
-        # JITs the Gibbs step once and executes every chain as a single
-        # fused XLA program, which is strictly faster than driving the
-        # per-chain Python loop ``chains`` times.
-        if _use_jax_full:
-            if return_eta:
-                raise NotImplementedError(
-                    "return_eta=True is not supported with gibbs_method='jax_dense'. "
-                    "Use gibbs_method='factorize' (or 'auto' on systems without "
-                    "CHOLMOD-only data) if you need the full latent field stored."
-                )
+        # ── JAX device-parallel path ──
+        if backend == "jax":
             chain_inits = [
-                self._initialize_from_ols(np.random.default_rng(seed)) for seed in seeds
+                self._initialize_from_ols(np.random.default_rng(s)) for s in chain_seeds
             ]
-            chain_results = run_chains_jax_vectorized(
+            intercept_col = -1
+            for _j in range(k):
+                if np.all(X[:, _j] == 1.0):
+                    intercept_col = _j
+                    break
+
+            chain_results = run_chains_jax_reduced_logit(
                 y=y,
                 X=X,
-                W_sparse=W_sparse,
-                W_sym_dense=W_sym_dense,
-                WtW_dense=WtW_dense,
-                logdet_jax=logdet_jax,
+                W_sparse=self._W_sparse,
                 priors=priors,
                 inits=chain_inits,
                 draws=draws,
                 tune=tune,
                 thin=thin,
-                jax_seeds=seeds,
-                pg_n_terms=pg_n_terms,
-                n_probes=n_probes,
-                lanczos_deg=lanczos_deg,
+                intercept_col=intercept_col,
+                krylov_degree=krylov_degree,
+                krylov_dmax=krylov_dmax,
+                slice_width=slice_width,
+                jax_seeds=chain_seeds,
                 progressbar=progressbar,
-                cholgraph_pattern=cholgraph_pattern,
             )
         else:
+            # ── NumPy / CHOLMOD path ──
+            W_csc = self._W_sparse.tocsc()
+            if self._W_eigs is not None:
+                W_eig_max = float(np.max(np.abs(self._W_eigs)))
+                W_eig_min = float(np.min(np.real(self._W_eigs)))
+            else:
+                W_eig_max, W_eig_min = 1.0, -1.0
+            W_sym, WtW, cholmod_pattern = _make_cholmod_pattern(W_csc, n)
 
             def _run_one_chain(chain_id, seed, progress_manager=None, chain_id_kw=None):
-                rng = np.random.default_rng(seed)
-                init = self._initialize_from_ols(rng)
-                progress_chain_id = chain_id if chain_id_kw is None else chain_id_kw
+                chain_rng = np.random.default_rng(seed)
+                init = self._initialize_from_ols(chain_rng)
+                cache = ReducedGibbsCache(
+                    W_sparse=W_csr,
+                    W_csc=W_csc,
+                    rho_lower=rho_lower,
+                    rho_upper=rho_upper,
+                    rho_adaptive_width=True,
+                    rho_slice_width_state=SliceWidthState(w=slice_width),
+                    krylov_degree=krylov_degree,
+                    krylov_dmax=krylov_dmax,
+                    cholmod_pattern=cholmod_pattern,
+                    W_sym=W_sym,
+                    WtW=WtW,
+                    W_eig_max=W_eig_max,
+                    W_eig_min=W_eig_min,
+                    n_rho_omega_cycles=1,
+                )
                 return run_chain(
                     y=y,
                     X=X,
-                    W_sparse=W_sparse,
+                    W_sparse=W_csr,
                     priors=priors,
                     cache=cache,
                     init=init,
                     draws=draws,
                     tune=tune,
                     thin=thin,
-                    return_eta=return_eta,
-                    rng=rng,
+                    rng=chain_rng,
+                    chain_id=chain_id_kw if chain_id_kw is not None else chain_id,
                     progress_manager=progress_manager,
-                    chain_id=progress_chain_id,
                 )
 
-            # Run chains.  Non-JAX paths parallelise across chains when
-            # the user requests multiple workers.
-            parallel = n_jobs != 1
             chain_results = run_chains(
                 chain_fn=_run_one_chain,
                 n_chains=chains,
-                seeds=seeds,
+                seeds=chain_seeds,
                 n_jobs=n_jobs,
                 progressbar=progressbar,
-                parallel=parallel,
+                parallel=(n_jobs != 1),
                 draws=draws,
                 tune=tune,
                 model_type="sar_logit",
+                timeout=timeout,
             )
 
-        # Assemble InferenceData
-        param_keys = ["rho"]
-        if return_eta:
-            param_keys.append("eta")
-
-        posterior_samples = {}
-        for key in param_keys:
-            arrays = [c[key] for c in chain_results]
-            posterior_samples[key] = np.stack(arrays, axis=0)
-
-        # beta has shape (n_keep, k) per chain
-        posterior_samples["beta"] = np.stack([c["beta"] for c in chain_results], axis=0)
-
-        # Feature names for coords
-        feature_names = list(self._feature_names)
-        coords = {
-            "coefficient": feature_names,
+        # Assemble InferenceData (varnames: rho, beta).
+        posterior_samples = {
+            "rho": np.stack([c["rho"] for c in chain_results], axis=0),
+            "beta": np.stack([c["beta"] for c in chain_results], axis=0),
         }
-        dims = {
-            "beta": ["coefficient"],
-        }
-        if return_eta:
-            coords["obs_id"] = list(range(n))
-            dims["eta"] = ["obs_id"]
-
-        # Log-likelihood: shape (chains, n_keep, n)
         log_lik = np.stack([c["log_lik"] for c in chain_results], axis=0)
 
         idata = gibbs_to_inference_data(
             posterior_samples=posterior_samples,
             log_likelihood={"obs": log_lik},
             observed_data={"obs": y},
-            coords=coords,
-            dims=dims,
+            coords={"coefficient": list(self._feature_names)},
+            dims={"beta": ["coefficient"]},
         )
 
         self._idata = idata

@@ -30,6 +30,7 @@ def run_chains(
     tune: int = 1000,
     model_type: str = "sar",
     timeout: float | None = 600,
+    reuse_workers: bool = False,
 ) -> list[dict]:
     """Run n_chains independent Gibbs chains.
 
@@ -61,6 +62,13 @@ def run_chains(
         Warmup draws per chain (used for progress bar setup).
     model_type : str, default "sar"
         Model type (used for progress bar display).
+    reuse_workers : bool, default False
+        Skip the worker-pool teardown before spawning.  Set this only for a
+        second call that immediately follows a first with the same
+        ``n_chains``/``n_jobs`` — the workers already carry the right
+        thread-limiting environment, so respawning them costs a process launch
+        and a re-pickle of the closure's data for nothing.  The warmup-refit
+        path uses it to split one run into two phases without paying twice.
     timeout : float or None, default None
         Maximum wall-clock seconds to wait for **all** chains to
         finish when ``parallel=True``.  If any worker has not
@@ -111,19 +119,20 @@ def run_chains(
         # Without this, reused workers keep their original (unlimited)
         # thread settings, which can cause BLAS deadlocks on macOS
         # with Apple Accelerate after many parallel calls.
-        try:
-            from joblib.externals.loky import get_reusable_executor
+        if not reuse_workers:
+            try:
+                from joblib.externals.loky import get_reusable_executor
 
-            get_reusable_executor(reuse=True).shutdown(wait=True)
-        except Exception:
-            pass  # executor may not exist yet
+                get_reusable_executor(reuse=True).shutdown(wait=True)
+            except Exception:
+                pass  # executor may not exist yet
 
-        # Force garbage collection before spawning workers.  Each fit()
-        # call creates CholmodFactor objects that hold C-level resources
-        # (CHOLMOD common structs, SuiteSparse memory).  Python's GC may
-        # not collect these promptly, and accumulated C resources can
-        # cause issues after many calls.
-        gc.collect()
+            # Force garbage collection before spawning workers.  Each fit()
+            # call creates CholmodFactor objects that hold C-level resources
+            # (CHOLMOD common structs, SuiteSparse memory).  Python's GC may
+            # not collect these promptly, and accumulated C resources can
+            # cause issues after many calls.
+            gc.collect()
 
         if progressbar:
             # Per-chain progress bars via shared-memory counters + rich.

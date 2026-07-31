@@ -285,7 +285,8 @@ def _adaptive_n_coarse(rho_min: float, rho_max: float) -> int:
     Empirically (rook + knn, n∈{1600, 2000}): the default narrow interval
     ``[0.1, 0.8]`` reaches ~1e-10 max error with only 16 nodes, while intervals
     that approach ``±0.95`` need the full 30 nodes for ~1e-7.  This mirrors
-    :func:`_adaptive_order` in ``_chol_cheb.py``.
+    :func:`~._chebyshev.cheb_order_for_tolerance`, which sizes the Chebyshev
+    order the same way.
 
     Parameters
     ----------
@@ -297,14 +298,19 @@ def _adaptive_n_coarse(rho_min: float, rho_max: float) -> int:
     int
         Number of Chebyshev-spaced coarse-grid points (LU factorisations).
     """
-    width = rho_max - rho_min
-    dist = min(abs(1.0 - rho_max), abs(1.0 + rho_min))
-    # Narrow interval well clear of the ±1 singularities (e.g. the default
-    # [0.1, 0.8]) converges with far fewer nodes; everything else keeps the
-    # full grid so wide/near-singular intervals still hit ~1e-7.
-    if width <= 0.71 and dist > 0.15:
-        return 16
-    return 30
+    from ._chebyshev import bernstein_rho
+
+    # Scale inversely with the Bernstein-ellipse rate, the same quantity that
+    # sets the Chebyshev order — distance to the ρ = ±1 singularities, not
+    # interval width.  The constant is calibrated so the applied default
+    # [0.1, 0.8] still draws 16 points (the value the width-keyed rule this
+    # replaced was tuned to), which fixes both directions the old rule got
+    # wrong: it returned 16 for any narrow interval, however far from ±1, and
+    # so could not exploit a post-warmup range at all.
+    rho_b = bernstein_rho(rho_min, rho_max)
+    if not np.isfinite(rho_b) or rho_b <= 1.0:
+        return 30
+    return int(np.clip(int(np.ceil(16.0 / np.log(rho_b))), 8, 30))
 
 
 def _aaa_algorithm_lazy(
@@ -363,6 +369,71 @@ def _aaa_algorithm_lazy(
     return sp_z, sp_f, w
 
 
+class AAAContext:
+    """Reusable KLU symbolic analysis for one directed ``W``.
+
+    The LU counterpart of
+    :class:`~._chol_cheb.CholChebContext`: everything independent of the ρ
+    interval — the matrix, the identity, and KLU's symbolic factorisation — is
+    held here, so fitting a second approximant on a different interval costs
+    only its numeric refactorisations.  This is what makes a warmup-adaptive
+    refit affordable on directed weights, where Cholesky is unavailable.
+
+    Parameters
+    ----------
+    W : array-like or scipy.sparse matrix
+        Spatial weights matrix; may be non-symmetric.
+    """
+
+    __slots__ = ("W_sp", "_eye", "_lu_logdet", "n")
+
+    def __init__(self, W):
+        if sp.issparse(W) or hasattr(W, "format"):
+            self.W_sp = sp.csc_matrix(W, dtype=np.float64)
+        else:
+            self.W_sp = sp.csc_matrix(np.asarray(W, dtype=np.float64))
+        self.n = int(self.W_sp.shape[0])
+        self._eye = sp.eye(self.n, format="csc")
+        # Symbolic analysis is established on the first call and reused for
+        # every later node and every later interval.
+        self._lu_logdet = _make_reusable_lu_logdet()
+
+    def logdet_at(self, rho: float) -> float:
+        """Exact ``log|I - ρW|`` by sparse LU, reusing symbolic analysis."""
+        return self._lu_logdet(self._eye - float(rho) * self.W_sp)
+
+    def fit_on(
+        self,
+        rho_min: float = 0.1,
+        rho_max: float = 0.8,
+        n_samples: int = 200,
+        tol: float = 1e-10,
+        max_iter: int = 30,
+        n_coarse: int | None = None,
+    ) -> AAAPrecompute:
+        """Fit the AAA rational approximant on ``[rho_min, rho_max]``."""
+        if n_coarse is None:
+            n_coarse = _adaptive_n_coarse(rho_min, rho_max)
+
+        # Dense sample grid for AAA (no factorisation here — just the grid)
+        z = np.linspace(rho_min, rho_max, n_samples)
+
+        # Run lazy AAA: exactly n_coarse LU factorisations (m ≤ n_coarse//2 of
+        # the grid points become support points).
+        support_points, support_values, weights = _aaa_algorithm_lazy(
+            z, self.logdet_at, tol=tol, max_iter=max_iter, n_coarse=n_coarse
+        )
+
+        return AAAPrecompute(
+            support_points=support_points,
+            support_values=support_values,
+            weights=weights,
+            rho_min=rho_min,
+            rho_max=rho_max,
+            n=self.n,
+        )
+
+
 def aaa_logdet_precompute(
     W,
     rho_min: float = 0.1,
@@ -411,41 +482,13 @@ def aaa_logdet_precompute(
     AAAPrecompute
         Precomputed rational approximant.
     """
-    if sp.issparse(W) or hasattr(W, "format"):
-        W_sp = sp.csc_matrix(W, dtype=np.float64)
-    else:
-        W_sp = sp.csc_matrix(np.asarray(W, dtype=np.float64))
-
-    n = W_sp.shape[0]
-
-    if n_coarse is None:
-        n_coarse = _adaptive_n_coarse(rho_min, rho_max)
-
-    # Dense sample grid for AAA (no factorisation here — just the grid)
-    z = np.linspace(rho_min, rho_max, n_samples)
-
-    # Lazy evaluation function: called only at the n_coarse coarse-grid
-    # points.  All I - ρW share one sparsity pattern, so the evaluator reuses
-    # KLU's symbolic factorisation across calls (numeric refactor only).
-    eye = sp.eye(n, format="csc")
-    lu_logdet = _make_reusable_lu_logdet()
-
-    def _eval_logdet(rho):
-        return lu_logdet(eye - rho * W_sp)
-
-    # Run lazy AAA: exactly n_coarse LU factorisations (m ≤ n_coarse//2 of the
-    # grid points become support points).
-    support_points, support_values, weights = _aaa_algorithm_lazy(
-        z, _eval_logdet, tol=tol, max_iter=max_iter, n_coarse=n_coarse
-    )
-
-    return AAAPrecompute(
-        support_points=support_points,
-        support_values=support_values,
-        weights=weights,
+    return AAAContext(W).fit_on(
         rho_min=rho_min,
         rho_max=rho_max,
-        n=n,
+        n_samples=n_samples,
+        tol=tol,
+        max_iter=max_iter,
+        n_coarse=n_coarse,
     )
 
 
@@ -532,3 +575,130 @@ def aaa_logdet_eval_vec(pre: AAAPrecompute, rho_arr: np.ndarray) -> np.ndarray:
             result[i] = sp_f[j]
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Cholesky-based AAA (symmetrizable W only)
+# ---------------------------------------------------------------------------
+
+
+class CholAAAContext:
+    """Reusable D-symmetrisation and CHOLMOD symbolic analysis for AAA.
+
+    The Cholesky counterpart of :class:`AAAContext`: for symmetrizable ``W``
+    (undirected graph), it evaluates exact logdet values via sparse Cholesky of
+    the D-symmetrised system — the same factorizer :class:`CholChebContext`
+    uses — but feeds them to the AAA rational approximant instead of a
+    Chebyshev DCT.  This combines the cheaper factorizer (CHOLMOD is ~2×
+    faster than KLU on symmetric SPD systems) with the better interpolator
+    (AAA's root-exponential convergence beats the polynomial's geometric
+    rate on wide intervals).
+
+    Everything interval-independent — the symmetrised matrix, the identity,
+    and CHOLMOD's symbolic analysis — is held here, so a warmup refit costs
+    only its numeric factorisations, exactly as with
+    :class:`CholChebContext`.
+
+    Raises
+    ------
+    ValueError
+        If ``W`` admits no symmetrizing diagonal (directed graph); use
+        :class:`AAAContext` (LU-based AAA) for those.
+    """
+
+    __slots__ = ("W_sym", "_eye", "_factor", "n")
+
+    def __init__(self, W):
+        from ._chol_cheb import _d_symmetrize
+
+        if sp.issparse(W) or hasattr(W, "format"):
+            W_sp = sp.csr_matrix(W, dtype=np.float64)
+        else:
+            W_sp = sp.csr_matrix(np.asarray(W, dtype=np.float64))
+        self.n = int(W_sp.shape[0])
+        self.W_sym = _d_symmetrize(W_sp)
+        self._eye = sp.eye(self.n, format="csc")
+        self._factor = None  # CHOLMOD symbolic analysis, established lazily
+
+    def logdet_at(self, rho: float) -> float:
+        """Exact ``log|I - ρW|`` by sparse Cholesky, reusing symbolic analysis."""
+        from sksparse.cholmod import cho_factor as cholmod_cho_factor
+
+        A = sp.csc_matrix(self._eye - float(rho) * self.W_sym)
+        if self._factor is None:
+            self._factor = cholmod_cho_factor(A)
+        else:
+            self._factor.factorize(A)
+        return float(self._factor.logdet())
+
+    def fit_on(
+        self,
+        rho_min: float = 0.1,
+        rho_max: float = 0.8,
+        n_samples: int = 200,
+        tol: float = 1e-10,
+        max_iter: int = 30,
+        n_coarse: int | None = None,
+    ) -> AAAPrecompute:
+        """Fit the AAA rational approximant on ``[rho_min, rho_max]``."""
+        if n_coarse is None:
+            n_coarse = _adaptive_n_coarse(rho_min, rho_max)
+
+        z = np.linspace(rho_min, rho_max, n_samples)
+        support_points, support_values, weights = _aaa_algorithm_lazy(
+            z, self.logdet_at, tol=tol, max_iter=max_iter, n_coarse=n_coarse
+        )
+        return AAAPrecompute(
+            support_points=support_points,
+            support_values=support_values,
+            weights=weights,
+            rho_min=rho_min,
+            rho_max=rho_max,
+            n=self.n,
+        )
+
+
+def chol_aaa_logdet_precompute(
+    W,
+    rho_min: float = 0.1,
+    rho_max: float = 0.8,
+    n_samples: int = 200,
+    tol: float = 1e-10,
+    max_iter: int = 30,
+    n_coarse: int | None = None,
+) -> AAAPrecompute:
+    """Precompute AAA rational approximant via sparse Cholesky.
+
+    Like :func:`aaa_logdet_precompute` but evaluates exact logdet values via
+    sparse Cholesky of the D-symmetrised system, which is ~2× cheaper than
+    KLU for symmetrizable ``W``.  Requires ``W`` to be D-symmetrizable
+    (row-standardised undirected graph).
+
+    Parameters
+    ----------
+    W : array-like or scipy.sparse matrix
+        Spatial weights matrix; must be D-symmetrizable (undirected graph).
+    rho_min, rho_max : float
+        The ρ approximation interval.
+    n_samples : int, default 200
+        Number of sample points for the AAA residual grid (no factorisations).
+    tol : float, default 1e-10
+        Relative tolerance for AAA convergence.
+    max_iter : int, default 30
+        Maximum number of AAA support points.
+    n_coarse : int, optional
+        Number of exact Cholesky factorisations (coarse-grid size).
+
+    Returns
+    -------
+    AAAPrecompute
+        Precomputed rational approximant (same dataclass as LU-based AAA).
+    """
+    return CholAAAContext(W).fit_on(
+        rho_min=rho_min,
+        rho_max=rho_max,
+        n_samples=n_samples,
+        tol=tol,
+        max_iter=max_iter,
+        n_coarse=n_coarse,
+    )

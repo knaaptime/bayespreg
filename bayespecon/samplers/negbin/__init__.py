@@ -41,8 +41,8 @@ __all__ = [
 # Gibbs registry entry — structural-form SAR NegBin (Pólya-Gamma)
 # ---------------------------------------------------------------------------
 #
-# Gibbs-only (no NUTS build).  ``auto`` prefers the CHOLMOD ``factorize``
-# (NumPy) path; the ``jax`` dense path is opt-in.
+# Gibbs-only (no NUTS build).  ``auto`` prefers the ``jax`` path (fastest for
+# cross-section); the CHOLMOD NumPy path is available via gibbs_backend="numpy".
 
 
 def _run_count_structural_gibbs(
@@ -83,6 +83,6 @@ register(
     "cross_section",
     run=_run_count_structural_gibbs,
     backends={"jax", "numpy"},
-    auto_backend="numpy",
+    auto_backend="jax",
     options={"return_eta", "pg_n_terms", "n_probes", "lanczos_deg"},
 )

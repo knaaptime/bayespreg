@@ -372,7 +372,7 @@ class TestSeparableNegBinLogpCompiles:
         y = rng.poisson(5.0, size=(n, n)).astype(np.int64)
         X = rng.normal(size=(n * n, 2))
 
-        model_obj = SARNegBinFlowSeparable(y, graph, X)
+        model_obj = SARNegBinFlowSeparable(y, X, graph)
         pm_model = model_obj._build_pymc_model()
 
         # Just test that logp can be evaluated at the initial point

@@ -9,9 +9,11 @@ for all ``|ρ| < 1``, enabling **sparse Cholesky** factorisation:
 * **Fast**: CHOLMOD sparse Cholesky is ~2× faster than sparse LU for SPD.
 * **Scalable**: ``O(nnz^{1.5})`` per factorisation, no ``O(n³)`` eigendecomposition.
 * **Full range**: works for ``ρ ∈ (-1, 1)`` — the entire stable region.
-  Adaptive order selection automatically increases the Chebyshev degree for
-  wider intervals (15 for ``[0.1, 0.8]``, 50 for ``[-0.95, 0.95]``, 100 for
-  ``[-0.99, 0.99]``).
+  The order is selected from the interval's Bernstein-ellipse convergence
+  rate (:func:`~._chebyshev.cheb_order_for_tolerance`) — its distance to the
+  ``ρ = ±1`` singularities, not its width — so it rises for wide intervals
+  (17 nodes for ``[0.1, 0.8]``, 52 for ``[-0.95, 0.95]``) and falls sharply
+  for narrow ones (6 for ``[0.55, 0.65]``).
 
 The method evaluates ``log|det(I - ρW)|`` exactly at ``order`` Chebyshev nodes
 in ``[ρ_min, ρ_max]``, then fits a Chebyshev polynomial in ``ρ`` for ``O(order)``
@@ -22,8 +24,8 @@ so CHOLMOD's symbolic analysis (AMD ordering + elimination tree) is performed
 only once and reused for all subsequent numeric factorisations via
 ``factor.factorize()``.  This saves ~64% of per-node cost.
 
-**When to use**: ``n ∈ (500, 20000]``, any ``ρ ∈ (-1, 1)``.  For ``n ≤ 500``
-use ``eigenvalue`` (exact eigendecomposition).  For ``n > 20000`` use
+**When to use**: ``n ∈ (500, 60000]``, any ``ρ ∈ (-1, 1)``.  For ``n ≤ 500``
+use ``eigenvalue`` (exact eigendecomposition).  For ``n > 60000`` use
 ``cheb_stochastic`` (avoids ``O(nnz^{1.5})`` Cholesky fill-in).  For
 non-symmetric ``W`` (directed graphs: KNN, travel time) use ``aaa`` (rational
 approximation via sparse LU).
@@ -33,18 +35,20 @@ approximation via sparse LU).
 ========== ============= ============= =========== ==================
 n          chol setup    chol eval     chol error  stoch(200)
 ========== ============= ============= =========== ==================
-484        9ms           1.3μs         2e-7        2.5ms, 0.46 err
-4,900      91ms          1.3μs         2e-6        25ms, 0.74 err
-10,000     194ms         1.3μs         3e-6        53ms, 0.75 err
-20,000     432ms         1.4μs         6e-6        87ms, 1.7 err
-40,000     997ms         1.4μs         1e-5        207ms, 1.8 err
-60,000     2.2s          1.4μs         2e-5        331ms, 3.5 err
+484        3.8ms         1.7μs         5e-9        2.7ms, 0.42 err
+4,900      30ms          1.7μs         2e-7        26ms, 0.69 err
+10,000     96ms          1.7μs         5e-7        62ms, 0.75 err
+19,881     248ms         1.7μs         9e-7        110ms, 1.7 err
+40,000     583ms         1.7μs         1.8e-6      236ms, 1.8 err
+59,536     1.18s         1.7μs         2.6e-6      328ms, 3.5 err
 ========== ============= ============= =========== ==================
 
-Cholesky-Chebyshev is the accuracy leader across this range: exact (2e-7 to
-2e-5 vs 0.5-3.5 for stochastic) and ~40× faster eval (1.3μs vs ~55μs).  Its
-setup grows with Cholesky fill-in (≈2× the stochastic cost by n≈40k), the
-crossover past which ``cheb_stochastic`` trades accuracy for cheaper setup.
+Cholesky-Chebyshev is the accuracy leader across this range: exact (5e-9 to
+2.6e-6 vs 0.4-3.5 for stochastic) and ~30× faster eval (1.7μs vs ~57μs).  Its
+setup grows with Cholesky fill-in, reaching ~3.6× the stochastic cost by
+n≈60k — small in absolute terms against any chain that runs for seconds, which
+is why the auto-selection cutoff sits at 60,000 rather than where the setup
+curves first cross.
 """
 
 from __future__ import annotations
@@ -54,7 +58,12 @@ from dataclasses import dataclass
 import numpy as np
 import scipy.sparse as sp
 
-from ._chebyshev import chebyshev_coeffs_dct1
+from ._chebyshev import (
+    cheb_order_for_tolerance,
+    cheb_tail_error,
+    chebyshev_coeffs_dct1,
+    chebyshev_gauss_nodes,
+)
 from ._clenshaw import clenshaw_scalar, clenshaw_vec
 
 
@@ -74,6 +83,9 @@ class CholChebPrecompute:
         Chebyshev polynomial degree.
     n : int
         Matrix dimension.
+    err_est : float
+        A-posteriori truncation-error estimate from the coefficient tail (see
+        :func:`~._chebyshev.cheb_tail_error`).  ``nan`` when not computed.
     """
 
     coeffs: np.ndarray
@@ -81,37 +93,7 @@ class CholChebPrecompute:
     rho_max: float
     order: int
     n: int
-
-
-def _adaptive_order(rho_min: float, rho_max: float) -> int:
-    """Choose Chebyshev order based on interval width.
-
-    The logdet function ``f(ρ) = Σ log(1 - ρλᵢ)`` has singularities at
-    ``ρ = 1/λᵢ`` for each eigenvalue ``λᵢ`` of ``W``.  For row-standardised
-    contiguity matrices, ``λ_max = 1`` (Perron) and ``λ_min ≈ -1``, so the
-    closest singularities are at ``ρ = ±1``.  Chebyshev convergence depends
-    on the distance from the interval to the nearest singularity.
-
-    Parameters
-    ----------
-    rho_min, rho_max : float
-        The ρ approximation interval.
-
-    Returns
-    -------
-    int
-        Chebyshev polynomial order (number of nodes).
-    """
-    width = rho_max - rho_min
-    # Distance from interval to nearest singularity at ±1
-    dist = min(abs(1.0 - rho_max), abs(1.0 + rho_min))
-    if dist <= 0.01:
-        return 50  # interval nearly touches singularity
-    if width <= 0.71:
-        return 15  # [0.1, 0.8] — standard empirical range
-    if width <= 1.5:
-        return 30  # e.g. [-0.5, 0.95]
-    return 50  # [-0.95, 0.95] or wider
+    err_est: float = float("nan")
 
 
 def _d_symmetrize(W: sp.csr_matrix) -> sp.csc_matrix:
@@ -176,11 +158,122 @@ def _d_symmetrize(W: sp.csr_matrix) -> sp.csc_matrix:
     return W_sym
 
 
+def _clamp_interval(rho_min: float, rho_max: float) -> tuple[float, float]:
+    """Clamp a ρ interval away from the logarithmic singularities at ``±1``."""
+    return max(float(rho_min), -0.99), min(float(rho_max), 0.99)
+
+
+class CholChebContext:
+    """Reusable D-symmetrisation and CHOLMOD symbolic analysis for one ``W``.
+
+    Everything a Chebyshev interpolant of ``log|I - ρW|`` needs that does *not*
+    depend on the interval — the symmetrised matrix ``W_sym``, the identity, and
+    CHOLMOD's symbolic analysis (AMD ordering + elimination tree) — is built
+    once here and reused by every call to :meth:`coeffs_on`.  Fitting a *second*
+    interpolant on a different interval therefore costs only its numeric
+    factorisations.
+
+    That is what makes a warmup-adaptive refit affordable.  A sampler past
+    warmup knows ρ to within a fraction of the prior's support, and a narrow
+    interval both needs fewer nodes (see
+    :func:`~._chebyshev.cheb_order_for_tolerance`) and resolves the Jacobian far
+    more accurately over the region the posterior actually occupies — but only
+    if the refit does not re-pay the setup.  Measured on the rook lattice
+    (n = 10,000): a fresh build at 15 nodes costs ~77 ms, a refit at 12 through
+    this context ~60 ms, at 6 nodes ~30 ms.
+
+    Parameters
+    ----------
+    W : array-like or scipy.sparse matrix
+        Spatial weights matrix (dense or sparse, row-standardised).
+
+    Raises
+    ------
+    ValueError
+        If ``W`` admits no symmetrizing diagonal (directed graph); use
+        ``logdet_method="aaa"`` for those.
+    """
+
+    __slots__ = ("W_sym", "_eye", "_factor", "n")
+
+    def __init__(self, W):
+        if sp.issparse(W) or hasattr(W, "format"):
+            W_sp = sp.csr_matrix(W, dtype=np.float64)
+        else:
+            W_sp = sp.csr_matrix(np.asarray(W, dtype=np.float64))
+        self.n = int(W_sp.shape[0])
+        self.W_sym = _d_symmetrize(W_sp)
+        self._eye = sp.eye(self.n, format="csc")
+        self._factor = None
+
+    def logdet_at(self, rho_nodes: np.ndarray) -> np.ndarray:
+        """Exact ``log|I - ρW|`` at each node, by sparse Cholesky.
+
+        The first call performs CHOLMOD's symbolic analysis and caches it on the
+        instance; every later node — and every later interval — reuses it, since
+        the sparsity pattern of ``I - ρW_sym`` does not depend on ρ.
+        """
+        from sksparse.cholmod import cho_factor as cholmod_cho_factor
+
+        out = np.empty(len(rho_nodes), dtype=np.float64)
+        for i, rho in enumerate(rho_nodes):
+            A = sp.csc_matrix(self._eye - float(rho) * self.W_sym)
+            if self._factor is None:
+                # First node ever: symbolic analysis + numeric factorisation.
+                self._factor = cholmod_cho_factor(A)
+            else:
+                # Numeric factorisation only — symbolic analysis reused.
+                self._factor.factorize(A)
+            out[i] = self._factor.logdet()
+        return out
+
+    def coeffs_on(
+        self,
+        rho_min: float = 0.1,
+        rho_max: float = 0.8,
+        order: int | None = None,
+        tol: float | None = None,
+    ) -> CholChebPrecompute:
+        """Fit the Chebyshev interpolant on ``[rho_min, rho_max]``.
+
+        Parameters
+        ----------
+        rho_min, rho_max : float
+            The ρ interval, clamped to ``[-0.99, 0.99]``.
+        order : int or None, default None
+            Number of nodes.  ``None`` selects it from the interval, ``n`` and
+            ``tol`` via :func:`~._chebyshev.cheb_order_for_tolerance`.
+        tol : float, optional
+            Target absolute error when ``order`` is ``None``.  Defaults to the
+            relative target ``DEFAULT_CHEB_RTOL · n``.
+        """
+        rho_min, rho_max = _clamp_interval(rho_min, rho_max)
+        if rho_max <= rho_min:
+            raise ValueError(
+                f"Invalid rho interval: rho_min={rho_min}, rho_max={rho_max}."
+            )
+        if order is None:
+            order = cheb_order_for_tolerance(rho_min, rho_max, self.n, tol=tol)
+
+        rho_nodes, _ = chebyshev_gauss_nodes(order, rho_min, rho_max)
+        coeffs = chebyshev_coeffs_dct1(self.logdet_at(rho_nodes))
+
+        return CholChebPrecompute(
+            coeffs=coeffs,
+            rho_min=rho_min,
+            rho_max=rho_max,
+            order=order,
+            n=self.n,
+            err_est=cheb_tail_error(coeffs),
+        )
+
+
 def chol_cheb_logdet_precompute(
     W,
     order: int | None = None,
     rho_min: float = 0.1,
     rho_max: float = 0.8,
+    tol: float | None = None,
 ) -> CholChebPrecompute:
     """Precompute Chebyshev coefficients via sparse Cholesky log-determinant.
 
@@ -191,81 +284,37 @@ def chol_cheb_logdet_precompute(
     **Symbolic reuse**: all ``I - ρW`` matrices share the same sparsity
     pattern, so CHOLMOD's symbolic analysis (AMD ordering + elimination
     tree) is performed only once and reused for all subsequent numeric
-    factorisations.  This saves ~64% of per-node cost.
+    factorisations.
+
+    This is a one-shot convenience wrapper over :class:`CholChebContext`.  To
+    fit more than one interval for the same ``W`` — a warmup-adaptive refit —
+    hold the context and call :meth:`CholChebContext.coeffs_on` repeatedly, so
+    the symmetrisation and symbolic analysis are paid once rather than per fit.
 
     Parameters
     ----------
     W : array-like or scipy.sparse matrix
         Spatial weights matrix (dense or sparse, row-standardised).
     order : int or None, default None
-        Chebyshev polynomial degree.  If ``None``, auto-selected based on
-        the interval width: 15 for ``[0.1, 0.8]``, 30 for wider ranges,
-        50 for ``[-0.95, 0.95]`` or wider.
+        Chebyshev polynomial degree.  If ``None``, selected from the interval's
+        Bernstein-ellipse convergence rate, ``n``, and ``tol``.
     rho_min : float, default 0.1
         Lower bound of the ρ approximation interval.  Clamped to -0.99
         to avoid the singularity at ρ = -1.
     rho_max : float, default 0.8
         Upper bound of the ρ approximation interval.  Clamped to 0.99
         to avoid the singularity at ρ = 1.
+    tol : float, optional
+        Target absolute error used to pick ``order`` when it is ``None``.
+        Defaults to the relative target ``DEFAULT_CHEB_RTOL · n``.
 
     Returns
     -------
     CholChebPrecompute
         Precomputed Chebyshev coefficients.
     """
-    from sksparse.cholmod import cho_factor as cholmod_cho_factor
-
-    if sp.issparse(W) or hasattr(W, "format"):
-        W_sp = sp.csr_matrix(W, dtype=np.float64)
-    else:
-        W_sp = sp.csr_matrix(np.asarray(W, dtype=np.float64))
-
-    n = W_sp.shape[0]
-
-    # Clamp interval away from singularities at ±1 (the logdet function
-    # has logarithmic singularities there; Chebyshev cannot converge at
-    # the singularity itself).  The sampler never explores ρ = ±1 exactly.
-    rho_min = max(rho_min, -0.99)
-    rho_max = min(rho_max, 0.99)
-
-    # Auto-select order based on interval width if not specified
-    if order is None:
-        order = _adaptive_order(rho_min, rho_max)
-
-    # D-symmetrise for SPD Cholesky
-    W_sym = _d_symmetrize(W_sp)
-
-    # Chebyshev nodes (Clenshaw-Curtis): cos((2j-1)π/(2*order)), j=1..order
-    k = np.arange(1, order + 1)
-    nodes_cos = np.cos((2 * k - 1) * np.pi / (2 * order))
-    rho_nodes = 0.5 * (rho_max - rho_min) * nodes_cos + 0.5 * (rho_max + rho_min)
-
-    # Evaluate logdet at each node via sparse Cholesky.
-    # Key optimisation: all I - ρW share the same sparsity pattern, so we
-    # perform symbolic analysis (AMD ordering + elimination tree) only once
-    # and reuse it for every subsequent numeric factorisation.  This saves
-    # ~64% of per-node cost (measured on n=2000 grids).
-    logdet_vals = np.zeros(order, dtype=np.float64)
-    factor = None
-    for i, rho in enumerate(rho_nodes):
-        A = sp.eye(n, format="csc") - rho * W_sym
-        if factor is None:
-            # First node: symbolic analysis + numeric factorisation
-            factor = cholmod_cho_factor(A)
-        else:
-            # Subsequent nodes: numeric factorisation only (reuse symbolic)
-            factor.factorize(A)
-        logdet_vals[i] = factor.logdet()
-
-    # DCT-I → Chebyshev coefficients
-    coeffs = chebyshev_coeffs_dct1(logdet_vals)
-
-    return CholChebPrecompute(
-        coeffs=coeffs,
-        rho_min=rho_min,
-        rho_max=rho_max,
-        order=order,
-        n=n,
+    return CholChebContext(W).coeffs_on(
+        rho_min=rho_min, rho_max=rho_max, order=order, tol=tol
     )
 
 

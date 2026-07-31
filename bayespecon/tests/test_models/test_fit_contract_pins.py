@@ -24,6 +24,7 @@ from bayespecon.models import (
     SEM,
     SLX,
     SARLogit,
+    SARLogitStructural,
     SARNegBin,
     SARNegBinStructural,
     SEMLogit,
@@ -258,8 +259,12 @@ def _binary_graph():
 
 
 # name -> (ctor, expected_varnames)
+# The canonical SARLogit is reduced-form (auto→jax); SARLogitStructural is the
+# structural latent-field model; SEMLogit is the structural SEM.  All three
+# expose only the spatial parameter and β.
 BINARY_XS: dict[str, tuple] = {
     "SARLogit": (SARLogit, {"beta", "rho"}),
+    "SARLogitStructural": (SARLogitStructural, {"beta", "rho"}),
     "SEMLogit": (SEMLogit, {"beta", "lam"}),
 }
 
@@ -281,6 +286,24 @@ def test_binary_xs_fit_contract(name):
     varnames = set(idata.posterior.data_vars)
     assert varnames == expected, f"{name} [gibbs]: {sorted(varnames)}"
     assert "log_likelihood" in idata.groups(), f"{name} gibbs should attach log_lik"
+
+
+def test_sarlogit_numpy_backend_fit_contract():
+    """The reduced SARLogit's opt-in NumPy backend matches the JAX contract."""
+    y, X = _binary_xy()
+    model = SARLogit(y=y, X=X, W=_binary_graph())
+    idata = model.fit(
+        sampler="gibbs",
+        gibbs_backend="numpy",
+        draws=6,
+        tune=6,
+        chains=1,
+        n_jobs=1,
+        progressbar=False,
+        random_seed=1,
+    )
+    assert set(idata.posterior.data_vars) == {"beta", "rho"}
+    assert "log_likelihood" in idata.groups()
 
 
 # ---------------------------------------------------------------------------
@@ -352,3 +375,28 @@ def test_count_xs_fit_contract(name, ctor, zi, expected, sampler):
     assert varnames == expected, f"{name} [{sampler}]: {sorted(varnames)}"
     if sampler == "gibbs":
         assert "log_likelihood" in idata.groups(), f"{name} gibbs should attach log_lik"
+
+
+@pytest.mark.filterwarnings("ignore:Zero-inflated NB:UserWarning")
+def test_zinb_jax_backend_fit_contract():
+    """SARZINB's opt-in JAX backend yields the same posterior contract.
+
+    The JAX path is a *reduced-form* selection variant (vs the structural
+    NumPy default), but exposes the identical parameter set and attaches a
+    pointwise log-likelihood, so downstream tooling is backend-agnostic.
+    """
+    y, X = _count_xy(zero_inflate=True)
+    model = SARZINB(y=y, X=X, W=_count_graph())
+    idata = model.fit(
+        sampler="gibbs",
+        gibbs_backend="jax",
+        draws=6,
+        tune=6,
+        chains=1,
+        n_jobs=1,
+        progressbar=False,
+        random_seed=1,
+    )
+    varnames = set(idata.posterior.data_vars)
+    assert varnames == {"beta", "rho", "alpha", "gamma", "lam"}, sorted(varnames)
+    assert "log_likelihood" in idata.groups()

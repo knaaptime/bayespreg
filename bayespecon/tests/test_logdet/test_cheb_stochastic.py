@@ -215,10 +215,10 @@ class TestFactoryIntegration:
             assert abs(result[i] - exact) / abs(exact) < 0.05
 
     def test_auto_select(self):
-        """For large n, auto-select should pick cheb_stochastic."""
+        """Past the Cholesky cutoff, auto-select should pick cheb_stochastic."""
         from bayespecon._logdet import resolve_logdet_method
 
-        assert resolve_logdet_method(None, n=50000) == "cheb_stochastic"
+        assert resolve_logdet_method(None, n=200000) == "cheb_stochastic"
 
     def test_eval_speed(self, small_W):
         """Eval should be O(20) Clenshaw, ~2μs per call."""

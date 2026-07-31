@@ -21,16 +21,16 @@ dependencies:
   - fastprogress
   - nutpie
   - polyagamma
-  - scikit-umfpack
   - scikit-sparse
-  - optimistix
   - blackjax
   - numpyro
+  - equinox
   - pip
   - pip:
-    - klujax
     - git+https://github.com/knaaptime/cholgraph
     - jax # force from pip to allow windows 
+    - sparsax
+    - pgjax
 
   # docs
   - numpydoc

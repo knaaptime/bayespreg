@@ -77,8 +77,8 @@ class TestSemFlowPanelConstruction:
 
         model = SEMFlowPanel(
             self.data["y"],
-            self.data["G"],
             self.data["X"],
+            self.data["G"],
             T=self.T,
             col_names=self.data["col_names"],
         )
@@ -90,8 +90,8 @@ class TestSemFlowPanelConstruction:
 
         model = SEMFlowSeparablePanel(
             self.data["y"],
-            self.data["G"],
             self.data["X"],
+            self.data["G"],
             T=self.T,
             col_names=self.data["col_names"],
         )
@@ -103,8 +103,8 @@ class TestSemFlowPanelConstruction:
 
         model = SEMFlowPanel(
             self.data["y"],
-            self.data["G"],
             self.data["X"],
+            self.data["G"],
             T=self.T,
             col_names=self.data["col_names"],
         )
@@ -134,8 +134,8 @@ class TestSemFlowPanelRecovery:
         )
         model = SEMFlowPanel(
             data["y"],
-            data["G"],
             data["X"],
+            data["G"],
             T=4,
             col_names=data["col_names"],
         )
@@ -173,8 +173,8 @@ class TestSemFlowPanelRecovery:
         )
         model = SEMFlowSeparablePanel(
             data["y"],
-            data["G"],
             data["X"],
+            data["G"],
             T=3,
             col_names=data["col_names"],
         )

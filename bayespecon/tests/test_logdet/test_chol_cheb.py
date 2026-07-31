@@ -7,9 +7,9 @@ import pytest
 import scipy.sparse as sp
 
 from bayespecon._logdet import make_logdet_numpy_fn, make_logdet_numpy_vec_fn
+from bayespecon._logdet._chebyshev import cheb_order_for_tolerance
 from bayespecon._logdet._chol_cheb import (
     CholChebPrecompute,
-    _adaptive_order,
     _d_symmetrize,
     chol_cheb_logdet_eval,
     chol_cheb_logdet_eval_vec,
@@ -94,31 +94,54 @@ class TestPrecompute:
 
 
 class TestAdaptiveOrder:
-    def test_standard_range(self):
-        """Narrow interval [0.1, 0.8] should use order=15."""
-        assert _adaptive_order(0.1, 0.8) == 15
+    """Order selection is driven by the Bernstein-ellipse convergence rate.
 
-    def test_wide_range(self):
-        """Wider interval should use higher order."""
-        assert _adaptive_order(-0.5, 0.95) == 30
+    The property that matters is that the order tracks the interval's *distance
+    to the ρ = ±1 singularities*, not its width.  The width-keyed lookup table
+    this replaced could not tell those apart, so it returned the same 15 nodes
+    for the applied default ``[0.1, 0.8]`` and for a post-warmup window an
+    order of magnitude narrower.
+    """
 
-    def test_full_theoretical_range(self):
-        """[-0.95, 0.95] should use order=50."""
-        assert _adaptive_order(-0.95, 0.95) == 50
+    def test_order_rises_as_interval_approaches_singularities(self):
+        """Wider intervals, closer to ±1, must cost more nodes."""
+        orders = [
+            cheb_order_for_tolerance(0.55, 0.65, 10_000),
+            cheb_order_for_tolerance(0.1, 0.8, 10_000),
+            cheb_order_for_tolerance(-0.5, 0.95, 10_000),
+            cheb_order_for_tolerance(-0.95, 0.95, 10_000),
+            cheb_order_for_tolerance(-0.99, 0.99, 10_000),
+        ]
+        assert orders == sorted(orders)
+        assert len(set(orders)) == len(orders), "each interval should differ"
 
-    def test_extreme_range(self):
-        """[-0.99, 0.99] should use order=50 (capped)."""
-        assert _adaptive_order(-0.99, 0.99) == 50
+    def test_narrow_interval_is_much_cheaper_than_the_applied_default(self):
+        """A post-warmup-width window costs a fraction of ``[0.1, 0.8]``.
+
+        This is the whole point of the rule: the old table returned 15 for both.
+        """
+        assert cheb_order_for_tolerance(
+            0.55, 0.65, 10_000
+        ) * 2 < cheb_order_for_tolerance(0.1, 0.8, 10_000)
+
+    def test_order_is_nearly_independent_of_n(self):
+        """The default target is relative to ``|J| ~ O(n)``, so ``m`` barely moves."""
+        orders = {
+            cheb_order_for_tolerance(0.1, 0.8, n) for n in (20, 400, 10_000, 60_000)
+        }
+        assert max(orders) - min(orders) <= 1
 
     def test_auto_order_used_when_none(self, small_W):
         """When order=None, the precompute should auto-select based on interval."""
-        pre = chol_cheb_logdet_precompute(
+        wide = chol_cheb_logdet_precompute(
             small_W, order=None, rho_min=-0.95, rho_max=0.95
         )
-        assert pre.order == 50
-
-        pre = chol_cheb_logdet_precompute(small_W, order=None, rho_min=0.1, rho_max=0.8)
-        assert pre.order == 15
+        narrow = chol_cheb_logdet_precompute(
+            small_W, order=None, rho_min=0.1, rho_max=0.8
+        )
+        assert wide.order == cheb_order_for_tolerance(-0.95, 0.95, small_W.shape[0])
+        assert narrow.order == cheb_order_for_tolerance(0.1, 0.8, small_W.shape[0])
+        assert narrow.order < wide.order
 
     def test_interval_clamped(self, small_W):
         """Interval [-1, 1] should be clamped to [-0.99, 0.99]."""
@@ -127,12 +150,33 @@ class TestAdaptiveOrder:
         )
         assert pre.rho_min == -0.99
         assert pre.rho_max == 0.99
-        assert pre.order == 50
+        assert pre.order == cheb_order_for_tolerance(-0.99, 0.99, small_W.shape[0])
 
     def test_explicit_order_overrides_auto(self, small_W):
         """Explicit order should override auto-selection."""
         pre = chol_cheb_logdet_precompute(small_W, order=8, rho_min=-0.95, rho_max=0.95)
         assert pre.order == 8
+
+    def test_tol_tightens_the_order(self, small_W):
+        """A tighter absolute target must buy more nodes."""
+        loose = chol_cheb_logdet_precompute(small_W, rho_min=0.1, rho_max=0.8, tol=1e-4)
+        tight = chol_cheb_logdet_precompute(
+            small_W, rho_min=0.1, rho_max=0.8, tol=1e-12
+        )
+        assert tight.order > loose.order
+
+    def test_selected_order_meets_its_target(self, small_W, small_eigs):
+        """The rule's contract: the auto order actually delivers ``tol``."""
+        for lo, hi, tol in [(0.1, 0.8, 1e-8), (0.55, 0.65, 1e-8), (-0.5, 0.9, 1e-6)]:
+            pre = chol_cheb_logdet_precompute(small_W, rho_min=lo, rho_max=hi, tol=tol)
+            grid = np.linspace(lo, hi, 41)
+            exact = np.array(
+                [np.sum(np.log(np.abs(1.0 - r * small_eigs))) for r in grid]
+            )
+            approx = np.array([chol_cheb_logdet_eval(pre, float(r)) for r in grid])
+            err = np.abs(approx - exact).max()
+            # The fitted model's worst observed under-prediction was 4x.
+            assert err < 10 * tol, f"[{lo}, {hi}] tol={tol}: err={err:.2e}"
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +232,6 @@ class TestAccuracy:
         pre = chol_cheb_logdet_precompute(
             small_W, order=None, rho_min=-0.95, rho_max=0.95
         )
-        assert pre.order == 50
         for rho in [-0.9, -0.5, -0.1, 0.0, 0.1, 0.3, 0.5, 0.7, 0.9]:
             exact = np.sum(np.log(np.abs(1.0 - rho * small_eigs)))
             approx = chol_cheb_logdet_eval(pre, rho)
@@ -265,11 +308,89 @@ class TestFactory:
         assert abs(fn(rho) - exact) < 1e-6
 
     def test_auto_select_midrange(self):
-        """Auto-select should pick cheb_cholesky for n in (500, 20000]."""
+        """Auto-select should pick chol_aaa for n in (500, 60000] when W is symmetric."""
         from bayespecon._logdet import resolve_logdet_method
 
-        assert resolve_logdet_method(None, n=501) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=1000) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=10000) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=20000) == "cheb_cholesky"
-        assert resolve_logdet_method(None, n=50000) == "cheb_stochastic"
+        # Without W, the default falls to chol_aaa (symmetric assumption).
+        assert resolve_logdet_method(None, n=501) == "chol_aaa"
+        assert resolve_logdet_method(None, n=1000) == "chol_aaa"
+        assert resolve_logdet_method(None, n=10000) == "chol_aaa"
+        assert resolve_logdet_method(None, n=20000) == "chol_aaa"
+        assert resolve_logdet_method(None, n=60000) == "chol_aaa"
+        assert resolve_logdet_method(None, n=200000) == "cheb_stochastic"
+        # cheb_cholesky remains available as an explicit opt-in.
+        assert resolve_logdet_method("cheb_cholesky", n=10000) == "cheb_cholesky"
+
+
+# ---------------------------------------------------------------------------
+# Reusable factorization context
+# ---------------------------------------------------------------------------
+
+
+class TestCholChebContext:
+    """A context reuses D-symmetrisation and CHOLMOD's symbolic analysis.
+
+    This is what makes a warmup-adaptive refit affordable: fitting a second
+    interpolant on a narrower interval must cost only its numeric
+    factorisations, not another full setup.
+    """
+
+    def test_matches_one_shot_precompute_exactly(self, small_W):
+        """Coefficients from a context must equal the one-shot wrapper's."""
+        from bayespecon._logdet._chol_cheb import CholChebContext
+
+        ctx = CholChebContext(small_W)
+        for lo, hi, order in [(0.1, 0.8, 15), (-0.5, 0.9, 20), (0.55, 0.65, 6)]:
+            via_ctx = ctx.coeffs_on(lo, hi, order=order)
+            fresh = chol_cheb_logdet_precompute(
+                small_W, order=order, rho_min=lo, rho_max=hi
+            )
+            assert np.array_equal(via_ctx.coeffs, fresh.coeffs)
+            assert (via_ctx.rho_min, via_ctx.rho_max) == (fresh.rho_min, fresh.rho_max)
+
+    def test_refits_are_independent(self, small_W, small_eigs):
+        """Refitting must not corrupt the interval fitted before it."""
+        from bayespecon._logdet._chol_cheb import CholChebContext
+
+        ctx = CholChebContext(small_W)
+        wide = ctx.coeffs_on(0.1, 0.8, order=15)
+        ctx.coeffs_on(0.55, 0.65, order=6)  # refit on a narrower window
+        wide_again = ctx.coeffs_on(0.1, 0.8, order=15)
+        assert np.array_equal(wide.coeffs, wide_again.coeffs)
+
+        for rho in (0.2, 0.5, 0.75):
+            exact = np.sum(np.log(np.abs(1.0 - rho * small_eigs)))
+            assert abs(chol_cheb_logdet_eval(wide, rho) - exact) < 1e-6
+
+    def test_narrow_refit_is_far_more_accurate(self, small_W, small_eigs):
+        """The payoff: over the refit window, the narrow fit is orders better."""
+        from bayespecon._logdet._chol_cheb import CholChebContext
+
+        lo, hi = 0.55, 0.65
+        ctx = CholChebContext(small_W)
+        wide = ctx.coeffs_on(0.1, 0.8)
+        narrow = ctx.coeffs_on(lo, hi, tol=1e-12)
+
+        grid = np.linspace(lo, hi, 41)
+        exact = np.array([np.sum(np.log(np.abs(1.0 - r * small_eigs))) for r in grid])
+        err_wide = np.abs(
+            np.array([chol_cheb_logdet_eval(wide, float(r)) for r in grid]) - exact
+        ).max()
+        err_narrow = np.abs(
+            np.array([chol_cheb_logdet_eval(narrow, float(r)) for r in grid]) - exact
+        ).max()
+        assert err_narrow < err_wide / 100.0
+
+    def test_rejects_directed_W(self):
+        """A directed graph has no symmetrizing diagonal — fail loudly."""
+        from bayespecon._logdet._chol_cheb import CholChebContext
+
+        W = sp.csr_matrix(np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]))
+        with pytest.raises(ValueError, match="D-symmetrizable"):
+            CholChebContext(W)
+
+    def test_rejects_inverted_interval(self, small_W):
+        from bayespecon._logdet._chol_cheb import CholChebContext
+
+        with pytest.raises(ValueError, match="Invalid rho interval"):
+            CholChebContext(small_W).coeffs_on(0.8, 0.2)

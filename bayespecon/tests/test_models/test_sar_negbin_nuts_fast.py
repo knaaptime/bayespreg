@@ -241,17 +241,15 @@ def test_simulate_sar_negbin_output_contract():
 
 
 @pytest.mark.requires_jax
-def test_sar_negbin_jax_logp_grad_with_lineax(monkeypatch):
-    """End-to-end smoke: SAR-NB logp + grad compile under JAX/Lineax."""
+def test_sar_negbin_jax_logp_grad(monkeypatch):
+    """End-to-end smoke: SAR-NB logp + grad compile under JAX (sparsax SAR)."""
     pytest.importorskip("jax")
-    pytest.importorskip("lineax")
+    pytest.importorskip("sparsax")
 
-    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "lineax")
-    monkeypatch.setenv("BAYESPECON_JAX_LINEAX_SOLVER", "bicgstab")
+    monkeypatch.setenv("BAYESPECON_JAX_SAR_SOLVER", "sparsax")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "1")
 
     from bayespecon._jax_dispatch import (
-        _select_jax_sar_lineax_solver,
         _select_jax_sar_solver,
         _select_jax_sparse_backend,
         register_jax_dispatch,
@@ -259,7 +257,6 @@ def test_sar_negbin_jax_logp_grad_with_lineax(monkeypatch):
 
     _select_jax_sparse_backend.cache_clear()
     _select_jax_sar_solver.cache_clear()
-    _select_jax_sar_lineax_solver.cache_clear()
     register_jax_dispatch.cache_clear()
     register_jax_dispatch()
 
@@ -270,8 +267,6 @@ def test_sar_negbin_jax_logp_grad_with_lineax(monkeypatch):
 
         with pm_model:
             ip = pm_model.initial_point()
-            # Move off the degenerate point (rho=0, beta=0 makes the RHS
-            # X @ beta = 0, which BiCGStab cannot start from).
             ip["beta"] = np.array([0.3, 0.6])
             ip["rho_interval__"] = np.array(0.4)
             # Reduced form: no sigma2_log__ or z
@@ -285,7 +280,6 @@ def test_sar_negbin_jax_logp_grad_with_lineax(monkeypatch):
     finally:
         _select_jax_sparse_backend.cache_clear()
         _select_jax_sar_solver.cache_clear()
-        _select_jax_sar_lineax_solver.cache_clear()
         register_jax_dispatch.cache_clear()
 
 

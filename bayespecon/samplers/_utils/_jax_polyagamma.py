@@ -138,13 +138,27 @@ def jax_polyagamma(
         cb_seed = jax.random.key_data(cb_key)[0].astype(jnp.int64) % (2**31)
 
         def _pg_callback(h_np, z_np, seed_np):
-            """Host callback: draw PG(h, z) using the exact C extension."""
+            """Host callback: draw PG(h, z) using the exact C extension.
+
+            Batch-aware so the enclosing sweep can be ``jax.vmap``-ed over
+            chains: under ``vmap_method="expand_dims"`` the callback receives
+            ``(chains, n)`` arrays and a ``(chains,)`` seed vector and draws each
+            chain with its own RNG in a single host round-trip.
+            """
             import numpy as _np
 
             from ._polyagamma import sample_polyagamma
 
-            rng = _np.random.default_rng(int(seed_np))
-            return sample_polyagamma(h_np, z_np, rng=rng)
+            if h_np.ndim <= 1:  # unbatched: (n,)
+                rng = _np.random.default_rng(int(seed_np))
+                return sample_polyagamma(h_np, z_np, rng=rng)
+            # Batched (vmap over chains): (chains, n) with per-chain seeds.
+            out = _np.empty_like(h_np)
+            seeds = _np.atleast_1d(seed_np)
+            for i in range(h_np.shape[0]):
+                rng = _np.random.default_rng(int(seeds[i % seeds.shape[0]]))
+                out[i] = sample_polyagamma(h_np[i], z_np[i], rng=rng)
+            return out
 
         result = jax.pure_callback(
             _pg_callback,
@@ -152,6 +166,7 @@ def jax_polyagamma(
             h,
             z,
             jnp.asarray(cb_seed, dtype=jnp.int64),
+            vmap_method="expand_dims",
         )
     else:
         raise ValueError(

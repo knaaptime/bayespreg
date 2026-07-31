@@ -25,6 +25,11 @@ import numpy as np
 import scipy.sparse as sp
 
 from ..._lazy_deps import az
+from ..._logdet._refit import (
+    DEFAULT_PAD_SD,
+    LogdetRefitter,
+    boundary_warning,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -81,6 +86,8 @@ class GibbsEstimation:
         W_eigs: np.ndarray | None = None,
         logdet_method: str | None = None,
         T: int = 1,
+        logdet_refit: bool = False,
+        logdet_refit_pad_sd: float = DEFAULT_PAD_SD,
     ):
         self.y = y
         self.X = X
@@ -94,6 +101,9 @@ class GibbsEstimation:
         self.W_eigs = W_eigs
         self.logdet_method = logdet_method
         self.T = int(T)
+        self.logdet_refit = bool(logdet_refit)
+        self.logdet_refit_pad_sd = float(logdet_refit_pad_sd)
+        self.refit_window = None
         self.n, self.k = X.shape
 
     def fit(
@@ -177,6 +187,7 @@ class GibbsEstimation:
         # ── NumPy path (default) ──
         # Build cache
         cache = self._build_cache()
+        self.refit_window = None  # per-run result; never carry one fit into the next
 
         spatial_param = self._spatial_param_name()
         _log.info(f"Gibbs sampling ({chains} chains, 3-block: β, σ², {spatial_param})")
@@ -190,47 +201,110 @@ class GibbsEstimation:
         child_seeds = parent_ss.spawn(chains)
         seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
 
-        # Define per-chain function
-        def _run_one_chain(chain_id, seed, progress_manager=None, chain_id_kw=None):
-            rng = np.random.default_rng(seed)
-            init = _initialize_gaussian_gibbs(
-                self.y,
-                self.X,
-                cache.XtX_cho,
-                self.priors,
-                rng,
+        parallel = n_jobs != 1
+
+        def _chain_fn(init_by_chain, phase_draws, phase_tune, *, scouting=False):
+            def _run_one_chain(chain_id, seed, progress_manager=None, chain_id_kw=None):
+                # A scouting phase consumed the base seed, so the phase that
+                # follows it must not reuse it.  Runs without a refit keep the
+                # original seeding exactly.
+                rng = np.random.default_rng(seed + 1 if init_by_chain[0] else seed)
+                init = init_by_chain[chain_id]
+                if init is None:
+                    init = _initialize_gaussian_gibbs(
+                        self.y, self.X, cache.XtX_cho, self.priors, rng
+                    )
+                return run_gaussian_chain(
+                    y=self.y,
+                    X=self.X,
+                    cache=cache,
+                    priors=self.priors,
+                    init=init,
+                    draws=phase_draws,
+                    tune=phase_tune,
+                    thin=thin,
+                    rng=rng,
+                    progressbar=progressbar,
+                    chain_id=chain_id_kw if chain_id_kw is not None else chain_id,
+                    progress_manager=progress_manager,
+                    return_state=scouting,
+                    # Scouting draws are discarded except for ρ; computing a
+                    # pointwise log-likelihood for them would add an O(n·k) pass
+                    # per iteration and an (iters × n) array per chain to pickle
+                    # back from every worker.
+                    store_log_lik=not scouting,
+                )
+
+            return _run_one_chain
+
+        inits: list = [None] * chains
+        tune_remaining = tune
+
+        # ── Optional warmup phase A: run half of warmup, then rebuild the
+        # Jacobian interpolant on the ρ range the chains actually found.  The
+        # refit is frozen here, before any retained draw, so the kernel that
+        # produces the posterior is fixed — the same discipline as step-size or
+        # slice-width adaptation.  The remaining warmup runs under the refit
+        # interpolant, which doubles as a check that the window holds.
+        refitter = self._make_refitter()
+        if cache.logdet_fn is None and refitter is None:
+            raise RuntimeError(
+                "No log-determinant evaluator: the model skipped building one "
+                "for a refit that is not going to happen. This is a wiring bug "
+                "— the refit-applicability tests in SpatialModel._fit_gibbs and "
+                "GibbsEstimation._make_refitter have diverged."
             )
-            return run_gaussian_chain(
-                y=self.y,
-                X=self.X,
-                cache=cache,
-                priors=self.priors,
-                init=init,
-                draws=draws,
-                tune=tune,
-                thin=thin,
-                rng=rng,
-                progressbar=progressbar,
-                chain_id=chain_id_kw if chain_id_kw is not None else chain_id,
-                progress_manager=progress_manager,
+        if refitter is not None:
+            # Warmup runs on a deliberately coarse interpolant.  Its draws are
+            # discarded, so it only has to steer the chains to the right
+            # neighbourhood — and building it cheaply rather than to full
+            # accuracy is what makes the refit cost less overall than not
+            # refitting at all.
+            self._install_scout(cache, refitter)
+        if refitter is not None and tune >= 2:
+            tune_a = tune // 2
+            warm = run_chains(
+                chain_fn=_chain_fn(inits, tune_a, 0, scouting=True),
+                n_chains=chains,
+                seeds=seeds,
+                n_jobs=n_jobs,
+                progressbar=False,
+                parallel=parallel,
+                draws=tune_a,
+                tune=0,
+                model_type=self.model_type,
+            )
+            inits = [c["_final_state"] for c in warm]
+            tune_remaining = tune - tune_a
+            # Chains start at ρ = 0 and walk to the posterior, so the first
+            # part of phase A is transient.  Including it would stretch the
+            # window back to the initial value and defeat the refit; the
+            # second half is what the chains have actually settled on.
+            self._apply_refit(
+                cache,
+                refitter,
+                np.concatenate([c[spatial_param][tune_a // 2 :] for c in warm]),
             )
 
-        # Run chains: n_jobs=1 → sequential, n_jobs≠1 → parallel via joblib
-        parallel = n_jobs != 1
         chain_results = run_chains(
-            chain_fn=_run_one_chain,
+            chain_fn=_chain_fn(inits, draws, tune_remaining),
             n_chains=chains,
             seeds=seeds,
             n_jobs=n_jobs,
             progressbar=progressbar,
             parallel=parallel,
             draws=draws,
-            tune=tune,
+            tune=tune_remaining,
             model_type=self.model_type,
+            # A scouting phase just spawned this pool with the same worker
+            # count; respawning it would re-pay the process launch and
+            # re-pickle y/X/W for every worker.
+            reuse_workers=inits[0] is not None,
         )
 
         # Assemble InferenceData
         idata = self._assemble_idata(chain_results)
+        self._record_refit(idata, chain_results, spatial_param)
         elapsed = time.time() - t_start
         _log.info(
             f"Sampling {chains} chains for {tune} tune and {draws} draw "
@@ -295,7 +369,22 @@ class GibbsEstimation:
         )
 
         # Build JAX-native logdet function
-        logdet_jax = self._build_logdet_jax()
+        # The refit path carries the interpolant as traced state, and the step
+        # then ignores any closed-over evaluator — so building one would be a
+        # full precompute (a Cholesky factorisation per node) thrown away.
+        param_fn, params0, refit_hook = self._build_jax_refit()
+        logdet_jax = None if param_fn is not None else self._build_logdet_jax()
+        # A refit that replaces the interpolant must also replace the evaluator
+        # the post-chain pointwise log-likelihood uses, and that evaluator is
+        # passed to the runner before the refit happens — so pass a late-binding
+        # indirection rather than the function itself.
+        self._active_logdet_vec_fn = self.logdet_vec_fn
+        logdet_vec_fn = (
+            self.logdet_vec_fn
+            if refit_hook is None
+            else (lambda a: self._active_logdet_vec_fn(a))
+        )
+        self.refit_window = None
 
         spatial_param = self._spatial_param_name()
         method_str = f" ({chain_method})" if chain_method != "sequential" else ""
@@ -337,7 +426,7 @@ class GibbsEstimation:
                 W_sparse=self.W_sparse,
                 Wy=self.Wy,
                 logdet_jax=logdet_jax,
-                logdet_vec_fn=self.logdet_vec_fn,
+                logdet_vec_fn=logdet_vec_fn,
                 priors=self.priors,
                 inits=inits,
                 draws=draws,
@@ -347,10 +436,14 @@ class GibbsEstimation:
                 model_type=self.model_type,
                 slice_width=slice_width,
                 progressbar=progressbar,
+                logdet_param_fn=param_fn,
+                logdet_params=params0,
+                refit_hook=refit_hook,
             )
 
             # Assemble InferenceData
             idata = self._assemble_idata(chain_results)
+            self._record_refit(idata, chain_results, spatial_param)
             elapsed = time.time() - t_start
             _log.info(
                 f"Sampling {chains} chains for {tune} tune and {draws} draw "
@@ -364,6 +457,23 @@ class GibbsEstimation:
                 "chain_method='parallel' is not supported for the JAX path. "
                 "Use chain_method='vectorized' for JAX-native parallelism."
             )
+
+        # ── Sequential JAX path ──
+        if refit_hook is not None:
+            # The refit pools ρ across chains at a synchronisation point in the
+            # middle of warmup, which a runner that finishes one chain before
+            # starting the next cannot provide.  Refitting per chain instead
+            # would leave each chain targeting a slightly different density, so
+            # this is refused rather than silently downgraded.
+            raise NotImplementedError(
+                "logdet_refit is not supported with chain_method='sequential' "
+                "on the JAX path: the refit pools warmup draws across chains, "
+                "which requires them to run concurrently. Use "
+                "chain_method='vectorized' (the default) or "
+                "gibbs_backend='numpy'."
+            )
+        if logdet_jax is None:
+            logdet_jax = self._build_logdet_jax()
 
         # Derive per-chain seeds
         if random_seed is not None:
@@ -428,6 +538,208 @@ class GibbsEstimation:
             f"took {elapsed:.0f} seconds."
         )
         return idata
+
+    # ------------------------------------------------------------------
+    # Warmup-adaptive Jacobian refit
+    # ------------------------------------------------------------------
+
+    def _spatial_W(self):
+        """Per-period ``N×N`` weights, and the unit count they imply.
+
+        A panel sampler receives the ``NT×NT`` block-diagonal lag matrix
+        ``I_T ⊗ W``, whose determinant already carries the ``T`` replication, so
+        anything that rebuilds the Jacobian must take the per-period block and
+        reapply ``T`` itself.  Getting this wrong is a ``T²`` double-count — the
+        bug this slice exists to prevent — so both the JAX evaluator and the
+        refitter go through here rather than each re-deriving it.
+        """
+        n_units = self.W_sparse.shape[0] // self.T
+        W = self.W_sparse[:n_units, :n_units] if self.T > 1 else self.W_sparse
+        return W, n_units
+
+    def _make_refitter(self) -> LogdetRefitter | None:
+        """Return a refitter, or ``None`` when the refit does not apply.
+
+        Construction is lazy — no factorisation happens until a refit is
+        actually performed — so this is cheap to call unconditionally.
+        """
+        if not self.logdet_refit or self.W_sparse is None:
+            return None
+        from ..._logdet import resolve_logdet_method
+
+        W, n_units = self._spatial_W()
+        method = resolve_logdet_method(self.logdet_method, n=n_units, W=W)
+        refitter = LogdetRefitter(W, method, T=self.T)
+        if not refitter.supported:
+            _log.info(
+                f"logdet_refit requested but method {method!r} does not support "
+                "it (no reusable factorisation or no ρ interval); continuing "
+                "with the prior interval."
+            )
+            return None
+        return refitter
+
+    def _prior_interval(self) -> tuple[float, float]:
+        """Prior ρ bounds, clamped away from the ``±1`` singularities."""
+        from ..._logdet._chol_cheb import _clamp_interval
+
+        return _clamp_interval(self.priors.rho_lower, self.priors.rho_upper)
+
+    def _install_scout(self, cache, refitter: LogdetRefitter) -> None:
+        """Build the interpolant warmup runs on, and install it on ``cache``.
+
+        With the refit enabled the model does not build one — see
+        ``SpatialModel._fit_gibbs`` — because it would be discarded.  This is
+        therefore the only interpolant in play until the refit replaces it, and
+        it is built at the loose scouting tolerance whenever that is cheaper
+        than the full-accuracy order.  On an interval already narrow enough that
+        the two coincide, it falls back to the full fit and the refit reverts to
+        being an accuracy-only change.
+        """
+        prior_lo, prior_hi = self._prior_interval()
+        full = refitter.capacity(prior_lo, prior_hi)
+        coarse = refitter.scout_order(prior_lo, prior_hi)
+        if coarse < full:
+            scalar_fn, vec_fn, order = refitter.scout_fit(prior_lo, prior_hi)
+            _log.info(
+                f"logdet_refit: warmup on a {order}-node scouting interpolant "
+                f"(against {full} for the un-refitted run)"
+            )
+        else:
+            scalar_fn, vec_fn, _ = refitter.refit(
+                prior_lo, prior_hi, prior_lo, prior_hi, capacity=full
+            )
+        cache.logdet_fn = scalar_fn
+        cache.logdet_vec_fn = vec_fn
+
+    def _apply_refit(self, cache, refitter: LogdetRefitter, warmup_rho) -> None:
+        """Rebuild the interpolant on the warmup range and install it on ``cache``.
+
+        Silently keeps the existing interpolant when :meth:`LogdetRefitter.plan`
+        declines — too few warmup draws, a degenerate spread, or a window that is
+        not materially narrower than the interval already in use.
+        """
+        prior_lo, prior_hi = self._prior_interval()
+        window = refitter.plan(
+            warmup_rho,
+            prior_lo,
+            prior_hi,
+            cache.rho_lower,
+            cache.rho_upper,
+            pad_sd=self.logdet_refit_pad_sd,
+        )
+        if window is None:
+            return
+        lo, hi = window
+
+        logdet_fn, logdet_vec_fn, info = refitter.refit(
+            lo,
+            hi,
+            prior_lo,
+            prior_hi,
+            capacity=refitter.capacity(prior_lo, prior_hi),
+            n_warmup_draws=int(np.size(warmup_rho)),
+            pad_sd=self.logdet_refit_pad_sd,
+        )
+        cache.logdet_fn = logdet_fn
+        cache.logdet_vec_fn = logdet_vec_fn
+        # The interpolant is only valid on its interval — a Chebyshev series
+        # diverges outside it — so the sampler's support must follow it.
+        cache.rho_lower = info.rho_min
+        cache.rho_upper = info.rho_max
+        self.refit_window = info
+        refitter.release()  # one refit per run; do not hold the factor for the rest
+        _log.info(f"logdet_refit: rebuilt Jacobian on {info}")
+
+    def _record_refit(self, idata, chain_results, spatial_param: str) -> None:
+        """Attach the refit window to ``idata`` and warn if draws hit its edges."""
+        info = self.refit_window
+        if info is None:
+            return
+        idata.attrs["logdet_refit_window"] = [info.rho_min, info.rho_max]
+        idata.attrs["logdet_refit_order"] = info.order
+        idata.attrs["logdet_refit_pad_sd"] = info.pad_sd
+        idata.attrs["logdet_refit_err_est"] = info.err_est
+
+        msg = boundary_warning(
+            np.concatenate([c[spatial_param] for c in chain_results]), info
+        )
+        if msg is not None:
+            import warnings
+
+            warnings.warn(msg, RuntimeWarning, stacklevel=2)
+
+    def _build_jax_refit(self):
+        """Build the JAX refit triple ``(param_fn, params0, refit_hook)``.
+
+        Returns ``(None, None, None)`` when no refit is configured, in which
+        case the JAX step keeps its closed-over interpolant and its compiled
+        form is byte-for-byte what it was before this feature existed.
+
+        The parameterised evaluator exists because the alternative — swapping a
+        closure constant — invalidates the jit cache and costs a full retrace of
+        the Gibbs step (~1.1 s measured), an order of magnitude more than the
+        refit's own factorisations.  Carrying the coefficients as traced arrays
+        of fixed capacity keeps the compiled step valid across the swap.
+        """
+        refitter = self._make_refitter()
+        if refitter is None:
+            return None, None, None
+
+        from ..._logdet._jax import make_logdet_jax_param_fn
+
+        prior_lo, prior_hi = self._prior_interval()
+        cap = refitter.capacity(prior_lo, prior_hi)
+
+        param_fn = make_logdet_jax_param_fn(refitter.method, T=self.T)
+        # Warmup runs on the coarse scouting fit; see ``_install_scout``.  The
+        # NumPy evaluators come back from the same fit because the model no
+        # longer builds any, and the post-chain pointwise log-likelihood needs
+        # one before the refit has happened.
+        scout_tol = (
+            refitter.scout_tol
+            if refitter.scout_order(prior_lo, prior_hi) < cap
+            else None
+        )
+        params0, _, _, scout_vec_fn = refitter.jax_params(
+            prior_lo, prior_hi, cap, tol=scout_tol, with_numpy_fns=True
+        )
+        self.logdet_vec_fn = scout_vec_fn
+
+        def _hook(pooled_rho):
+            window = refitter.plan(
+                pooled_rho,
+                prior_lo,
+                prior_hi,
+                prior_lo,
+                prior_hi,
+                pad_sd=self.logdet_refit_pad_sd,
+            )
+            if window is None:
+                return None
+            lo, hi = window
+            # The retained draws are produced under the refit interpolant, so
+            # their pointwise log-likelihood — and any WAIC/LOO built on it —
+            # must be too.  The JAX path computes that after the chain from the
+            # NumPy vectorised evaluator, so take it from this same fit rather
+            # than refitting and paying the factorisations twice.
+            params, info, _, vec_fn = refitter.jax_params(
+                lo,
+                hi,
+                cap,
+                prior_min=prior_lo,
+                prior_max=prior_hi,
+                n_warmup_draws=int(np.size(pooled_rho)),
+                pad_sd=self.logdet_refit_pad_sd,
+                with_numpy_fns=True,
+            )
+            self.refit_window = info
+            self._active_logdet_vec_fn = vec_fn
+            refitter.release()  # one refit per run; the factor is dead weight now
+            _log.info(f"logdet_refit: rebuilt Jacobian on {info}")
+            return params, info.rho_min, info.rho_max
+
+        return param_fn, params0, _hook
 
     def _build_logdet_jax(self) -> callable:
         """Build a JAX-native logdet callable for the JAX Gibbs path.
@@ -645,6 +957,8 @@ class GaussianSARGibbs(GibbsEstimation):
         W_eigs: np.ndarray | None = None,
         logdet_method: str | None = None,
         T: int = 1,
+        logdet_refit: bool = False,
+        logdet_refit_pad_sd: float = DEFAULT_PAD_SD,
     ):
         super().__init__(
             y=y,
@@ -659,6 +973,8 @@ class GaussianSARGibbs(GibbsEstimation):
             W_eigs=W_eigs,
             logdet_method=logdet_method,
             T=T,
+            logdet_refit=logdet_refit,
+            logdet_refit_pad_sd=logdet_refit_pad_sd,
         )
 
     def _spatial_param_name(self) -> str:
@@ -710,6 +1026,8 @@ class GaussianSEMGibbs(GibbsEstimation):
         W_eigs: np.ndarray | None = None,
         logdet_method: str | None = None,
         T: int = 1,
+        logdet_refit: bool = False,
+        logdet_refit_pad_sd: float = DEFAULT_PAD_SD,
     ):
         super().__init__(
             y=y,
@@ -724,6 +1042,8 @@ class GaussianSEMGibbs(GibbsEstimation):
             W_eigs=W_eigs,
             logdet_method=logdet_method,
             T=T,
+            logdet_refit=logdet_refit,
+            logdet_refit_pad_sd=logdet_refit_pad_sd,
         )
 
     def _spatial_param_name(self) -> str:

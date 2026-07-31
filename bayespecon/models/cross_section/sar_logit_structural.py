@@ -1,29 +1,26 @@
-r"""Structural-form SEM-logit with Pólya–Gamma Gibbs sampler.
+r"""Structural-form SAR-logit with Pólya–Gamma Gibbs sampler.
 
 .. math::
 
     y_i \sim \mathrm{Bernoulli}(\mathrm{logit}^{-1}(\eta_i)), \quad
-    \eta = X\beta + u, \quad
-    u = \lambda W u + \nu, \quad
+    \eta = \rho W \eta + X\beta + \nu, \quad
     \nu \sim N(0, I)
 
-The logit link absorbs the error scale, so σ² is fixed at 1 and does
-not appear as a free parameter.  The Pólya–Gamma augmentation yields
-fully conjugate Gibbs updates for η, β, and λ (via collapsed slice
-sampling).
+This is the *structural* (latent-field) SAR-logit: the spatial lag acts on the
+latent log-odds :math:`\eta`, and an i.i.d. Gaussian innovation :math:`\nu`
+enters through :math:`(I-\rho W)^{-1}`.  The logit link absorbs the error scale
+(σ² = 1).  Contrast with the canonical reduced-form :class:`SARLogit`, where the
+spatial lag is a deterministic mean-propagator (no latent field) — that is the
+default and the model with the richer probability-scale impacts.
 
-Use this model when:
-- The response is binary (0/1).
-- You need spatial autocorrelation in the error term (not the outcome).
-- NUTS is slow or unreliable for the spatial parameter λ.
+Use this model when you specifically want the latent spatially-smoothed
+log-odds field rather than the reduced-form mean propagator.
 
 References
 ----------
 Polson, N. G., Scott, J. G., & Windle, J. (2013). Bayesian inference
 for logistic models using Pólya–Gamma latent variables.
 *Journal of the American Statistical Association*, 108(504), 1339–1349.
-
-Neal, R. M. (2003). Slice sampling. *Annals of Statistics*, 31(3), 705–767.
 """
 
 from __future__ import annotations
@@ -40,20 +37,18 @@ from ...samplers._utils._sparsax_utils import resolve_pg_jax_backend
 from ...samplers._utils._spatial_normal import CholmodFactor
 from ...samplers.gaussian._chain_runner import run_chains
 from ...samplers.logit import (
-    SEMLogitGibbsCache,
-    SEMLogitGibbsPriors,
-    SEMLogitGibbsState,
-    run_chain_sem,
+    LogitGibbsCache,
+    LogitGibbsPriors,
+    LogitGibbsState,
+    run_chain,
 )
-from ...samplers.logit._jax import (
-    run_chains_jax_sem_vectorized,
-)
+from ...samplers.logit._jax import run_chains_jax_vectorized
 from ..base import SpatialModel
-from ..priors import SEMLogitPriors, resolve_priors
+from ..priors import SARLogitPriors, resolve_priors
 
 
-class SEMLogit(SpatialModel):
-    """Bayesian structural-form SEM-logit with Pólya–Gamma Gibbs sampler.
+class SARLogitStructural(SpatialModel):
+    """Bayesian structural-form SAR-logit with Pólya–Gamma Gibbs sampler.
 
     Parameters
     ----------
@@ -70,20 +65,20 @@ class SEMLogit(SpatialModel):
         Design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(n, n)``.
-    priors : dict or SEMLogitPriors, optional
+    priors : dict or SARLogitPriors, optional
         Override default priors. Supported keys:
 
-        - ``lam_lower`` (float, default -0.999): Lower bound of the
-          Uniform prior on :math:`\\lambda`.
-        - ``lam_upper`` (float, default 0.999): Upper bound of the
-          Uniform prior on :math:`\\lambda`.
+        - ``rho_lower`` (float, default -0.999): Lower bound of the
+          Uniform prior on :math:`\\rho`.
+        - ``rho_upper`` (float, default 0.999): Upper bound of the
+          Uniform prior on :math:`\\rho`.
         - ``beta_mu`` (float, default 0.0): Normal prior mean for
           :math:`\\beta`.
         - ``beta_sigma`` (float, default 10.0): Normal prior std for
           :math:`\\beta`.
 
     logdet_method : str, optional
-        How to compute :math:`\\log|I - \\lambda W|`. ``None`` (default)
+        How to compute :math:`\\log|I - \\rho W|`. ``None`` (default)
         auto-selects based on ``n``.
     robust : bool, default False
         Not supported. Raises ``NotImplementedError`` if True.
@@ -91,45 +86,38 @@ class SEMLogit(SpatialModel):
     Notes
     -----
     The structural form parameterises the latent log-odds as
-    ``eta = X @ beta + u`` with ``u = lam * W @ u + nu``,
-    ``nu ~ N(0, I)``, and augments the logistic likelihood with
-    Pólya–Gamma auxiliary variables to obtain fully conjugate Gibbs
-    updates for η and β.
+    ``eta = rho * W @ eta + X @ beta + nu`` with ``nu ~ N(0, I)``,
+    and augments the logistic likelihood with Pólya–Gamma auxiliary
+    variables to obtain fully conjugate Gibbs updates for η and β.
 
     The sampler bypasses PyMC's NUTS entirely. It produces an
     ``arviz.InferenceData`` object compatible with all downstream
-    diagnostics.
-
-    The ``fit()`` method does **not** accept ``nuts_sampler`` or
-    ``target_accept`` kwargs — these are NUTS-specific and will raise
-    ``TypeError`` if passed.
-
-    Because the logit link absorbs the error scale, σ² is fixed at 1
-    and does not appear in the posterior.  The PG shape parameter is
-    always h = 1 (one trial per observation), so the Devroye method
-    is valid and typically fastest.
+    diagnostics.  Impacts are reported on the log-odds scale; for
+    probability-scale impacts use the reduced-form :class:`SARLogit`.
     """
 
-    _spatial_params: tuple[str, ...] = ("lam",)
-    _lag_terms: tuple[str, ...] = ()
-    _jacobian_param: str | None = "lam"
+    _spatial_params: tuple[str, ...] = ("rho",)
+    _lag_terms: tuple[str, ...] = ("Wy",)
+    _jacobian_param: str | None = "rho"
     _gibbs_class: str | None = None  # Gibbs-only, no NUTS
-    _model_type: str = "sem_logit"
+    _model_type: str = "sar_logit_structural"
     _likelihood: str = "binary"
     _gibbs_key: tuple[str, str] | None = ("binary_structural", "cross_section")
-    _priors_cls = SEMLogitPriors
+    _priors_cls = SARLogitPriors
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         if self.robust:
-            raise NotImplementedError("robust=True is not supported for SEMLogit.")
+            raise NotImplementedError(
+                "robust=True is not supported for SARLogitStructural."
+            )
 
         # Validate y is binary
         if not np.isin(self._y, [0.0, 1.0]).all():
             raise ValueError("y must be binary with values in {0, 1}.")
 
-        # Precompute logdet callable for the λ slice sampler.
+        # Precompute logdet callable for the ρ slice sampler.
         self._logdet_fn = self._logdet_numpy_fn
 
     # ------------------------------------------------------------------
@@ -139,39 +127,69 @@ class SEMLogit(SpatialModel):
     _JAX_DENSE_THRESHOLD: int = 10000
 
     def _initialize_from_ols(self, rng):
-        """Warm-start the Gibbs sampler from a linear probability model.
+        """Warm-start the Gibbs sampler from a spatial profile likelihood.
 
-        Fits OLS of y on X (treating y as continuous), then uses the
-        fitted values as initial η.  Starts λ at 0 (no spatial
-        dependence in the error).
+        For each ρ on a coarse grid, computes X̃ = (I − ρW)⁻¹X and
+        the OLS estimate β̂ = (X̃ᵀX̃)⁻¹X̃ᵀy, then picks the (ρ, β)
+        that maximises the Gaussian log-likelihood on y (treating y as
+        continuous).  This places the chain near the posterior mode even
+        at high ρ, where starting at ρ = 0 can leave the chain stuck in
+        a wrong mode.
 
-        Returns a SEMLogitGibbsState with reasonable starting values.
+        Falls back to a simple OLS on X (ρ = 0) if the grid search
+        fails for all ρ values.
         """
         y = self._y
         X = self._X
+        self._W_sparse.tocsr()
+        W_csc = self._W_sparse.tocsc()
         n, k = X.shape
 
-        # β₀: OLS on y (linear probability model)
+        # --- Profile-log-likelihood initialisation ---
+        _rho_grid = np.arange(0.05, 0.96, 0.05)
+        _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
+        for _rho_g in _rho_grid:
+            try:
+                _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
+                _Xtilde_g = sp.linalg.spsolve(_A_g, X)
+                _beta_g = np.linalg.lstsq(_Xtilde_g, y, rcond=None)[0]
+                _eta_g = _Xtilde_g @ _beta_g
+                _sig2_g = float(np.mean((y - _eta_g) ** 2))
+                if _sig2_g > 1e-10:
+                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
+                    if _ll_g > _best_ll:
+                        _best_ll = _ll_g
+                        _best_rho = _rho_g
+                        _best_beta = _beta_g.copy()
+            except Exception:
+                pass
+
+        _rho_jitter = 0.02
+        beta_init = _best_beta + 0.1 * rng.standard_normal(k)
+        rho_init = float(
+            np.clip(
+                _best_rho + _rho_jitter * rng.standard_normal(),
+                self._logdet_bounds.rho_min + 0.01,
+                self._logdet_bounds.rho_max - 0.01,
+            )
+        )
+
+        # η₀: (I − ρ₀W)⁻¹Xβ₀ — spatially structured starting values
         try:
-            beta_init = np.linalg.lstsq(X, y, rcond=None)[0]
-        except np.linalg.LinAlgError:
-            beta_init = np.zeros(k)
-
-        # η₀: X @ β₀ (no spatial structure)
-        eta_init = X @ beta_init
-
-        # λ₀: start at 0 (no spatial dependence in error)
-        lam_init = 0.0
+            _A_init = sp.eye(n, format="csc") - rho_init * W_csc
+            eta_init = sp.linalg.spsolve(_A_init, X @ beta_init)
+        except Exception:
+            eta_init = X @ beta_init
 
         # ω₀: draw from PG(1, η)
         from ...samplers._utils._polyagamma import sample_polyagamma
 
         omega_init = sample_polyagamma(np.ones(n), eta_init, rng=rng)
 
-        return SEMLogitGibbsState(
+        return LogitGibbsState(
             eta=eta_init,
             beta=beta_init,
-            lam=lam_init,
+            rho=rho_init,
             omega=omega_init,
         )
 
@@ -207,15 +225,14 @@ class SEMLogit(SpatialModel):
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
             Execution backend.  ``"numpy"`` uses the CHOLMOD factorisation
-            path (the default); ``"jax"`` uses the JAX-accelerated dense path
-            (requires float64; viable for n ≲ 10 000).
+            path; ``"jax"`` uses the JAX-accelerated dense path (requires
+            float64; viable for n ≲ 10 000).
         return_eta : bool
             If True, store the full latent field η in the posterior.
             Default False — η is n × draws × chains, which can be large.
         pg_n_terms : int, default 25
-            Ignored (kept for API compatibility).  PG draws now use the
-            exact sum-of-exponentials method which does not require
-            truncation.  Only relevant on the JAX path.
+            Ignored (kept for API compatibility).  Only relevant on the
+            JAX path.
         n_probes : int, default 5
             Number of Lanczos probe vectors for stochastic log|P|
             estimation.  Only used on the JAX path.
@@ -236,23 +253,23 @@ class SEMLogit(SpatialModel):
         # Build priors from the typed priors object
         priors_obj = resolve_priors(
             self.priors if isinstance(self.priors, dict) else None,
-            SEMLogitPriors,
+            SARLogitPriors,
         )
-        if isinstance(self.priors, SEMLogitPriors):
+        if isinstance(self.priors, SARLogitPriors):
             priors_obj = self.priors
 
-        priors = SEMLogitGibbsPriors(
+        priors = LogitGibbsPriors(
             beta_mu=priors_obj.beta_mu,
             beta_sigma=priors_obj.beta_sigma,
-            lam_lower=self._logdet_bounds.rho_min,
-            lam_upper=self._logdet_bounds.rho_max,
+            rho_lower=self._logdet_bounds.rho_min,
+            rho_upper=self._logdet_bounds.rho_max,
         )
 
         # Build cache
         XtX = X.T @ X
 
         # Precompute matrix pieces for the precision expansion:
-        # P = I + diag(ω) - λ*(W+W^T) + λ²*W^T W  (σ² = 1)
+        # P = I + diag(ω) - ρ*(W+W^T) + ρ²*W^T W  (σ² = 1)
         W_sym = W_sparse + W_sparse.T
         WtW = W_sparse.T @ W_sparse
 
@@ -275,23 +292,24 @@ class SEMLogit(SpatialModel):
         logdet_jax = _jax_parts["logdet_jax"]
         sparsax_pattern = _jax_parts["sparsax_pattern"]
 
-        cache = SEMLogitGibbsCache(
+        cache = LogitGibbsCache(
             W_sparse=W_sparse,
             XtX=XtX,
             logdet_fn=self._logdet_fn,
-            lam_lower=priors.lam_lower,
-            lam_upper=priors.lam_upper,
+            rho_lower=priors.rho_lower,
+            rho_upper=priors.rho_upper,
             cholmod_factor=cholmod_factor,
             W_sym=W_sym,
             WtW=WtW,
+            WtX=np.asarray(W_sparse.T @ X, dtype=np.float64),
             solve_method=solve_method,
             logdet_P_method=logdet_P_method,
             sample_method=sample_method,
             W_sym_dense=W_sym_dense,
             WtW_dense=WtW_dense,
             logdet_jax=logdet_jax,
-            lam_adaptive_width=True,
-            lam_slice_width_state=SliceWidthState(w=0.2),
+            rho_adaptive_width=True,
+            rho_slice_width_state=SliceWidthState(w=0.2),
         )
 
         # Derive per-chain seeds
@@ -305,19 +323,17 @@ class SEMLogit(SpatialModel):
         # Define the per-chain function
         _use_jax_full = sample_method in ("jax_dense", "cholmod_jax")
 
-        # JAX dense path: run all chains together via jax.vmap so the
-        # Gibbs step JITs once and every chain executes inside one
-        # fused XLA program.
         if _use_jax_full:
             if return_eta:
                 raise NotImplementedError(
                     "return_eta=True is not supported with gibbs_backend='jax'. "
-                    "Use gibbs_backend='numpy' if you need the full latent field stored."
+                    "Use gibbs_backend='numpy' if you need the full latent field "
+                    "stored."
                 )
             chain_inits = [
                 self._initialize_from_ols(np.random.default_rng(seed)) for seed in seeds
             ]
-            chain_results = run_chains_jax_sem_vectorized(
+            chain_results = run_chains_jax_vectorized(
                 y=y,
                 X=X,
                 W_sparse=W_sparse,
@@ -342,7 +358,7 @@ class SEMLogit(SpatialModel):
                 rng = np.random.default_rng(seed)
                 init = self._initialize_from_ols(rng)
                 progress_chain_id = chain_id if chain_id_kw is None else chain_id_kw
-                return run_chain_sem(
+                return run_chain(
                     y=y,
                     X=X,
                     W_sparse=W_sparse,
@@ -358,8 +374,6 @@ class SEMLogit(SpatialModel):
                     chain_id=progress_chain_id,
                 )
 
-            # Non-JAX paths parallelise across chains when the user
-            # requests multiple workers.
             parallel = n_jobs != 1
             chain_results = run_chains(
                 chain_fn=_run_one_chain,
@@ -370,11 +384,11 @@ class SEMLogit(SpatialModel):
                 parallel=parallel,
                 draws=draws,
                 tune=tune,
-                model_type="sem_logit",
+                model_type="sar_logit_structural",
             )
 
         # Assemble InferenceData
-        param_keys = ["lam"]
+        param_keys = ["rho"]
         if return_eta:
             param_keys.append("eta")
 
@@ -383,10 +397,8 @@ class SEMLogit(SpatialModel):
             arrays = [c[key] for c in chain_results]
             posterior_samples[key] = np.stack(arrays, axis=0)
 
-        # beta has shape (n_keep, k) per chain
         posterior_samples["beta"] = np.stack([c["beta"] for c in chain_results], axis=0)
 
-        # Feature names for coords
         feature_names = list(self._feature_names)
         coords = {
             "coefficient": feature_names,
@@ -398,7 +410,6 @@ class SEMLogit(SpatialModel):
             coords["obs_id"] = list(range(n))
             dims["eta"] = ["obs_id"]
 
-        # Log-likelihood: shape (chains, n_keep, n)
         log_lik = np.stack([c["log_lik"] for c in chain_results], axis=0)
 
         idata = gibbs_to_inference_data(
@@ -413,50 +424,47 @@ class SEMLogit(SpatialModel):
         return idata
 
     def _build_pymc_model(self):
-        """Not supported — SEMLogit uses a Gibbs sampler, not NUTS."""
+        """Not supported — SARLogitStructural uses a Gibbs sampler, not NUTS."""
         raise NotImplementedError(
-            "SEMLogit does not build a PyMC model. "
+            "SARLogitStructural does not build a PyMC model. "
             "Use the fit() method for Gibbs sampling."
         )
 
     def fitted_probabilities(self) -> np.ndarray:
         """Compute fitted probabilities at posterior mean parameters.
 
-        Returns the probability P(y=1) = logit⁻¹(η) where η = Xβ
-        (the SEM spatial error affects the variance of η, not the mean).
-
-        Returns
-        -------
-        probs : ndarray of shape (n,)
-            Fitted probabilities at posterior mean.
+        Returns P(y=1) = logit⁻¹(η) where η = (I − ρW)⁻¹ Xβ at the
+        posterior mean of ρ and β.
         """
         self._require_fit()
+        rho = float(self._posterior_mean("rho"))
         beta = self._posterior_mean("beta")
-        eta = self._X @ beta
-        return 1.0 / (1.0 + np.exp(-eta))
+        A_rho_inv = sp.linalg.spsolve(
+            sp.eye(self._X.shape[0], format="csr") - rho * self._W_sparse,
+            self._X @ beta,
+        )
+        return 1.0 / (1.0 + np.exp(-A_rho_inv))
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean parameters.
-
-        For the logit model, the fitted mean is the fitted probability.
-        """
+        """For the logit model, the fitted mean is the fitted probability."""
         return self.fitted_probabilities()
 
     def _compute_spatial_effects_posterior(
         self,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Compute posterior impacts for SEM-logit.
-
-        For SEM, direct effects equal β and indirect effects are zero.
-        """
+        """Compute posterior impacts on the log-odds scale for each draw."""
         from ...diagnostics.lmtests import _get_posterior_draws
 
         idata = self.inference_data
+        rho_draws = _get_posterior_draws(idata, "rho")
         beta_draws = _get_posterior_draws(idata, "beta")
 
+        mean_diag = self._batch_mean_diag(rho_draws)
+        mean_row_sum = self._batch_mean_row_sum(rho_draws)
+
         ni = self._nonintercept_indices
-        direct_samples = beta_draws[:, ni]
-        total_samples = beta_draws[:, ni]
-        indirect_samples = total_samples - direct_samples  # zeros
+        direct_samples = mean_diag[:, None] * beta_draws[:, ni]
+        total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
+        indirect_samples = total_samples - direct_samples
 
         return direct_samples, indirect_samples, total_samples

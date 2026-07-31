@@ -35,7 +35,6 @@ auto-selected default.
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
@@ -85,7 +84,26 @@ def _recover_symmetrizing_diagonal(W: sp.csr_matrix) -> np.ndarray | None:
     """Recover D such that D^{1/2} W D^{-1/2} is symmetric.
 
     For W = D⁻¹A (row-standardised, A symmetric), D[i]/D[j] = W[j,i]/W[i,j]
-    for each edge (i,j).  We propagate via BFS from node 0.
+    for each edge (i,j), so ``log D`` is a potential on the graph and is
+    recovered by accumulating edge log-ratios along a spanning forest.
+
+    The traversal is a BFS spanning forest from ``scipy.sparse.csgraph``,
+    seeded at the lowest-index node of each connected component, and the
+    accumulation is done by pointer doubling — ``O(log depth)`` vectorised
+    passes rather than a Python loop over edges.
+
+    Accumulating in log space, then centring each component before
+    exponentiating, also extends the range of graphs that can be symmetrised at
+    all: the multiplicative propagation it replaces overflowed once the edge
+    ratios compounded past ``~1e308`` along a path, whereas the same graph is
+    representable here because ``D`` is free up to a per-component scalar.  The
+    sign of each ratio is carried separately as a parity bit, so a
+    sign-inconsistent ``W`` still yields a negative ``D`` and is rejected by the
+    caller rather than silently losing its sign to ``log|·|``.
+
+    Edges whose value is below ``1e-300`` in either direction are excluded from
+    the traversal; a node they leave isolated becomes its own component and so
+    comes back as ``D = 1``.
 
     Returns
     -------
@@ -93,6 +111,8 @@ def _recover_symmetrizing_diagonal(W: sp.csr_matrix) -> np.ndarray | None:
         D (up to scalar multiple), or None if W has asymmetric sparsity
         (directed graph — D-symmetrisation not applicable).
     """
+    from scipy.sparse.csgraph import breadth_first_order, connected_components
+
     n = W.shape[0]
 
     # Check symmetric sparsity pattern without densifying: the boolean
@@ -101,41 +121,95 @@ def _recover_symmetrizing_diagonal(W: sp.csr_matrix) -> np.ndarray | None:
     if (pattern != pattern.T.tocsr()).nnz > 0:
         return None
 
-    # BFS to propagate D[i]/D[j] = W[j,i] / W[i,j], seeded per connected
-    # component so disconnected graphs get a consistent D on every block.
-    D = np.empty(n, dtype=np.float64)
-    D[:] = np.nan
+    if n == 0:
+        return np.ones(0, dtype=np.float64)
 
-    # Build adjacency list for BFS
-    W_coo = W.tocoo()
-    adj: list[list[int]] = [[] for _ in range(n)]
-    for i, j in zip(W_coo.row, W_coo.col):
-        if i != j:
-            adj[i].append(j)
+    # Drop stored zeros so the surviving pattern is exactly the one the check
+    # above proved symmetric.  W and Wᵀ then share an index structure, and
+    # entry k of ``fwd`` is W[i,j] while entry k of ``rev`` is W[j,i].
+    Wc = sp.csr_matrix(W, dtype=np.float64)
+    Wc.sum_duplicates()
+    Wc.eliminate_zeros()
+    Wc.sort_indices()
+    A = Wc
+    B = Wc.T.tocsr()
+    B.sort_indices()
 
-    W_csr = W.tocsr()
-    for seed in range(n):
-        if not np.isnan(D[seed]):
-            continue
-        D[seed] = 1.0
-        queue = deque([seed])
-        while queue:
-            i = queue.popleft()
-            for j in adj[i]:
-                if np.isnan(D[j]):
-                    # D[i] / D[j] = W[j,i] / W[i,j]
-                    wij = W_csr[i, j]
-                    wji = W_csr[j, i]
-                    if abs(wij) < 1e-300 or abs(wji) < 1e-300:
-                        continue
-                    D[j] = D[i] * wij / wji
-                    queue.append(j)
+    rows = np.repeat(np.arange(n, dtype=np.int64), np.diff(A.indptr))
+    cols = A.indices.astype(np.int64)
+    fwd = A.data  # W[i, j]
+    rev = B.data  # W[j, i]
 
-    # Isolated/unreachable-by-value nodes (e.g. zero rows) default to 1
-    if np.any(np.isnan(D)):
-        D[np.isnan(D)] = 1.0
+    # Traversal graph: off-diagonal edges carrying usable values both ways.
+    # The predicate is symmetric in (i, j), so the graph is undirected.
+    usable = (rows != cols) & (np.abs(fwd) >= 1e-300) & (np.abs(rev) >= 1e-300)
+    graph = sp.csr_matrix(
+        (np.ones(int(usable.sum())), (rows[usable], cols[usable])),
+        shape=(n, n),
+    )
 
-    return D
+    # Per-edge log-ratio: D[j] = D[i] · W[i,j] / W[j,i].
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(usable, fwd / np.where(usable, rev, 1.0), 1.0)
+    edge_logabs = np.log(np.abs(ratio))
+    edge_neg = (ratio < 0).astype(np.int8)
+
+    # Flat row-major keys are already sorted (CSR with sorted indices), so a
+    # single searchsorted resolves every (parent, child) lookup at once.
+    keys = rows * n + cols
+
+    n_comp, labels = connected_components(graph, directed=False)
+
+    # BFS spanning forest, seeded at the lowest-index node of each component
+    # (matching the seeding order of the loop this replaces).
+    order = np.argsort(labels, kind="stable")
+    seeds = order[np.searchsorted(labels[order], np.arange(n_comp))]
+
+    parent = np.arange(n, dtype=np.int64)  # roots point at themselves
+    for seed in seeds:
+        nodes, pred = breadth_first_order(
+            graph, int(seed), directed=False, return_predecessors=True
+        )
+        child = nodes[nodes != seed]
+        parent[child] = pred[child]
+
+    # Edge into each node from its BFS parent; roots contribute nothing.
+    is_root = parent == np.arange(n, dtype=np.int64)
+    logabs = np.zeros(n, dtype=np.float64)
+    neg = np.zeros(n, dtype=np.int64)
+    if keys.size:
+        pos = np.searchsorted(keys, parent * n + np.arange(n, dtype=np.int64))
+        pos = np.clip(pos, 0, keys.size - 1)
+        logabs = np.where(is_root, 0.0, edge_logabs[pos])
+        neg = np.where(is_root, 0, edge_neg[pos]).astype(np.int64)
+
+    # Pointer doubling: accumulate the path sum from each node to its root in
+    # O(log depth) passes.  Roots are self-parents, so they are fixed points.
+    anc = parent
+    while True:
+        nxt = anc[anc]
+        if np.array_equal(nxt, anc):
+            break
+        logabs = logabs + logabs[anc]
+        neg = neg + neg[anc]
+        anc = nxt
+
+    # ``D`` is defined only up to a scalar multiple *per connected component*
+    # (every edge of W_sym rescales by the same factor within a component), so
+    # centring each component's log before exponentiating is free and keeps the
+    # representable range centred on 1.  Without it, a graph whose edge ratios
+    # compound in one direction — a long chain, a steep density gradient —
+    # overflows to ``inf`` at one end and underflows to ``0`` at the other, and
+    # both are rejected downstream as a failed symmetrisation.
+    #
+    # Via bincount rather than a mask per component: contiguity weights routinely
+    # have many islands, and ``labels == c`` in a loop is O(n · n_comp).
+    logabs -= (np.bincount(labels, weights=logabs) / np.bincount(labels))[labels]
+
+    # Every node is in some component and every component is traversed from its
+    # seed, so an isolated node is its own component: centring leaves its log at
+    # zero and it comes back as D = 1 without a special case.
+    return np.where(neg % 2 == 0, 1.0, -1.0) * np.exp(logabs)
 
 
 # ---------------------------------------------------------------------------

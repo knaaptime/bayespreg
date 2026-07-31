@@ -9,6 +9,7 @@ import scipy.sparse as sp
 
 from bayespecon import dgp
 from bayespecon.models.cross_section.sar_logit import SARLogit
+from bayespecon.models.cross_section.sar_logit_structural import SARLogitStructural
 from bayespecon.models.cross_section.sem_logit import SEMLogit
 from bayespecon.models.priors import SARLogitPriors, SEMLogitPriors
 from bayespecon.tests.helpers import W_to_graph, make_line_W
@@ -485,8 +486,10 @@ class TestJaxVectorizedFit:
         assert not np.allclose(rho[0], rho[1])
 
     def test_sar_jax_dense_rejects_return_eta(self):
+        # return_eta is a structural-only option (the reduced-form SARLogit has
+        # no latent field); it lives on SARLogitStructural's jax_dense path.
         y, X, W = _binary_data()
-        model = SARLogit(y=y, X=X, W=W)
+        model = SARLogitStructural(y=y, X=X, W=W)
         with pytest.raises(NotImplementedError, match="return_eta"):
             model.fit(
                 draws=4,

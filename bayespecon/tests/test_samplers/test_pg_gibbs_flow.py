@@ -171,7 +171,7 @@ class TestNegativeBinomialFlowGibbs:
         from bayespecon.models.flow._flow import NegBinFlow
 
         data = _make_flow_data()
-        model = NegBinFlow(data["y_vec"], data["G"], data["X"])
+        model = NegBinFlow(data["y_vec"], data["X"], data["G"])
         idata = model.fit(
             draws=20,
             tune=20,
@@ -189,7 +189,7 @@ class TestNegativeBinomialFlowGibbs:
         from bayespecon.models.flow._flow import NegBinFlow
 
         data = _make_flow_data()
-        model = NegBinFlow(data["y_vec"], data["G"], data["X"])
+        model = NegBinFlow(data["y_vec"], data["X"], data["G"])
         draws, chains = 30, 2
         idata = model.fit(
             draws=draws,
@@ -211,7 +211,7 @@ class TestNegativeBinomialFlowGibbs:
         from bayespecon.models.flow._flow import NegBinFlow
 
         data = _make_flow_data()
-        model = NegBinFlow(data["y_vec"], data["G"], data["X"])
+        model = NegBinFlow(data["y_vec"], data["X"], data["G"])
         idata = model.fit(
             draws=30,
             tune=30,
@@ -227,7 +227,7 @@ class TestNegativeBinomialFlowGibbs:
         from bayespecon.models.flow._flow import NegBinFlow
 
         data = _make_flow_data()
-        model = NegBinFlow(data["y_vec"], data["G"], data["X"])
+        model = NegBinFlow(data["y_vec"], data["X"], data["G"])
         idata = model.fit(
             draws=20,
             tune=20,
@@ -249,8 +249,8 @@ class TestNegativeBinomialSARFlowSeparableGibbs:
         data = _make_flow_data()
         model = SARNegBinFlowSeparable(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             logdet_method="eigenvalue",
         )
         idata = model.fit(
@@ -274,8 +274,8 @@ class TestNegativeBinomialSARFlowSeparableGibbs:
         data = _make_flow_data()
         model = SARNegBinFlowSeparable(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             logdet_method="eigenvalue",
         )
         idata = model.fit(
@@ -298,8 +298,8 @@ class TestNegativeBinomialSARFlowSeparableGibbs:
         data = _make_flow_data()
         model = SARNegBinFlowSeparable(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             logdet_method="eigenvalue",
         )
         draws, chains = 30, 2
@@ -326,7 +326,7 @@ class TestNegativeBinomialSARFlowGibbs:
         from bayespecon.models.flow._flow import SARNegBinFlow
 
         data = _make_flow_data()
-        model = SARNegBinFlow(data["y_vec"], data["G"], data["X"])
+        model = SARNegBinFlow(data["y_vec"], data["X"], data["G"])
         idata = model.fit(
             draws=20,
             tune=20,
@@ -341,12 +341,52 @@ class TestNegativeBinomialSARFlowGibbs:
         assert "rho_o" in idata.posterior
         assert "rho_w" in idata.posterior
 
+    def test_gibbs_jax_backend_returns_inference_data(self):
+        """gibbs_backend='jax' (sparsax-sparse chain) returns valid InferenceData."""
+        import importlib.util
+
+        if importlib.util.find_spec("sparsax") is None:
+            pytest.skip("sparsax not installed")
+        from bayespecon.models.flow._flow import SARNegBinFlow
+
+        data = _make_flow_data()
+        model = SARNegBinFlow(data["y_vec"], data["X"], data["G"])
+        idata = model.fit(
+            draws=20,
+            tune=20,
+            chains=2,
+            sampler="gibbs",
+            gibbs_backend="jax",
+            random_seed=42,
+            progressbar=False,
+        )
+        for v in ("beta", "alpha", "rho_d", "rho_o", "rho_w"):
+            assert v in idata.posterior
+            assert np.isfinite(idata.posterior[v].to_numpy()).all()
+        assert "log_likelihood" in idata.groups()
+
+    def test_separable_jax_backend_raises(self):
+        """The separable Kronecker model is NumPy-only; jax must raise clearly."""
+        from bayespecon.models.flow._flow import SARNegBinFlowSeparable
+
+        data = _make_flow_data()
+        model = SARNegBinFlowSeparable(data["y_vec"], data["X"], data["G"])
+        with pytest.raises(ValueError, match="unrestricted"):
+            model.fit(
+                draws=10,
+                tune=10,
+                chains=1,
+                sampler="gibbs",
+                gibbs_backend="jax",
+                progressbar=False,
+            )
+
     def test_gibbs_shapes(self):
         """Gibbs posterior has correct shapes for unrestricted model."""
         from bayespecon.models.flow._flow import SARNegBinFlow
 
         data = _make_flow_data()
-        model = SARNegBinFlow(data["y_vec"], data["G"], data["X"])
+        model = SARNegBinFlow(data["y_vec"], data["X"], data["G"])
         draws, chains = 30, 2
         idata = model.fit(
             draws=draws,
@@ -368,7 +408,7 @@ class TestNegativeBinomialSARFlowGibbs:
         from bayespecon.models.flow._flow import SARNegBinFlow
 
         data = _make_flow_data()
-        model = SARNegBinFlow(data["y_vec"], data["G"], data["X"])
+        model = SARNegBinFlow(data["y_vec"], data["X"], data["G"])
         idata = model.fit(
             draws=30,
             tune=30,

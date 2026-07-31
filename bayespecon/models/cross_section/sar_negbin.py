@@ -51,6 +51,16 @@ import scipy.sparse as sp
 
 from ..._lazy_deps import az, pm
 from ...samplers._utils._slice import SliceWidthState
+from ...samplers.negbin_reduced import (  # noqa: F401 — import side-effect registers the Gibbs entry
+    ReducedGibbsCache,
+    ReducedGibbsPriors,
+    ReducedGibbsState,
+    run_chain,
+)
+from ...samplers.negbin_reduced._core import (
+    _KRYLOV_DEGREE_DEFAULT,
+    _KRYLOV_DMAX_DEFAULT,
+)
 from ..base import SpatialModel
 from ..priors import SARNegBinPriors
 
@@ -141,13 +151,13 @@ class SARNegBin(SpatialModel):
         chains: int = 4,
         random_seed: Optional[int] = None,
         thin: int = 1,
-        n_jobs: int = 1,
+        n_jobs: int = -1,
         progressbar: bool = True,
         backend: str = "numpy",
         init_jitter: float = 0.1,
-        slice_width: float = 0.2,
-        krylov_degree: int = 8,
-        krylov_dmax: float = 0.15,
+        slice_width: float = 0.4,
+        krylov_degree: int = _KRYLOV_DEGREE_DEFAULT,
+        krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
         n_rho_omega_cycles: int = 1,
         timeout: float | None = None,
     ) -> "az.InferenceData":
@@ -200,12 +210,6 @@ class SARNegBin(SpatialModel):
         """
         from ...samplers._utils._idata import gibbs_to_inference_data
         from ...samplers.gaussian._chain_runner import run_chains
-        from ...samplers.negbin_reduced import (
-            ReducedGibbsCache,
-            ReducedGibbsPriors,
-            ReducedGibbsState,
-            run_chain,
-        )
 
         n, k = self._X.shape
 

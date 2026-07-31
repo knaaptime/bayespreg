@@ -41,6 +41,19 @@ from bayespecon._jax_dispatch import ensure_x64
 from .._utils._jax_polyagamma import jax_polyagamma
 from ._core import JAXLogitGibbsState
 
+# On-device Pólya-Gamma for the ω ~ PG(1, η) block.  Prefer pgjax's exact Devroye
+# sampler (no host round-trip, no truncation bias) when installed; else fall back
+# to the on-device but truncated/approximate "exp" method.  h = 1 (Bernoulli).
+try:
+    import pgjax as _pgjax
+
+    def _draw_pg1(h, z, key):
+        return _pgjax.pg_sample(h, z, key)
+except ImportError:
+
+    def _draw_pg1(h, z, key):
+        return jax_polyagamma(h, z, key=key, method="exp")
+
 
 def _check_jax_available() -> None:
     """Raise ImportError if JAX or equinox is not installed."""
@@ -81,7 +94,7 @@ def _make_gibbs_step_with_data(
     priors,
     n_probes,
     lanczos_deg,
-    cholgraph_pattern=None,
+    sparsax_pattern=None,
 ):
     """Build a JIT-compiled Gibbs step with data bound into the closure.
 
@@ -140,7 +153,7 @@ def _make_gibbs_step_with_data(
 
     ensure_x64()
 
-    use_cholgraph = cholgraph_pattern is not None
+    use_sparsax = sparsax_pattern is not None
 
     # Sparse W matvecs — never densify W: W @ x and Wᵀ @ x go through BCOO.
     def W_matvec(x):
@@ -150,8 +163,8 @@ def _make_gibbs_step_with_data(
         return Wt_bcoo @ x
 
     # Dense (W+Wᵀ) and WᵀW are only needed to assemble the dense P in the
-    # no-cholgraph fallback; skip building them on the sparse path.
-    if not use_cholgraph:
+    # no-sparsax fallback; skip building them on the sparse path.
+    if not use_sparsax:
         W_sym = jnp.asarray(W_sym_dense, dtype=jnp.float64)
         WtW = jnp.asarray(WtW_dense, dtype=jnp.float64)
     # Prior hyperparameters
@@ -173,21 +186,21 @@ def _make_gibbs_step_with_data(
     # Precompute W^T X for the β-marginalised density (sparse, O(nnz·k))
     WtX = Wt_bcoo @ X_jax  # (n, k)
 
-    # ── cholgraph setup (optional sparse SPD Cholesky path) ──
-    if use_cholgraph:
-        _Ai = jnp.asarray(cholgraph_pattern["Ai"], dtype=jnp.int32)
-        _Aj = jnp.asarray(cholgraph_pattern["Aj"], dtype=jnp.int32)
-        _W_sym_vals = jnp.asarray(cholgraph_pattern["W_sym_vals"], dtype=jnp.float64)
-        _WtW_vals = jnp.asarray(cholgraph_pattern["WtW_vals"], dtype=jnp.float64)
-        _diag_idx = jnp.asarray(cholgraph_pattern["diag_idx"], dtype=jnp.int32)
-        _nnz = len(cholgraph_pattern["Ai"])
-        _n_static = int(cholgraph_pattern["n"])
+    # ── sparsax setup (optional sparse SPD Cholesky path) ──
+    if use_sparsax:
+        _Ai = jnp.asarray(sparsax_pattern["Ai"], dtype=jnp.int32)
+        _Aj = jnp.asarray(sparsax_pattern["Aj"], dtype=jnp.int32)
+        _W_sym_vals = jnp.asarray(sparsax_pattern["W_sym_vals"], dtype=jnp.float64)
+        _WtW_vals = jnp.asarray(sparsax_pattern["WtW_vals"], dtype=jnp.float64)
+        _diag_idx = jnp.asarray(sparsax_pattern["diag_idx"], dtype=jnp.int32)
+        _nnz = len(sparsax_pattern["Ai"])
+        _n_static = int(sparsax_pattern["n"])
         # Factor-once closures: η-draw and each ρ-density eval do exactly ONE
-        # numeric factorization via cholgraph 0.4 sample_gaussian / factor_solve
+        # numeric factorization via sparsax 0.4 sample_gaussian / factor_solve
         # (0.3 fallback inside).
-        from .._utils._cholgraph_utils import make_cholgraph_ops
+        from .._utils._sparsax_utils import make_sparsax_ops
 
-        _eta_sample, _solve_logdet = make_cholgraph_ops(_Ai, _Aj, _n_static)
+        _eta_sample, _solve_logdet = make_sparsax_ops(_Ai, _Aj, _n_static)
 
         def _assemble_Ax(omega, rho_val):
             """Assemble COO values for P = I + diag(ω) − ρ(W+Wᵀ) + ρ²WᵀW."""
@@ -222,8 +235,8 @@ def _make_gibbs_step_with_data(
 
         key_omega, key_eta, key_beta, key_rho = jax.random.split(key, 4)
 
-        # ── Block 1: ω ~ PG(1, η) — exact Exp method (h = 1) ──
-        omega_new = jax_polyagamma(jnp.ones(n), eta, key=key_omega, method="exp")
+        # ── Block 1: ω ~ PG(1, η) — on-device (pgjax Devroye, else exp) ──
+        omega_new = _draw_pg1(jnp.ones(n), eta, key_omega)
 
         # ── Block 2: η | ω, ρ, β — Cholesky solve (σ² = 1) ──
         # P = I + diag(ω) - ρ(W+W^T) + ρ²W^TW  (no 1/σ² scaling)
@@ -231,8 +244,8 @@ def _make_gibbs_step_with_data(
         # RHS: Xbeta - ρ W'Xbeta + κ  (σ² = 1); W'Xbeta = (WᵀX)β reuses WtX.
         rhs = Xbeta - rho * (WtX @ beta) + kappa
 
-        if use_cholgraph:
-            # Sparse SPD Cholesky via cholgraph — mean + draw ~ N(P⁻¹ rhs, P⁻¹)
+        if use_sparsax:
+            # Sparse SPD Cholesky via sparsax — mean + draw ~ N(P⁻¹ rhs, P⁻¹)
             # from ONE factorization.
             Ax = _assemble_Ax(omega_new, rho)
             z_eta = jax.random.normal(key_eta, shape=(n,), dtype=jnp.float64)
@@ -284,7 +297,7 @@ def _make_gibbs_step_with_data(
             # Multi-RHS: P_η [z | M] = [κ | u]
             rhs_stack = jnp.column_stack([kappa, u])  # (n, k+1)
 
-            if use_cholgraph:
+            if use_sparsax:
                 Ax_r = _assemble_Ax(omega_new, rho_val)
                 # Multi-RHS solve + logdet from one factorization (factor_solve).
                 sol, log_det_P = _solve_logdet(Ax_r, rhs_stack)  # sol: (n, k+1)
@@ -558,7 +571,7 @@ def _make_gibbs_step_with_data_sem(
     priors,
     n_probes,
     lanczos_deg,
-    cholgraph_pattern=None,
+    sparsax_pattern=None,
 ):
     """Build a JIT-compiled SEM-logit Gibbs step with data bound into the closure.
 
@@ -579,7 +592,7 @@ def _make_gibbs_step_with_data_sem(
 
     ensure_x64()
 
-    use_cholgraph = cholgraph_pattern is not None
+    use_sparsax = sparsax_pattern is not None
 
     # Sparse W matvecs — never densify W.  (W+Wᵀ)@x and (WᵀW)@x compose the
     # base W @ x / Wᵀ @ x BCOO matvecs, so no dense W_sym/WtW is materialised.
@@ -596,8 +609,8 @@ def _make_gibbs_step_with_data_sem(
         return Wt_matvec(W_matvec(x))
 
     # Dense (W+Wᵀ) and WᵀW are only needed to assemble the dense P in the
-    # no-cholgraph fallback; skip building them on the sparse path.
-    if not use_cholgraph:
+    # no-sparsax fallback; skip building them on the sparse path.
+    if not use_sparsax:
         W_sym = jnp.asarray(W_sym_dense, dtype=jnp.float64)
         WtW = jnp.asarray(WtW_dense, dtype=jnp.float64)
     beta_mu_jax = jnp.broadcast_to(jnp.asarray(priors.beta_mu, dtype=jnp.float64), (k,))
@@ -612,19 +625,19 @@ def _make_gibbs_step_with_data_sem(
 
     kappa = y_jax - 0.5
 
-    # ── cholgraph setup (optional sparse SPD Cholesky path) ──
-    if use_cholgraph:
-        _Ai = jnp.asarray(cholgraph_pattern["Ai"], dtype=jnp.int32)
-        _Aj = jnp.asarray(cholgraph_pattern["Aj"], dtype=jnp.int32)
-        _W_sym_vals = jnp.asarray(cholgraph_pattern["W_sym_vals"], dtype=jnp.float64)
-        _WtW_vals = jnp.asarray(cholgraph_pattern["WtW_vals"], dtype=jnp.float64)
-        _diag_idx = jnp.asarray(cholgraph_pattern["diag_idx"], dtype=jnp.int32)
-        _nnz = len(cholgraph_pattern["Ai"])
-        _n_static = int(cholgraph_pattern["n"])
-        # Factor-once closures (cholgraph 0.4 sample_gaussian / factor_solve).
-        from .._utils._cholgraph_utils import make_cholgraph_ops
+    # ── sparsax setup (optional sparse SPD Cholesky path) ──
+    if use_sparsax:
+        _Ai = jnp.asarray(sparsax_pattern["Ai"], dtype=jnp.int32)
+        _Aj = jnp.asarray(sparsax_pattern["Aj"], dtype=jnp.int32)
+        _W_sym_vals = jnp.asarray(sparsax_pattern["W_sym_vals"], dtype=jnp.float64)
+        _WtW_vals = jnp.asarray(sparsax_pattern["WtW_vals"], dtype=jnp.float64)
+        _diag_idx = jnp.asarray(sparsax_pattern["diag_idx"], dtype=jnp.int32)
+        _nnz = len(sparsax_pattern["Ai"])
+        _n_static = int(sparsax_pattern["n"])
+        # Factor-once closures (sparsax 0.4 sample_gaussian / factor_solve).
+        from .._utils._sparsax_utils import make_sparsax_ops
 
-        _eta_sample, _solve_logdet = make_cholgraph_ops(_Ai, _Aj, _n_static)
+        _eta_sample, _solve_logdet = make_sparsax_ops(_Ai, _Aj, _n_static)
 
         def _assemble_Ax(omega, lam_val):
             """Assemble COO values for P = I + diag(ω) − λ(W+Wᵀ) + λ²WᵀW."""
@@ -642,8 +655,8 @@ def _make_gibbs_step_with_data_sem(
 
         key_omega, key_eta, key_beta, key_lam = jax.random.split(key, 4)
 
-        # ── Block 1: ω ~ PG(1, η) — exact Exp method (h = 1) ──
-        omega_new = jax_polyagamma(jnp.ones(n), eta, key=key_omega, method="exp")
+        # ── Block 1: ω ~ PG(1, η) — on-device (pgjax Devroye, else exp) ──
+        omega_new = _draw_pg1(jnp.ones(n), eta, key_omega)
 
         # ── Block 2: η | ω, β, λ — SEM-specific rhs ──
         # P = I + diag(ω) - λ(W+W^T) + λ²W^TW
@@ -653,7 +666,7 @@ def _make_gibbs_step_with_data_sem(
         WtWXbeta = WtW_matvec(Xbeta)
         rhs = Xbeta - lam * WsymXbeta + lam**2 * WtWXbeta + kappa
 
-        if use_cholgraph:
+        if use_sparsax:
             # Mean + draw ~ N(P⁻¹ rhs, P⁻¹) from ONE factorization.
             Ax = _assemble_Ax(omega_new, lam)
             z_eta = jax.random.normal(key_eta, shape=(n,), dtype=jnp.float64)
@@ -709,7 +722,7 @@ def _make_gibbs_step_with_data_sem(
             """
             rhs_r = Xbeta_r - lam_val * WsymXbeta_r + lam_val**2 * WtWXbeta_r + kappa
 
-            if use_cholgraph:
+            if use_sparsax:
                 Ax_r = _assemble_Ax(omega_new, lam_val)
                 # Solve + logdet from one factorization (factor_solve).
                 m, log_det_P = _solve_logdet(Ax_r, rhs_r)
@@ -1065,7 +1078,7 @@ def run_chains_jax_vectorized(
     n_probes: int = 5,
     lanczos_deg: int = 15,
     progressbar: bool = True,
-    cholgraph_pattern=None,
+    sparsax_pattern=None,
 ) -> list[dict]:
     """Run multiple SAR-logit Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1130,7 +1143,7 @@ def run_chains_jax_vectorized(
         priors=priors,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
-        cholgraph_pattern=cholgraph_pattern,
+        sparsax_pattern=sparsax_pattern,
     )
 
     init_states = _stack_chain_inits(inits, JAXLogitGibbsState, "rho")
@@ -1150,14 +1163,23 @@ def run_chains_jax_vectorized(
     # because jax.lax.fori_loop requires a concrete length.
     adapt_window = max(50, tune // 10) if tune > 0 else 50
 
+    # One chain per CPU device (pmap) when enough host devices exist — the better
+    # JAX chain-parallelism (measured ~1.5x over vmap here).  It does NOT beat the
+    # NumPy backend for SAR/SEM-logit, though: this sampler is *solve-heavy* (a
+    # spatial solve per slice candidate — KLU for asymmetric W, CHOLMOD for
+    # d-symmetrizable W), and SuiteSparse serializes concurrent solves (it
+    # parallelizes across processes, as NumPy/joblib does, not threads).  pmap's
+    # win over NumPy is specific to arithmetic-heavy samplers whose solve is a
+    # small fraction of the sweep (e.g. the reduced-form SAR-NB).
+    _use_pmap = chains > 1 and jax.local_device_count() >= chains
+
+    def _pv(f):
+        return jax.pmap(f) if _use_pmap else jax.jit(jax.vmap(f))
+
     def _make_warmup_fn(n_iters: int):
-        """Create a JIT-compiled warmup function with baked-in iteration count."""
-        return jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_warmup(
-                    gibbs_step, s_, k_, n_iters, w_
-                )
-            )(s, k, w)
+        """Create a device-parallel warmup function with baked-in iter count."""
+        return _pv(
+            lambda s_, k_, w_: _run_chain_logit_warmup(gibbs_step, s_, k_, n_iters, w_)
         )
 
     # Pre-compile the main warmup function for the standard window size
@@ -1200,12 +1222,10 @@ def run_chains_jax_vectorized(
         # ── Phase 2: post-warmup draws — single scan ──
         draw_keys = jax.random.split(jax.random.fold_in(master_key, 1), chains)
 
-        draws_fn = jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_draws_sar(
-                    gibbs_step, y_jax, s_, k_, draws, w_
-                )
-            )(s, k, w)
+        draws_fn = _pv(
+            lambda s_, k_, w_: _run_chain_logit_draws_sar(
+                gibbs_step, y_jax, s_, k_, draws, w_
+            )
         )
 
         state, keys, rhos, betas, eta_norms, log_liks, accept_rates = draws_fn(
@@ -1257,7 +1277,7 @@ def run_chains_jax_sem_vectorized(
     n_probes: int = 5,
     lanczos_deg: int = 15,
     progressbar: bool = True,
-    cholgraph_pattern=None,
+    sparsax_pattern=None,
 ) -> list[dict]:
     """Run multiple SEM-logit Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1292,7 +1312,7 @@ def run_chains_jax_sem_vectorized(
         priors=priors,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
-        cholgraph_pattern=cholgraph_pattern,
+        sparsax_pattern=sparsax_pattern,
     )
 
     init_states = _stack_chain_inits(inits, JAXSEMLogitGibbsState, "lam")
@@ -1308,14 +1328,23 @@ def run_chains_jax_sem_vectorized(
     slice_width_arr = jnp.full(chains, jnp.float64(0.2))
     adapt_window = max(50, tune // 10) if tune > 0 else 50
 
+    # One chain per CPU device (pmap) when enough host devices exist — the better
+    # JAX chain-parallelism (measured ~1.5x over vmap here).  It does NOT beat the
+    # NumPy backend for SAR/SEM-logit, though: this sampler is *solve-heavy* (a
+    # spatial solve per slice candidate — KLU for asymmetric W, CHOLMOD for
+    # d-symmetrizable W), and SuiteSparse serializes concurrent solves (it
+    # parallelizes across processes, as NumPy/joblib does, not threads).  pmap's
+    # win over NumPy is specific to arithmetic-heavy samplers whose solve is a
+    # small fraction of the sweep (e.g. the reduced-form SAR-NB).
+    _use_pmap = chains > 1 and jax.local_device_count() >= chains
+
+    def _pv(f):
+        return jax.pmap(f) if _use_pmap else jax.jit(jax.vmap(f))
+
     def _make_warmup_fn(n_iters: int):
-        """Create a JIT-compiled warmup function with baked-in iteration count."""
-        return jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_warmup(
-                    gibbs_step, s_, k_, n_iters, w_
-                )
-            )(s, k, w)
+        """Create a device-parallel warmup function with baked-in iter count."""
+        return _pv(
+            lambda s_, k_, w_: _run_chain_logit_warmup(gibbs_step, s_, k_, n_iters, w_)
         )
 
     warmup_fn = _make_warmup_fn(adapt_window)
@@ -1357,12 +1386,10 @@ def run_chains_jax_sem_vectorized(
         # ── Phase 2: post-warmup draws — single scan ──
         draw_keys = jax.random.split(jax.random.fold_in(master_key, 1), chains)
 
-        draws_fn = jax.jit(
-            lambda s, k, w: jax.vmap(
-                lambda s_, k_, w_: _run_chain_logit_draws_sem(
-                    gibbs_step, y_jax, s_, k_, draws, w_
-                )
-            )(s, k, w)
+        draws_fn = _pv(
+            lambda s_, k_, w_: _run_chain_logit_draws_sem(
+                gibbs_step, y_jax, s_, k_, draws, w_
+            )
         )
 
         state, keys, lams, betas, eta_norms, log_liks, accept_rates = draws_fn(

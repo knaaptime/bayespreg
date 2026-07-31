@@ -1,0 +1,308 @@
+r"""JAX reduced-form SAR-logit Pólya–Gamma Gibbs sampler.
+
+Reuses the reduced-form SAR-NB machinery (``..negbin_reduced._jax``): the sparse
+``(I−ρW)⁻¹`` solve (sparsax KLU, never densified), the shift-invert Krylov
+basis, the device-parallel (pmap) runner.  Only the Pólya–Gamma augmentation
+differs — Bernoulli (h = 1, κ = y − ½, working response κ/ω, no α) instead of
+Negative-Binomial.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+from ..negbin_reduced._core import _KRYLOV_DEGREE_DEFAULT, _KRYLOV_DMAX_DEFAULT
+
+
+def _rho_log_density_logit(
+    rho_val,
+    V_stack,
+    rho_basis,
+    omega,
+    y_jax,
+    V0_inv_diag,
+    mu0,
+    intercept_col,
+    krylov_dmax,
+):
+    """β-marginalised log-density of ρ for the reduced-form logit (Krylov-only).
+
+    Identical Gaussian core to the reduced-NB density, with the Bernoulli
+    working response s = κ/ω (κ = y − ½) — no ``log α`` offset — and no
+    ``log|I−ρW|`` term (it cancels when β is marginalised out).  Candidates
+    outside the Krylov radius are rejected (−inf); the bounded ρ step is offset
+    by a wide ``krylov_dmax`` (see the count model for the rationale).
+    """
+    import jax.numpy as jnp
+    from jax.scipy.linalg import solve_triangular
+
+    from ..negbin_reduced._jax import _eval_U_from_basis_jax
+
+    k = V_stack.shape[2]
+    drho = rho_val - rho_basis
+    use_basis = jnp.abs(drho) <= krylov_dmax
+    U = _eval_U_from_basis_jax(V_stack, drho)
+
+    reparam = (intercept_col >= 0) & (jnp.abs(rho_val) > 1e-8)
+    scale = 1.0 - rho_val
+    U_rp = jnp.where(reparam, U.at[:, intercept_col].set(1.0), U)
+    V0_inv_diag_rp = jnp.where(
+        reparam,
+        V0_inv_diag.at[intercept_col].set(V0_inv_diag[intercept_col] * scale * scale),
+        V0_inv_diag,
+    )
+    mu0_rp = jnp.where(
+        reparam, mu0.at[intercept_col].set(mu0[intercept_col] / scale), mu0
+    )
+
+    # Bernoulli working response: κ = y − ½, s = κ/ω (no log-α offset).
+    kappa = y_jax - 0.5
+    s = kappa / omega
+    r = s - U_rp @ mu0_rp
+
+    Uw = U_rp * omega[:, None]
+    M = U_rp.T @ Uw + jnp.diag(V0_inv_diag_rp)
+    v = Uw.T @ r
+    L_M = jnp.linalg.cholesky(M + 1e-10 * jnp.eye(k))
+    w = solve_triangular(L_M, v, lower=True)
+    quad_pen = w @ w
+    rOr = jnp.dot(r, omega * r)
+    log_det_M = 2.0 * jnp.sum(jnp.log(jnp.diag(L_M)))
+
+    result = -0.5 * log_det_M - 0.5 * (rOr - quad_pen)
+    result = jnp.where(reparam, result + jnp.log(scale), result)
+    return jnp.where(use_basis, result, -jnp.inf)  # Krylov-only
+
+
+def _make_reduced_logit_gibbs_step(
+    y_jax,
+    X_jax,
+    sparse_ctx,
+    n,
+    k,
+    priors,
+    *,
+    intercept_col,
+    krylov_degree,
+    krylov_dmax,
+):
+    """Build a JIT-compiled reduced-form SAR-logit Gibbs step (ω → ρ → β)."""
+    import jax
+    import jax.numpy as jnp
+    from jax.scipy.linalg import cho_solve, solve_triangular
+
+    from bayespecon._jax_dispatch import ensure_x64
+
+    from .._utils._jax_polyagamma import jax_polyagamma
+    from .._utils._jax_slice import jax_slice_sample_1d
+    from ..negbin_reduced._jax import (
+        _build_krylov_basis_jax,
+        _eval_U_from_basis_jax,
+        _make_sparse_solvers,
+    )
+
+    # On-device Pólya-Gamma (no host round-trip) when pgjax is installed — it
+    # removes the per-sweep callback tax and lets pmap parallelise the ω-update.
+    # h = 1 (Bernoulli) is exact via pgjax's Devroye sampler.  Falls back to the
+    # exact host callback otherwise.
+    try:
+        import pgjax
+
+        def _draw_pg(hh, zz, kk):
+            return pgjax.pg_sample(hh, zz, kk)
+    except ImportError:
+
+        def _draw_pg(hh, zz, kk):
+            return jax_polyagamma(hh, zz, key=kk, method="callback")
+
+    ensure_x64()
+    _solve, _matvec_W = _make_sparse_solvers(sparse_ctx)
+
+    beta_sigma = priors.beta_sigma
+    if np.isscalar(beta_sigma):
+        V0_inv_diag = jnp.full(k, 1.0 / (float(beta_sigma) ** 2))
+    else:
+        V0_inv_diag = 1.0 / jnp.asarray(beta_sigma, dtype=jnp.float64) ** 2
+    beta_mu = priors.beta_mu
+    mu0 = (
+        jnp.full(k, float(beta_mu))
+        if np.isscalar(beta_mu)
+        else jnp.asarray(beta_mu, dtype=jnp.float64)
+    )
+    rho_lo = jnp.float64(priors.rho_lower)
+    rho_hi = jnp.float64(priors.rho_upper)
+    dmax = jnp.float64(krylov_dmax)
+    _ic = int(intercept_col)
+    _deg = int(krylov_degree)
+
+    @jax.jit
+    def gibbs_step(state, key, slice_width):
+        beta = state["beta"]
+        rho = state["rho"]
+        key_rho, key_beta, key_pg = jax.random.split(key, 3)
+
+        # ── Block 0: ω ~ PG(1, η) ── (Bernoulli augmentation)
+        eta = _solve(rho, X_jax @ beta)
+        z = jnp.clip(eta, -20.0, 20.0)
+        h = jnp.ones_like(z)  # per-device (n,)
+        omega = _draw_pg(h, z, key_pg)
+
+        # ── Block 1: ρ — Krylov-only slice ──
+        V_stack = _build_krylov_basis_jax(
+            lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _deg
+        )
+
+        def _dens(rv):
+            return _rho_log_density_logit(
+                rv, V_stack, rho, omega, y_jax, V0_inv_diag, mu0, _ic, dmax
+            )
+
+        rho_new, _ = jax_slice_sample_1d(
+            _dens, rho, rho_lo, rho_hi, key=key_rho, w=slice_width
+        )
+
+        # ── Block 2: β | ρ, ω, y — conjugate normal ──
+        drho_new = rho_new - rho
+        Xtilde = _eval_U_from_basis_jax(V_stack, drho_new)  # within dmax (Krylov-only)
+
+        reparam_beta = (_ic >= 0) & (jnp.abs(rho_new) > 1e-8)
+        scale_beta = 1.0 - rho_new
+        Xtilde_rp = jnp.where(reparam_beta, Xtilde.at[:, _ic].set(1.0), Xtilde)
+        V0_inv_diag_rp = jnp.where(
+            reparam_beta,
+            V0_inv_diag.at[_ic].set(V0_inv_diag[_ic] * scale_beta * scale_beta),
+            V0_inv_diag,
+        )
+        mu0_rp = jnp.where(reparam_beta, mu0.at[_ic].set(mu0[_ic] / scale_beta), mu0)
+
+        kappa = y_jax - 0.5
+        Xt_omega = Xtilde_rp * omega[:, None]
+        Sigma_beta_inv = Xt_omega.T @ Xtilde_rp + jnp.diag(V0_inv_diag_rp)
+        rhs = Xtilde_rp.T @ kappa + V0_inv_diag_rp * mu0_rp
+
+        L_beta = jnp.linalg.cholesky(Sigma_beta_inv + 1e-10 * jnp.eye(k))
+        m_beta = cho_solve((L_beta, True), rhs)
+        z_beta = jax.random.normal(key_beta, shape=(k,), dtype=jnp.float64)
+        beta_draw = m_beta + solve_triangular(L_beta.T, z_beta, lower=False)
+        beta_new = jnp.where(
+            reparam_beta, beta_draw.at[_ic].set(beta_draw[_ic] * scale_beta), beta_draw
+        )
+
+        eta_new = Xtilde @ beta_new
+        new_state = {"beta": beta_new, "rho": rho_new, "omega": omega}
+        return new_state, eta_new  # η for the on-device Bernoulli log-lik
+
+    return gibbs_step
+
+
+def run_chains_jax_reduced_logit(
+    y,
+    X,
+    W_sparse,
+    priors,
+    inits,
+    draws,
+    tune,
+    *,
+    thin=1,
+    intercept_col=0,
+    krylov_degree=_KRYLOV_DEGREE_DEFAULT,
+    krylov_dmax=_KRYLOV_DMAX_DEFAULT,
+    slice_width=0.4,
+    jax_seeds=None,
+    progressbar=False,
+):
+    """Run the reduced-form SAR-logit PG-Gibbs sampler (device-parallel).
+
+    Returns one dict per chain with keys ``rho``, ``beta``, ``log_lik``.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    from bayespecon._jax_dispatch import ensure_x64
+
+    from ..negbin_reduced._jax import (
+        _build_sparse_ctx,
+        _run_chains_device_parallel,
+    )
+
+    ensure_x64()
+    chains = len(inits)
+    n, k = X.shape
+    y_jax = jnp.asarray(y, dtype=jnp.float64)
+    X_jax = jnp.asarray(X, dtype=jnp.float64)
+    sparse_ctx = _build_sparse_ctx(W_sparse, n)
+
+    import sparsax
+
+    sparsax.set_lu_cache_size(max(32, 6 * chains))
+
+    slice_width_jax = jnp.float64(slice_width)
+    if jax_seeds is None:
+        jax_seeds = list(range(chains))
+
+    gibbs_step = _make_reduced_logit_gibbs_step(
+        y_jax=y_jax,
+        X_jax=X_jax,
+        sparse_ctx=sparse_ctx,
+        n=n,
+        k=k,
+        priors=priors,
+        intercept_col=intercept_col,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
+    )
+
+    state0 = {
+        "beta": jnp.asarray(np.stack([i.beta for i in inits]), dtype=jnp.float64),
+        "rho": jnp.asarray([float(i.rho) for i in inits], dtype=jnp.float64),
+        "omega": jnp.asarray(np.stack([i.omega for i in inits]), dtype=jnp.float64),
+    }
+    warm_keys = jnp.stack([jax.random.PRNGKey(int(s)) for s in jax_seeds])
+    draw_keys = jnp.stack(
+        [jax.random.fold_in(jax.random.PRNGKey(int(s)), 1) for s in jax_seeds]
+    )
+
+    def _warm_one(s, key):
+        def body(_, carry):
+            st, kk = carry
+            kk, sk = jax.random.split(kk)
+            st, _ = gibbs_step(st, sk, slice_width_jax)
+            return (st, kk)
+
+        st, _ = jax.lax.fori_loop(0, tune, body, (s, key))
+        return st
+
+    def _draw_one(s, key):
+        def body(carry, _):
+            st, kk = carry
+            kk, sk = jax.random.split(kk)
+            st, eta = gibbs_step(st, sk, slice_width_jax)
+            return (st, kk), (st["rho"], st["beta"], eta)
+
+        _, traces = jax.lax.scan(body, (s, key), None, length=draws)
+        return traces
+
+    rho_all, beta_all, eta_all = _run_chains_device_parallel(
+        _warm_one, _draw_one, state0, warm_keys, draw_keys, chains, tune
+    )
+    rho_all = np.asarray(rho_all)
+    beta_all = np.asarray(beta_all)
+    eta_all = np.asarray(eta_all)
+
+    # Pointwise Bernoulli-logit log-likelihood from the fitted η (no post-hoc solves).
+    sl = slice(None, None, thin) if thin > 1 else slice(None)
+    y_np = np.asarray(y, dtype=np.float64)
+    results = []
+    for c in range(chains):
+        eta_c = eta_all[c, sl]  # (n_keep, n)
+        # log p(y|η) = yη − softplus(η), softplus stable via logaddexp.
+        log_lik = y_np * eta_c - np.logaddexp(0.0, eta_c)
+        results.append(
+            {
+                "rho": rho_all[c, sl],
+                "beta": beta_all[c, sl],
+                "log_lik": log_lik,
+            }
+        )
+    return results

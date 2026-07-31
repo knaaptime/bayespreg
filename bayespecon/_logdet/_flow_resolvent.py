@@ -137,12 +137,12 @@ class FlowKron:
         The pattern of ``I_N − W_Fᵀ`` is **fixed** regardless of ρ — only the
         numerical values change.  This decomposes the matrix values into:
 
-        * ``rows``, ``cols`` — COO indices (int32, for klujax)
+        * ``rows``, ``cols`` — COO indices (int32, for sparsax)
         * ``const_vals`` — values from the identity block (always 1.0)
         * ``coef_d``, ``coef_o``, ``coef_w`` — per-entry coefficients so that
           ``Ax = const_vals - ρ_d·coef_d - ρ_o·coef_o - ρ_w·coef_w``
 
-        Computed once and cached so that klujax's symbolic analysis
+        Computed once and cached so that sparsax's symbolic analysis
         (``analyze``) can be reused across all ρ evaluations.
         """
         if hasattr(self, "_pattern_cache"):
@@ -213,22 +213,6 @@ class FlowKron:
         self._pattern_cache = (rows, cols, const_vals, coef_d, coef_o, coef_w)
         return self._pattern_cache
 
-    def klujax_symbolic(self):
-        """One-time klujax symbolic analysis for ``(I_N − W_Fᵀ)``.
-
-        Returns ``(Ai, Aj, symbolic)`` cached on the instance.  The sparsity
-        pattern is fixed for all ρ, so ``analyze`` is called once and reused
-        via ``klujax.solve_with_symbol``.
-        """
-        if hasattr(self, "_klujax_cache"):
-            return self._klujax_cache
-        import klujax
-
-        rows, cols, *_ = self._resolvent_T_pattern()
-        symbolic = klujax.analyze(rows, cols, self.N)
-        self._klujax_cache = (rows, cols, symbolic)
-        return self._klujax_cache
-
 
 def flow_logdet_grad(
     W,
@@ -296,9 +280,9 @@ def flow_logdet_grad(
 
     # Solver priority for the numpy path:
     #   1. sksparse KLU / UMFPACK (factorize once, solve P vectors sequentially)
-    #   2. klujax (batched solve, but requires JAX array conversion overhead)
+    #   2. sparsax (batched solve, but requires JAX array conversion overhead)
     #   3. GMRES (iterative fallback)
-    # The JAX-native path (_make_flow_kron_jax) uses klujax directly without
+    # The JAX-native path (_make_flow_kron_jax) uses sparsax directly without
     # numpy conversion; here we prefer sksparse for pure-numpy performance.
     from bayespecon._ops._backend import _select_sparse_backend, _sparse_factor
 
@@ -313,16 +297,22 @@ def flow_logdet_grad(
             acc[1] += xt @ kron.matvec_Wo(z)
             acc[2] += xt @ kron.matvec_Ww(z)
     else:
-        from bayespecon._jax_dispatch import _klujax_available
+        from bayespecon._jax_dispatch import _sparsax_available
 
-        if _klujax_available():
-            import klujax
+        if _sparsax_available():
+            import jax.numpy as jnp
+            import sparsax
 
+            ensure_x64()
             rows, cols, const_vals, coef_d, coef_o, coef_w = kron._resolvent_T_pattern()
-            symbolic = kron.klujax_symbolic()[2]
-            Ax = const_vals - rho_d * coef_d - rho_o * coef_o - rho_w * coef_w
+            Ai = jnp.asarray(np.asarray(rows, dtype=np.int32))
+            Aj = jnp.asarray(np.asarray(cols, dtype=np.int32))
+            Ax = jnp.asarray(
+                const_vals - rho_d * coef_d - rho_o * coef_o - rho_w * coef_w,
+                dtype=jnp.float64,
+            )
             Xt = np.asarray(
-                klujax.solve_with_symbol(rows, cols, Ax, probes, symbolic),
+                sparsax.lu_solve(Ai, Aj, Ax, jnp.asarray(probes, dtype=jnp.float64)),
                 dtype=np.float64,
             )
             for p in range(P):
@@ -465,7 +455,7 @@ def flow_logdet_grad_exact(W, rho_d: float, rho_o: float, rho_w: float) -> np.nd
 
 
 # ---------------------------------------------------------------------------
-# JAX-native resolvent gradient (klujax + equinox, fully jittable)
+# JAX-native resolvent gradient (sparsax + equinox, fully jittable)
 # ---------------------------------------------------------------------------
 
 import jax.numpy as jnp  # noqa: E402 — lazy import for JAX convenience funcs
@@ -474,19 +464,18 @@ import jax.numpy as jnp  # noqa: E402 — lazy import for JAX convenience funcs
 def _make_flow_kron_jax(kron: FlowKron, probes: np.ndarray, n_quad: int = 8):
     r"""Build a JAX-native, JIT-compilable flow logdet value+grad closure.
 
-    Precomputes the fixed klujax symbolic analysis and frozen probes as JAX
+    Precomputes the fixed sparsax symbolic analysis and frozen probes as JAX
     arrays, then returns an ``eqx.filter_jit``-decorated function
 
     ``fn(rho_d, rho_o, rho_w) -> (value, grad3)``
 
     where the value is computed by ray integration (Gauss-Legendre quadrature
     of the gradient along ``0 → ρ``) and the gradient is the Hutchinson
-    resolvent trace — all in JAX, with klujax for the batched sparse solve.
+    resolvent trace — all in JAX, with sparsax for the batched sparse solve.
 
-    The Kronecker matvecs (``W_k @ x``) are done via JAX dense matmul on the
-    ``n × n`` reshape, using the dense ``W`` matrix stored as a JAX array.
-    This is ``O(n²)`` per matvec (vs ``O(n·nnz)`` for the sparse path) but is
-    fully jittable and vmappable — the right trade-off for JAX.
+    The Kronecker matvecs (``W_k @ x``) use sparse ``BCOO`` copies of ``W`` and
+    ``Wᵀ`` on the ``n × n`` reshape (``O(n·nnz)`` per matvec) — ``W`` is never
+    densified — while remaining fully jittable and vmappable.
 
     Parameters
     ----------
@@ -509,18 +498,17 @@ def _make_flow_kron_jax(kron: FlowKron, probes: np.ndarray, n_quad: int = 8):
 
     ensure_x64()
 
-    from bayespecon._jax_dispatch import _klujax_available
+    from bayespecon._jax_dispatch import _sparsax_available
 
-    if not _klujax_available():
+    if not _sparsax_available():
         raise ImportError(
-            "klujax is required for the JAX-native flow resolvent path. "
-            "Install with: pip install klujax"
+            "sparsax is required for the JAX-native flow resolvent path. "
+            "Install with: pip install sparsax"
         )
 
-    import klujax
+    import sparsax
 
     n = kron.n
-    N = kron.N
 
     # --- Precompute static data as JAX arrays ---
     # Sparse W and Wt as BCOO for Kronecker matvecs in JAX (O(n·nnz) per matvec)
@@ -531,7 +519,8 @@ def _make_flow_kron_jax(kron: FlowKron, probes: np.ndarray, n_quad: int = 8):
     W_bcoo = BCOO.from_scipy_sparse(W_coo)
     Wt_bcoo = BCOO.from_scipy_sparse(Wt_coo)
 
-    # klujax symbolic analysis (pattern is fixed for all ρ)
+    # Fixed sparsity pattern for all ρ; sparsax caches the fill-reducing
+    # analysis internally keyed on (Ai, Aj), reused across solves.
     rows, cols, const_vals, coef_d, coef_o, coef_w = kron._resolvent_T_pattern()
     Ai = jnp.asarray(np.asarray(rows, dtype=np.int32))
     Aj = jnp.asarray(np.asarray(cols, dtype=np.int32))
@@ -539,7 +528,6 @@ def _make_flow_kron_jax(kron: FlowKron, probes: np.ndarray, n_quad: int = 8):
     _coef_d = jnp.asarray(coef_d, dtype=jnp.float64)
     _coef_o = jnp.asarray(coef_o, dtype=jnp.float64)
     _coef_w = jnp.asarray(coef_w, dtype=jnp.float64)
-    symbolic = klujax.analyze(Ai, Aj, N)
 
     # Frozen probes as JAX array
     probes_jax = jnp.asarray(probes, dtype=jnp.float64)  # (N, P)
@@ -572,7 +560,7 @@ def _make_flow_kron_jax(kron: FlowKron, probes: np.ndarray, n_quad: int = 8):
         """Hutchinson resolvent gradient at (rd, ro, rw)."""
         Ax = _const_vals - rd * _coef_d - ro * _coef_o - rw * _coef_w
         # Batched solve: all P probes at once → (N, P)
-        Xt = klujax.solve_with_symbol(Ai, Aj, Ax, probes_jax, symbolic)
+        Xt = sparsax.lu_solve(Ai, Aj, Ax, probes_jax)
 
         # Accumulate x̃ᵀ (W_k z) for each probe, each k
         # Using vmap over probes for the contractions
@@ -622,7 +610,7 @@ def _make_flow_kron_jax(kron: FlowKron, probes: np.ndarray, n_quad: int = 8):
 
 
 class FlowKronJax:
-    """JAX-native flow logdet value+grad with klujax solves and JIT compilation.
+    """JAX-native flow logdet value+grad with sparsax solves and JIT compilation.
 
     Wraps :func:`_make_flow_kron_jax` to provide a clean interface matching
     the numpy :class:`FlowKron` but returning JAX arrays.
@@ -671,7 +659,7 @@ def flow_logdet_grad_jax(
     n_probes: int = 48,
     seed: int = 0,
 ) -> np.ndarray:
-    """JAX-native stochastic gradient of ``log|I_N − W_F(ρ)|`` (klujax, jittable).
+    """JAX-native stochastic gradient of ``log|I_N − W_F(ρ)|`` (sparsax, jittable).
 
     Convenience wrapper around :class:`FlowKronJax` for one-off gradient
     evaluation.  For repeated calls (e.g. inside a sampler), construct a
@@ -714,7 +702,7 @@ def flow_logdet_value_and_grad_jax(
     n_quad: int = 8,
     seed: int = 0,
 ) -> tuple[float, np.ndarray]:
-    """JAX-native ``log|I_N − W_F|`` and ``∇_ρ log|I_N − W_F|`` (klujax, jittable).
+    """JAX-native ``log|I_N − W_F|`` and ``∇_ρ log|I_N − W_F|`` (sparsax, jittable).
 
     Convenience wrapper around :class:`FlowKronJax`.
 

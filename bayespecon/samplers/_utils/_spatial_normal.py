@@ -869,8 +869,7 @@ def _check_jax_available() -> None:
 
     if importlib.util.find_spec("jax") is None:
         raise ImportError(
-            "JAX is required for the 'jax_dense' Gibbs method. "
-            "Install with: pip install jax"
+            "JAX is required for gibbs_backend='jax'. Install with: pip install jax"
         )
 
 
@@ -1011,7 +1010,7 @@ def jax_cg_solve(
 
     Uses ``jax.scipy.sparse.linalg.cg`` with a dense matvec
     ``lambda v: P_dense @ v``.  Machine-precision accuracy (1e-16
-    relative error), unlike lineax CG which achieves only ~1e-9.
+    relative error).
 
     Parameters
     ----------
@@ -1034,10 +1033,9 @@ def jax_cg_solve(
 
     Notes
     -----
-    Uses ``jax.scipy.sparse.linalg.cg`` (not lineax) because:
-    - Same speed as lineax CG
-    - Machine-precision accuracy (1e-16 vs 1e-9)
-    - Simpler API (no TaggedLinearOperator needed)
+    Uses ``jax.scipy.sparse.linalg.cg`` (built-in) because:
+    - Machine-precision accuracy (1e-16)
+    - Simple API with no extra optional dependency
 
     Benchmarks (Apple M1, CPU):
         n=500:  scipy=0.56ms, JAX=0.29ms (1.9×)

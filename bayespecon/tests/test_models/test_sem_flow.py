@@ -110,8 +110,8 @@ class TestSemFlowConstruction:
 
         model = SEMFlow(
             self.y_vec,
-            self.G,
             self.X,
+            self.G,
             col_names=self.col_names,
         )
         assert model._n == self.n
@@ -126,8 +126,8 @@ class TestSemFlowConstruction:
 
         model = SEMFlowSeparable(
             self.y_vec,
-            self.G,
             self.X,
+            self.G,
             col_names=self.col_names,
         )
         assert model._n == self.n
@@ -138,8 +138,8 @@ class TestSemFlowConstruction:
 
         model = SEMFlow(
             self.y_vec,
-            self.G,
             self.X,
+            self.G,
             col_names=self.col_names,
         )
         with pytest.raises(NotImplementedError, match="resolvent"):
@@ -150,8 +150,8 @@ class TestSemFlowConstruction:
 
         model = SEMFlowSeparable(
             self.y_vec,
-            self.G,
             self.X,
+            self.G,
             col_names=self.col_names,
         )
         pm_model = model._build_pymc_model()
@@ -188,8 +188,8 @@ class TestSemFlowRecovery:
 
         model = SEMFlow(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         idata = model.fit(
@@ -241,8 +241,8 @@ class TestSemFlowRecovery:
         )
         model = SEMFlowSeparable(
             data["y_vec"],
-            data["G"],
             data["X"],
+            data["G"],
             col_names=data["col_names"],
         )
         idata = model.fit(
