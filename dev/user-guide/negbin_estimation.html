@@ -1725,7 +1725,7 @@ True params: {&#39;rho&#39;: 0.5, &#39;beta&#39;: array([ 1. ,  0.6, -0.3]), &#3
 Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (4 chains in 2 jobs)
 NUTS: [rho, beta, alpha]
-Sampling 4 chains for 1_000 tune and 2_000 draw iterations (4_000 + 8_000 draws total) took 58 seconds.
+Sampling 4 chains for 1_000 tune and 2_000 draw iterations (4_000 + 8_000 draws total) took 53 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">/home/runner/micromamba/envs/test/lib/python3.14/site-packages/rich/live.py:260: UserWarning: install "ipywidgets" 
@@ -1889,13 +1889,13 @@ for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 30s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">395</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 18s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">654</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>PG-Gibbs posterior means:
-  rho   = 0.5232  (true = 0.5)
-  beta  = [ 0.81797058  0.70695357 -0.54220306]  (true = [1.0, 0.6, -0.3])
-  sigma = 0.5927  (true = 0.7071)
-  alpha = 1.3562  (true = 2.0)
+  rho   = 0.5006  (true = 0.5)
+  beta  = [ 0.86491678  0.71614337 -0.55062291]  (true = [1.0, 0.6, -0.3])
+  sigma = 0.5984  (true = 0.7071)
+  alpha = 1.3554  (true = 2.0)
 </code></pre></div>
 </div>
 </div>
@@ -1939,74 +1939,74 @@ for Jupyter support
   <tbody>
     <tr>
       <th>rho</th>
-      <td>0.523</td>
-      <td>0.144</td>
-      <td>0.249</td>
-      <td>0.794</td>
-      <td>0.010</td>
-      <td>0.006</td>
-      <td>203.0</td>
-      <td>309.0</td>
-      <td>1.03</td>
+      <td>0.501</td>
+      <td>0.146</td>
+      <td>0.212</td>
+      <td>0.750</td>
+      <td>0.013</td>
+      <td>0.005</td>
+      <td>132.0</td>
+      <td>414.0</td>
+      <td>1.04</td>
     </tr>
     <tr>
       <th>beta[x0]</th>
-      <td>0.818</td>
-      <td>0.270</td>
-      <td>0.339</td>
-      <td>1.351</td>
-      <td>0.020</td>
+      <td>0.865</td>
+      <td>0.290</td>
+      <td>0.365</td>
+      <td>1.438</td>
+      <td>0.028</td>
       <td>0.013</td>
-      <td>191.0</td>
-      <td>314.0</td>
-      <td>1.03</td>
+      <td>98.0</td>
+      <td>345.0</td>
+      <td>1.05</td>
     </tr>
     <tr>
       <th>beta[x1]</th>
-      <td>0.707</td>
-      <td>0.138</td>
-      <td>0.446</td>
-      <td>0.964</td>
+      <td>0.716</td>
+      <td>0.134</td>
+      <td>0.463</td>
+      <td>0.967</td>
       <td>0.005</td>
       <td>0.002</td>
-      <td>783.0</td>
-      <td>1882.0</td>
+      <td>808.0</td>
+      <td>1676.0</td>
       <td>1.01</td>
     </tr>
     <tr>
       <th>beta[x2]</th>
-      <td>-0.542</td>
-      <td>0.142</td>
-      <td>-0.807</td>
-      <td>-0.278</td>
-      <td>0.005</td>
+      <td>-0.551</td>
+      <td>0.138</td>
+      <td>-0.812</td>
+      <td>-0.296</td>
+      <td>0.004</td>
       <td>0.002</td>
-      <td>841.0</td>
-      <td>2109.0</td>
+      <td>953.0</td>
+      <td>1849.0</td>
       <td>1.00</td>
     </tr>
     <tr>
       <th>sigma</th>
-      <td>0.593</td>
-      <td>0.124</td>
-      <td>0.381</td>
-      <td>0.832</td>
+      <td>0.598</td>
+      <td>0.122</td>
+      <td>0.374</td>
+      <td>0.819</td>
       <td>0.006</td>
-      <td>0.003</td>
-      <td>436.0</td>
-      <td>1120.0</td>
+      <td>0.002</td>
+      <td>444.0</td>
+      <td>909.0</td>
       <td>1.00</td>
     </tr>
     <tr>
       <th>alpha</th>
-      <td>1.356</td>
-      <td>0.350</td>
-      <td>0.757</td>
-      <td>2.005</td>
-      <td>0.004</td>
+      <td>1.355</td>
+      <td>0.361</td>
+      <td>0.740</td>
+      <td>2.055</td>
+      <td>0.005</td>
       <td>0.006</td>
-      <td>7458.0</td>
-      <td>5598.0</td>
+      <td>6974.0</td>
+      <td>4975.0</td>
       <td>1.00</td>
     </tr>
   </tbody>
@@ -2083,16 +2083,16 @@ for Jupyter support
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/bayespecon/samplers/negbin/__init__.py:65: UserWarning: SAR Negative Binomial models require large samples for reliable spatial parameter recovery. With n=100, posterior estimates of ρ and α may be severely attenuated. n ≥ 900 is recommended.
-  return model._fit_gibbs(
-</code></pre></div>
-</div>
 <div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">/home/runner/micromamba/envs/test/lib/python3.14/site-packages/rich/live.py:260: UserWarning: install "ipywidgets" 
 for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 32s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">377</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/bayespecon/samplers/negbin/__init__.py:65: UserWarning: SAR Negative Binomial models require large samples for reliable spatial parameter recovery. With n=100, posterior estimates of ρ and α may be severely attenuated. n ≥ 900 is recommended.
+  return model._fit_gibbs(
+</code></pre></div>
+</div>
+<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 18s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">655</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>JAX PG-Gibbs posterior means:
   rho   = 0.5006  (true = 0.5)
@@ -2133,7 +2133,7 @@ for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 31s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">391</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 25s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">483</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Factorize path: rho = 0.5232, alpha = 1.3562
 </code></pre></div>
@@ -2232,9 +2232,9 @@ for Jupyter support
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Groups: [&#39;posterior&#39;, &#39;log_likelihood&#39;, &#39;observed_data&#39;]
 
-LOO: elpd = 2761.11, SE = 707.63
+LOO: elpd = 2760.26, SE = 707.56
 
-WAIC: elpd = 2774.34, SE = 708.95
+WAIC: elpd = 2774.10, SE = 709.07
 </code></pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/arviz/stats/stats.py:782: UserWarning: Estimated shape parameter of Pareto distribution is greater than 0.70 for one or more samples. You should consider using a more robust model, this is because importance sampling is less likely to work well if the marginal posterior and LOO posterior are very different. This is more likely to happen with a non-robust model and highly influential observations.
@@ -2276,38 +2276,38 @@ See http://arxiv.org/abs/1507.04544 for details
   <tbody>
     <tr>
       <th>rho</th>
-      <td>0.523</td>
-      <td>0.144</td>
-      <td>0.249</td>
-      <td>0.794</td>
-      <td>0.010</td>
-      <td>0.006</td>
-      <td>203.0</td>
-      <td>309.0</td>
-      <td>1.03</td>
+      <td>0.501</td>
+      <td>0.146</td>
+      <td>0.212</td>
+      <td>0.750</td>
+      <td>0.013</td>
+      <td>0.005</td>
+      <td>132.0</td>
+      <td>414.0</td>
+      <td>1.04</td>
     </tr>
     <tr>
       <th>sigma</th>
-      <td>0.593</td>
-      <td>0.124</td>
-      <td>0.381</td>
-      <td>0.832</td>
+      <td>0.598</td>
+      <td>0.122</td>
+      <td>0.374</td>
+      <td>0.819</td>
       <td>0.006</td>
-      <td>0.003</td>
-      <td>436.0</td>
-      <td>1120.0</td>
+      <td>0.002</td>
+      <td>444.0</td>
+      <td>909.0</td>
       <td>1.00</td>
     </tr>
     <tr>
       <th>alpha</th>
-      <td>1.356</td>
-      <td>0.350</td>
-      <td>0.757</td>
-      <td>2.005</td>
-      <td>0.004</td>
+      <td>1.355</td>
+      <td>0.361</td>
+      <td>0.740</td>
+      <td>2.055</td>
+      <td>0.005</td>
       <td>0.006</td>
-      <td>7458.0</td>
-      <td>5598.0</td>
+      <td>6974.0</td>
+      <td>4975.0</td>
       <td>1.00</td>
     </tr>
   </tbody>
@@ -2328,7 +2328,7 @@ See http://arxiv.org/abs/1507.04544 for details
         &lt;Axes: title={&#39;center&#39;: &#39;alpha&#39;}&gt;]], dtype=object)
 </code></pre></div>
 </div>
-<img alt="../_images/f986995343f4d89510afe9962863ba4228dd327969b5244940448b6c949d55e3.png" src="../_images/f986995343f4d89510afe9962863ba4228dd327969b5244940448b6c949d55e3.png" />
+<img alt="../_images/1f5f394d8ba955a766de75c75af442b6905b8fed3cc7e51caaf1160b8da2bd3e.png" src="../_images/1f5f394d8ba955a766de75c75af442b6905b8fed3cc7e51caaf1160b8da2bd3e.png" />
 </div>
 </div>
 <h2 id="overdispersion-parameter-diagnostics">Overdispersion Parameter Diagnostics<a class="headerlink" href="#overdispersion-parameter-diagnostics" title="Link to this heading">¶</a></h2>
@@ -2371,12 +2371,12 @@ See http://arxiv.org/abs/1507.04544 for details
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>alpha posterior: mean = 1.356, median = 1.316, 95% CI = [0.797, 2.146]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>alpha posterior: mean = 1.355, median = 1.308, 95% CI = [0.773, 2.176]
 True alpha = 2.0
 
 Observed: mean(y) = 12.7, var(y) = 409.8
 Variance-mean ratio: 32.37
-NB2 predicted ratio at posterior mean alpha: 1 + mean(y)/alpha = 10.33
+NB2 predicted ratio at posterior mean alpha: 1 + mean(y)/alpha = 10.34
 </code></pre></div>
 </div>
 </div>

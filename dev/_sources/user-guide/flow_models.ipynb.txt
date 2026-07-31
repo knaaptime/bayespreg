@@ -272,8 +272,8 @@
    "source": [
     "sar_flow = SARFlow(\n",
     "    y_vec,\n",
-    "    G,\n",
     "    X,\n",
+    "    G,\n",
     "    col_names=col_names,\n",
     "    restrict_positive=True,  # Dirichlet stability prior,\n",
     ")\n",
@@ -466,8 +466,8 @@
    "source": [
     "sep_flow = SARFlowSeparable(\n",
     "    y_sep,\n",
-    "    G,\n",
     "    X_sep,\n",
+    "    G,\n",
     "    col_names=cn_sep,\n",
     "    # logdet_method=None (auto) selects the separable Kronecker method\n",
     ")\n",
@@ -727,8 +727,8 @@
     "\n",
     "model_asym = SARFlow(\n",
     "    np.log(data_asym[\"y_vec\"]),\n",
-    "    G_asym,\n",
     "    data_asym[\"X\"],\n",
+    "    G_asym,\n",
     "    col_names=data_asym[\"col_names\"],\n",
     ")\n",
     "print(\"symmetric_xo_xd =\", model_asym._symmetric_xo_xd)\n",
@@ -802,7 +802,7 @@
    "source": [
     "from bayespecon.models import OLSFlow\n",
     "\n",
-    "ols_flow = OLSFlow(y_vec, G, X, col_names=col_names)\n",
+    "ols_flow = OLSFlow(y_vec, X, G, col_names=col_names)\n",
     "ols_flow.fit(**SAMPLE_KWARGS_DEMO)\n",
     "ols_flow.spatial_effects(mode=\"combined\").round(4)"
    ]
@@ -902,8 +902,8 @@
     "# Fit unrestricted SARFlow on the same separable data for a fair comparison\n",
     "sar_flow_on_sep = SARFlow(\n",
     "    y_sep,\n",
-    "    G,\n",
     "    X_sep,\n",
+    "    G,\n",
     "    col_names=cn_sep,\n",
     ")\n",
     "idata_sar_on_sep = sar_flow_on_sep.fit(\n",
@@ -977,8 +977,8 @@
     "# Fit with restrict_positive=False to allow negative rho values\n",
     "sar_flow_neg = SARFlow(\n",
     "    y_vec,\n",
-    "    G,\n",
     "    X,\n",
+    "    G,\n",
     "    col_names=col_names,\n",
     "    restrict_positive=False,  # Uniform(-1,1) priors + stability potential\n",
     ")\n",

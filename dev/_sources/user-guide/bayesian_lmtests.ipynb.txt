@@ -924,10 +924,20 @@
     "X_flow = flow_data[\"X\"]\n",
     "G_flow = flow_data[\"G\"]\n",
     "\n",
-    "ols_flow = OLSFlow(y_flow, G_flow, X_flow, col_names=flow_data[\"col_names\"])\n",
+    "ols_flow = OLSFlow(y_flow, X_flow, G_flow, col_names=flow_data[\"col_names\"])\n",
     "ols_flow.fit(draws=600, tune=600, chains=2, random_seed=42, progressbar=False)\n",
     "\n",
     "ols_flow.spatial_diagnostics()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "219f85bd",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "flow_data.keys()"
    ]
   },
   {
@@ -939,7 +949,7 @@
    "source": [
     "# Fit the SAR flow alternative; its diagnostic registry consists of the robust\n",
     "# (Neyman-orthogonal) marginal-extension tests.\n",
-    "sar_flow = SARFlow(y_flow, G_flow, X_flow, col_names=flow_data[\"col_names\"])\n",
+    "sar_flow = SARFlow(y_flow, X_flow, G_flow, col_names=flow_data[\"col_names\"])\n",
     "sar_flow.fit(draws=600, tune=600, chains=2, random_seed=42, progressbar=False)\n",
     "\n",
     "sar_flow.spatial_diagnostics()"

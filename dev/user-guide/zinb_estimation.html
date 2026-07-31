@@ -1535,15 +1535,6 @@ True parameters:
 </code></pre></div>
 </div>
 </div>
-<div class="cell_output docutils container">
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">/home/runner/micromamba/envs/test/lib/python3.14/site-packages/rich/live.py:260: UserWarning: install "ipywidgets" 
-for Jupyter support
-  warnings.warn('install "ipywidgets" for Jupyter support')
-</pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 290s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">41</span> draws/s<span style="font-weight: bold">)</span>
-</pre>
-</div></div>
 </div>
 <h2 id="posterior-summary">3. Posterior Summary<a class="headerlink" href="#posterior-summary" title="Link to this heading">¶</a></h2>
 <p>Compare posterior means to the true parameter values used in the DGP.</p>
@@ -1580,27 +1571,27 @@ for Jupyter support
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>            mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  \
-rho        0.363  0.041   0.290    0.442      0.001    0.000    6039.0   
-lam        0.235  0.116   0.023    0.453      0.002    0.002    3162.0   
-alpha      4.567  0.696   3.126    5.766      0.011    0.012    4462.0   
-beta[x0]   1.062  0.061   0.950    1.176      0.001    0.001    4719.0   
-beta[x1]   0.600  0.018   0.567    0.634      0.000    0.000    3967.0   
-gamma[z0]  0.874  0.075   0.736    1.015      0.003    0.002     614.0   
-gamma[z1]  0.962  0.068   0.836    1.090      0.004    0.002     261.0   
+rho        0.363  0.040   0.285    0.434      0.001    0.000    6177.0   
+lam        0.271  0.115   0.056    0.479      0.002    0.001    3526.0   
+alpha      4.989  0.369   4.349    5.707      0.005    0.004    5015.0   
+beta[x0]   1.064  0.066   0.940    1.186      0.001    0.001    6002.0   
+beta[x1]   0.599  0.017   0.567    0.632      0.000    0.000    5126.0   
+gamma[z0]  0.716  0.122   0.493    0.943      0.002    0.001    3386.0   
+gamma[z1]  0.810  0.062   0.694    0.926      0.001    0.001    2581.0   
 
            ess_tail  r_hat  
-rho          5497.0   1.00  
-lam          4109.0   1.00  
-alpha        4185.0   1.00  
-beta[x0]     5118.0   1.00  
-beta[x1]     5894.0   1.00  
-gamma[z0]    1102.0   1.01  
-gamma[z1]     688.0   1.03  
+rho          5855.0    1.0  
+lam          4959.0    1.0  
+alpha        5378.0    1.0  
+beta[x0]     5819.0    1.0  
+beta[x1]     6155.0    1.0  
+gamma[z0]    5028.0    1.0  
+gamma[z1]    4387.0    1.0  
 
 --- Parameter Recovery ---
-ρ (count SAR):  true=0.40, posterior mean=0.363 ± 0.041
-λ (sel SAR):    true=0.30, posterior mean=0.235 ± 0.116
-α (dispersion): true=5.00, posterior mean=4.567 ± 0.696
+ρ (count SAR):  true=0.40, posterior mean=0.363 ± 0.040
+λ (sel SAR):    true=0.30, posterior mean=0.271 ± 0.115
+α (dispersion): true=5.00, posterior mean=4.989 ± 0.369
 </code></pre></div>
 </div>
 </div>
@@ -1621,15 +1612,15 @@ gamma[z1]     688.0   1.03
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9961/1873529208.py:3: UserWarning: The figure layout has changed to tight
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9445/1873529208.py:3: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
-<img alt="../_images/ce967a24b113472c91b487cbe544f556909494f2739cf3b5d3390ffbe9f57329.png" src="../_images/ce967a24b113472c91b487cbe544f556909494f2739cf3b5d3390ffbe9f57329.png" />
+<img alt="../_images/9e6edd9759bd6972769662f3b55713ff52ab5d06cf2b6d592f6ee6fab549e90f.png" src="../_images/9e6edd9759bd6972769662f3b55713ff52ab5d06cf2b6d592f6ee6fab549e90f.png" />
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>       r_hat  ess_bulk  ess_tail
-rho      1.0    6039.0    5497.0
-lam      1.0    3162.0    4109.0
-alpha    1.0    4462.0    4185.0
+rho      1.0    6177.0    5855.0
+lam      1.0    3526.0    4959.0
+alpha    1.0    5015.0    5378.0
 </code></pre></div>
 </div>
 </div>
@@ -1669,15 +1660,15 @@ alpha    1.0    4462.0    4185.0
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Number of zero observations: 848
 
-Mean P(structural | y=0): 0.858
-Mean P(sampling | y=0):   0.142
+Mean P(structural | y=0): 0.877
+Mean P(sampling | y=0):   0.123
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9961/1143200135.py:19: UserWarning: The figure layout has changed to tight
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9445/1143200135.py:19: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
-<img alt="../_images/c3a4b11a74d8595024609ae66ff86adb51a48d7e54ce46569326c94271b246c4.png" src="../_images/c3a4b11a74d8595024609ae66ff86adb51a48d7e54ce46569326c94271b246c4.png" />
+<img alt="../_images/59e1be92bf8dcda6ffcfa953a0fbca131ca28b2813524e18ecd3731055d93fae.png" src="../_images/59e1be92bf8dcda6ffcfa953a0fbca131ca28b2813524e18ecd3731055d93fae.png" />
 </div>
 </div>
 <h2 id="corridor-activation-probabilities">6. Corridor Activation Probabilities<a class="headerlink" href="#corridor-activation-probabilities" title="Link to this heading">¶</a></h2>
@@ -1709,19 +1700,19 @@ Mean P(sampling | y=0):   0.142
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Mean corridor probability: 0.723
-Min corridor probability:   0.108
-Max corridor probability:   0.990
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Mean corridor probability: 0.703
+Min corridor probability:   0.142
+Max corridor probability:   0.980
 
 True activation rate: 0.704
-Estimated activation rate: 0.723
+Estimated activation rate: 0.703
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9961/1500508181.py:20: UserWarning: The figure layout has changed to tight
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9445/1500508181.py:20: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
-<img alt="../_images/7e8fa969df3280ee8155a16dae4797366765a74b2487ee9d5c63aff110f6a3cb.png" src="../_images/7e8fa969df3280ee8155a16dae4797366765a74b2487ee9d5c63aff110f6a3cb.png" />
+<img alt="../_images/8cd46c1c805ffa58a00b4a7abf0a641c384f421d363dd884f390b23b2969360f.png" src="../_images/8cd46c1c805ffa58a00b4a7abf0a641c384f421d363dd884f390b23b2969360f.png" />
 </div>
 </div>
 <h2 id="fitted-mean-counts">7. Fitted Mean Counts<a class="headerlink" href="#fitted-mean-counts" title="Link to this heading">¶</a></h2>
@@ -1754,15 +1745,15 @@ Estimated activation rate: 0.723
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Mean fitted count: 4.52
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Mean fitted count: 4.40
 Mean observed count: 4.39
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9961/1948847008.py:21: UserWarning: The figure layout has changed to tight
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/tmp/ipykernel_9445/1948847008.py:21: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
-<img alt="../_images/ad7426bb134e21c7b0ead12d2c3d2f9743048cb047f1695a0807d2cc7771a8e1.png" src="../_images/ad7426bb134e21c7b0ead12d2c3d2f9743048cb047f1695a0807d2cc7771a8e1.png" />
+<img alt="../_images/5b5bd8f1e8a4ba732a9e7f1370e5707b69d4c2521e0c3e36ce430cb73e56129f.png" src="../_images/5b5bd8f1e8a4ba732a9e7f1370e5707b69d4c2521e0c3e36ce430cb73e56129f.png" />
 </div>
 </div>
 <h2 id="posterior-distributions-of-key-parameters">8. Posterior Distributions of Key Parameters<a class="headerlink" href="#posterior-distributions-of-key-parameters" title="Link to this heading">¶</a></h2>
@@ -1801,11 +1792,11 @@ Mean observed count: 4.39
 </div>
 <div class="cell_output docutils container">
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>findfont: Failed to find font weight semibold, now using 700.
-/tmp/ipykernel_9961/297505054.py:22: UserWarning: The figure layout has changed to tight
+/tmp/ipykernel_9445/297505054.py:22: UserWarning: The figure layout has changed to tight
   plt.tight_layout()
 </code></pre></div>
 </div>
-<img alt="../_images/4e912f54404e33df52229a8c9653ed3b0e54f0fd1701d9441f4180743aa6afa5.png" src="../_images/4e912f54404e33df52229a8c9653ed3b0e54f0fd1701d9441f4180743aa6afa5.png" />
+<img alt="../_images/c5f3fc40258beb154167dab785519cd82ea69e70438c89b05c06a7235a45c77a.png" src="../_images/c5f3fc40258beb154167dab785519cd82ea69e70438c89b05c06a7235a45c77a.png" />
 </div>
 </div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Link to this heading">¶</a></h2>
