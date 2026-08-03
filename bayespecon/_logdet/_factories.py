@@ -41,16 +41,56 @@ from ._slq import (
 # ---------------------------------------------------------------------------
 
 
-def _cheb_stochastic_coeffs(W_sparse, rho_min, rho_max):
-    """Stochastic-Chebyshev logdet → Chebyshev-in-ρ coefficients (order 20).
+def _cheb_precompute_for(method: str):
+    """Return the Chebyshev precompute matching ``method``'s factorizer.
 
-    Precomputes stochastic moments, evaluates the logdet at order-20
-    Chebyshev nodes in ``[rho_min, rho_max]``, then fits a Chebyshev-in-ρ
-    polynomial via DCT-I so it can be evaluated with an O(m) Clenshaw
-    recurrence.
+    ``cheb_cholesky`` and ``lu_cheb`` differ only in how the exact node values
+    are obtained — sparse Cholesky versus sparse LU — and produce the same
+    :class:`~._chol_cheb.CholChebPrecompute`, so every downstream evaluation,
+    gradient and refit path is shared.
     """
-    pre = cheb_stochastic_logdet_precompute(W_sparse)
-    rho_nodes, _ = chebyshev_gauss_nodes(20, rho_min, rho_max)
+    from ._chol_cheb import chol_cheb_logdet_precompute, lu_cheb_logdet_precompute
+
+    return (
+        lu_cheb_logdet_precompute
+        if method == "lu_cheb"
+        else chol_cheb_logdet_precompute
+    )
+
+
+def _cheb_stochastic_coeffs(W_sparse, rho_min, rho_max, n_probes: int = 50):
+    """Stochastic-Chebyshev logdet → Chebyshev-in-ρ coefficients.
+
+    Precomputes stochastic moments, evaluates the logdet at Chebyshev nodes in
+    ``[rho_min, rho_max]``, then fits a Chebyshev-in-ρ polynomial via DCT-I so
+    it can be evaluated with an O(m) Clenshaw recurrence.
+
+    The ρ interval is forwarded so the matrix-argument order is sized against
+    the probe-noise floor rather than pinned at the module default, which is
+    what lets the exact low-order moments (``n_exact``) pay off near ρ = 1.
+
+    The refit degree comes from the same interval rule the deterministic
+    Chebyshev interpolant uses (:func:`~._chebyshev.cheb_order_for_tolerance`),
+    not a fixed 20.  A fixed 20 was harmless while the estimator itself carried
+    an error of tens; once the exact moments cut that error several-fold, the
+    refit's own interpolation error became the binding one, inflating the max
+    error by up to 2x at ``n = 59,536`` over ``[-0.99, 0.99]``.  Sizing it from
+    the interval keeps the refit off the critical path at every width — and on
+    the narrow post-warmup intervals of :mod:`._refit` it asks for *fewer* nodes
+    than 20, so per-ρ evaluation there gets cheaper, not dearer.  The nodes cost
+    one O(p²) scalar evaluation each against a precompute measured in hundreds
+    of milliseconds, so the extra width is free at setup.
+    """
+    from ._chebyshev import cheb_order_for_tolerance
+
+    pre = cheb_stochastic_logdet_precompute(
+        W_sparse, order=None, rho_min=rho_min, rho_max=rho_max, n_probes=n_probes
+    )
+    # An explicit cap keeps BAYESPECON_LOGDET_NODE_CAP out of this path: that
+    # knob matches *factorization* budgets across interpolants, and the refit
+    # performs none — its nodes are scalar evaluations of an existing surrogate.
+    degree = cheb_order_for_tolerance(rho_min, rho_max, pre.n, floor=8, cap=200)
+    rho_nodes, _ = chebyshev_gauss_nodes(degree, rho_min, rho_max)
     logdet_vals = np.array(
         [cheb_stochastic_logdet_eval(pre, float(r)) for r in rho_nodes]
     )
@@ -93,12 +133,10 @@ def make_logdet_numpy_fn(
         coeffs, rmin_cb, rmax_cb = _cheb_stochastic_coeffs(W_sparse, rho_min, rho_max)
         return lambda r: _clenshaw_scalar(coeffs, r, rmin_cb, rmax_cb, T)
 
-    if method == "cheb_cholesky":
-        from ._chol_cheb import chol_cheb_logdet_precompute
-
+    if method in ("cheb_cholesky", "lu_cheb"):
         # Cholesky-Chebyshev: exact logdet via sparse Cholesky at Chebyshev nodes.
         # No stochastic noise, no O(n³) eigendecomposition.  SPD for |ρ| < 1.
-        pre = chol_cheb_logdet_precompute(
+        pre = _cheb_precompute_for(method)(
             W_sparse, order=None, rho_min=rho_min, rho_max=rho_max
         )
         coeffs = pre.coeffs
@@ -203,10 +241,8 @@ def make_logdet_grad_numpy_fn(
             logdet_grad_chebyshev(float(r), coeffs, rmin_cb, rmax_cb)
         )
 
-    if method == "cheb_cholesky":
-        from ._chol_cheb import chol_cheb_logdet_precompute
-
-        pre = chol_cheb_logdet_precompute(
+    if method in ("cheb_cholesky", "lu_cheb"):
+        pre = _cheb_precompute_for(method)(
             W_sparse, order=None, rho_min=rho_min, rho_max=rho_max
         )
         coeffs, rmin_cb, rmax_cb = pre.coeffs, pre.rho_min, pre.rho_max
@@ -290,7 +326,7 @@ def make_logdet_grad_numpy_vec_fn(
 
     # Chebyshev-family (chebyshev / cheb_cholesky / cheb_stochastic / slq) share
     # the Clenshaw-derivative, which vectorises naturally over ρ arrays.
-    if method in ("chebyshev", "cheb_stochastic", "cheb_cholesky", "slq"):
+    if method in ("chebyshev", "cheb_stochastic", "cheb_cholesky", "lu_cheb", "slq"):
         if method == "chebyshev":
             out = chebyshev(W_sparse, order=20, rmin=rho_min, rmax=rho_max, eigs=eigs)
             coeffs, rmin_cb, rmax_cb = out["coeffs"], out["rmin"], out["rmax"]
@@ -298,10 +334,8 @@ def make_logdet_grad_numpy_vec_fn(
             coeffs, rmin_cb, rmax_cb = _cheb_stochastic_coeffs(
                 W_sparse, rho_min, rho_max
             )
-        elif method == "cheb_cholesky":
-            from ._chol_cheb import chol_cheb_logdet_precompute
-
-            pre = chol_cheb_logdet_precompute(
+        elif method in ("cheb_cholesky", "lu_cheb"):
+            pre = _cheb_precompute_for(method)(
                 W_sparse, order=None, rho_min=rho_min, rho_max=rho_max
             )
             coeffs, rmin_cb, rmax_cb = pre.coeffs, pre.rho_min, pre.rho_max
@@ -408,11 +442,11 @@ def make_logdet_numpy_vec_fn(
         coeffs, rmin_cb, rmax_cb = _cheb_stochastic_coeffs(W_sparse, rho_min, rho_max)
         return lambda rho_arr: _clenshaw_vec(coeffs, rho_arr, rmin_cb, rmax_cb, T)
 
-    if method == "cheb_cholesky":
-        from ._chol_cheb import chol_cheb_logdet_eval_vec, chol_cheb_logdet_precompute
+    if method in ("cheb_cholesky", "lu_cheb"):
+        from ._chol_cheb import chol_cheb_logdet_eval_vec
 
         # Cholesky-Chebyshev: exact logdet via sparse Cholesky at Chebyshev nodes.
-        pre = chol_cheb_logdet_precompute(
+        pre = _cheb_precompute_for(method)(
             W_sparse, order=None, rho_min=rho_min, rho_max=rho_max
         )
 
@@ -491,11 +525,9 @@ def make_logdet_fn(
                 return val if T == 1 else T * val
 
             return _cheb_stoch_sparse
-        if method == "cheb_cholesky":
-            from ._chol_cheb import chol_cheb_logdet_precompute
-
+        if method in ("cheb_cholesky", "lu_cheb"):
             # Cholesky-Chebyshev: exact logdet via sparse Cholesky at Chebyshev nodes.
-            pre = chol_cheb_logdet_precompute(
+            pre = _cheb_precompute_for(method)(
                 W_sparse, order=None, rho_min=rho_min, rho_max=rho_max
             )
             coeffs_np = pre.coeffs.astype(np.float64)
@@ -595,11 +627,9 @@ def make_logdet_fn(
             return val if T == 1 else T * val
 
         return _cheb_stoch_dense
-    if method == "cheb_cholesky":
-        from ._chol_cheb import chol_cheb_logdet_precompute
-
+    if method in ("cheb_cholesky", "lu_cheb"):
         # Cholesky-Chebyshev: exact logdet via sparse Cholesky at Chebyshev nodes.
-        pre = chol_cheb_logdet_precompute(
+        pre = _cheb_precompute_for(method)(
             sp.csr_matrix(W_dense), order=None, rho_min=rho_min, rho_max=rho_max
         )
         coeffs_np = pre.coeffs.astype(np.float64)

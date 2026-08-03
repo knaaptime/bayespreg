@@ -23,14 +23,24 @@ giving 3× more spectral information per Krylov step than the Barry-Pace Taylor
 series (degree k from k trace moments).
 
 The ``n``-scaling (rather than the sample ``‖z‖²``) removes the χ² radial
-fluctuation and makes a constant integrand exact per probe.  Note, however,
-that SLQ estimates the *full* log-integral stochastically and — unlike
-``cheb_stochastic``, which subtracts the exact ``μ₀ = n`` and ``μ₁ = tr(W̃)``
-moments as control variates — carries the full ``‖log(I-ρW_sym)‖_F`` Hutchinson
-variance.  On flat spatial spectra this makes SLQ *less* accurate than
-``cheb_stochastic`` at equal probe counts; the limitation is inherent to the
-per-probe quadrature, not the weight normalization.  SLQ is opt-in, not the
-auto-selected default.
+fluctuation and makes a constant integrand exact per probe.
+
+**Exact low-order moments** (``n_exact``, default 4).  The Gauss rule implies
+its own estimates of the power traces, ``m̂_j = Σᵢ wᵢ θᵢʲ``, and
+``log(1-ρx) = -Σⱼ ρʲxʲ/j`` means those estimates *are* the low-order terms of
+the SLQ answer.  Replacing them with the exact ``tr(Wʲ)`` removes their sampling
+error at no extra matrix-vector products — the same free axis ``cheb_stochastic``
+exploits.  Measured on rook/knn at n = 2,500, K = 50: RMSE falls ~700× at
+ρ = 0.5, ~12× at ρ = 0.9 and ~4× at ρ = 0.99.
+
+An earlier version of this docstring said SLQ "carries the full
+``‖log(I-ρW_sym)‖_F`` Hutchinson variance" and was therefore inherently less
+accurate than ``cheb_stochastic`` on flat spatial spectra.  That was a statement
+about the *uncorrected* estimator: with both given the same control-variate
+depth and the same matvec budget the two are indistinguishable on this problem
+class, trading places across budgets with overlapping seed spreads.  SLQ remains
+opt-in rather than the auto-selected default, but on cost grounds rather than
+accuracy ones.
 """
 
 from __future__ import annotations
@@ -59,12 +69,34 @@ class SLQPrecompute:
         Matrix dimension.
     method : str
         "lanczos" (D-symmetrised) or "arnoldi" (non-symmetric fallback).
+    cv_coeffs : np.ndarray or None
+        Control-variate corrections ``m̂_j - tr(Wʲ)`` for ``j = 1 .. n_exact``,
+        or ``None`` when the correction is disabled.  See
+        :func:`slq_logdet_precompute` for what these are and why they are free.
     """
 
     nodes: np.ndarray
     weights: np.ndarray
     n: int
     method: str = "lanczos"
+    cv_coeffs: np.ndarray | None = None
+
+    @property
+    def n_exact(self) -> int:
+        """Depth of the exact-moment correction (0 when disabled)."""
+        return 0 if self.cv_coeffs is None else len(self.cv_coeffs)
+
+    def _cv_correction(self, rho):
+        """``Σ_j (ρʲ/j)(m̂_j − m_j)`` — the control-variate term at ``rho``.
+
+        Broadcasts over an array of ``rho``.  Zero when the correction is off.
+        """
+        if self.cv_coeffs is None:
+            return 0.0
+        rho = np.asarray(rho, dtype=np.float64)
+        j = np.arange(1, len(self.cv_coeffs) + 1, dtype=np.float64)
+        powers = rho[..., None] ** j / j
+        return np.sum(powers * self.cv_coeffs, axis=-1)
 
     @property
     def n_probes(self) -> int:
@@ -386,17 +418,39 @@ def _arnoldi_iteration(
 # ---------------------------------------------------------------------------
 
 
+#: Default depth of the exact-moment control variate, matching
+#: ``cheb_stochastic``'s ``DEFAULT_N_EXACT`` so the two estimators are
+#: comparable out of the box.  Measured gains on rook/knn at n = 2,500,
+#: K = 50: RMSE at ρ = 0.5 falls ~700×, at ρ = 0.9 ~12×, at ρ = 0.99 ~4×.
+DEFAULT_SLQ_N_EXACT = 4
+
+
+#: Default Lanczos depth.  Lowered from 30 after measuring that the Gauss rule
+#: converges well before it: at a fixed matvec budget, spending the saved steps
+#: on probes instead is 1.3-1.6x more accurate on rook and knn at
+#: n ∈ {2,500, 10,000}, because what remains after convergence is Monte Carlo
+#: variance rather than quadrature error.  15 rather than 12 because the
+#: convergence point is problem-dependent: 12 wins at n = 2,500 but buys nothing
+#: at n = 10,000, and below 10 the rule is clearly unconverged.
+DEFAULT_LANCZOS_DEG = 15
+
+
 def slq_logdet_precompute(
     W,
     n_probes: int = 50,
-    lanczos_deg: int = 30,
+    lanczos_deg: int = DEFAULT_LANCZOS_DEG,
     rng: np.random.Generator | None = None,
+    n_exact: int | None = None,
 ) -> SLQPrecompute:
     """Precompute SLQ quadrature rules for log|I - ρW|.
 
     For undirected-graph W (symmetric sparsity), uses D-symmetrised Lanczos
     with real eigenvalues and valid Gauss quadrature.  For directed W,
     falls back to Arnoldi with complex Ritz values.
+
+    ``n_exact`` sets the depth of the exact-moment control variate described in
+    :func:`_slq_cv_coeffs`, which costs no matrix-vector products.  Pass ``0``
+    to disable it and recover the uncorrected estimator.
 
     Parameters
     ----------
@@ -411,6 +465,21 @@ def slq_logdet_precompute(
     """
     if rng is None:
         rng = np.random.default_rng(0)
+
+    # Reuse ``cheb_stochastic``'s mean-degree guard: depths above 2 need
+    # sparse-sparse products whose fill-in grows with degree, and on dense
+    # graphs those can dominate a matvec-only precompute.
+    if n_exact == 0:
+        depth = 0
+    else:
+        from ._cheb_stochastic import _resolve_exact_depth
+
+        _W_guard = sp.csr_matrix(W) if not sp.issparse(W) else sp.csr_matrix(W)
+        depth = _resolve_exact_depth(
+            _W_guard,
+            DEFAULT_SLQ_N_EXACT if n_exact is None else int(n_exact),
+            16.0,
+        )
 
     if sp.issparse(W) or hasattr(W, "format"):
         W_sp = sp.csr_matrix(W)
@@ -442,7 +511,13 @@ def slq_logdet_precompute(
         all_nodes, all_weights, _ = _batched_lanczos(
             batch_matvec, n, lanczos_deg, Z, n_probes
         )
-        return SLQPrecompute(nodes=all_nodes, weights=all_weights, n=n, method=method)
+        return SLQPrecompute(
+            nodes=all_nodes,
+            weights=all_weights,
+            n=n,
+            method=method,
+            cv_coeffs=_slq_cv_coeffs(W_sp, all_nodes, all_weights, depth),
+        )
     else:
         # Arnoldi fallback (complex Ritz values) — per-probe loop.  Unit
         # starts scaled by n (matching the Lanczos convention); the bilinear
@@ -459,7 +534,52 @@ def slq_logdet_precompute(
             all_nodes[j, :m] = theta
             all_weights[j, :m] = n * gamma
 
-        return SLQPrecompute(nodes=all_nodes, weights=all_weights, n=n, method=method)
+        return SLQPrecompute(
+            nodes=all_nodes,
+            weights=all_weights,
+            n=n,
+            method=method,
+            cv_coeffs=_slq_cv_coeffs(W_sp, all_nodes, all_weights, depth),
+        )
+
+
+def _slq_cv_coeffs(
+    W_sp: sp.csr_matrix,
+    nodes: np.ndarray,
+    weights: np.ndarray,
+    n_exact: int,
+) -> np.ndarray | None:
+    """Control-variate corrections ``m̂_j - tr(Wʲ)`` for ``j = 1 .. n_exact``.
+
+    The quadrature rule this precompute already holds implies its own estimates
+    of the power traces,
+
+        m̂_j = (1/K) Σ_probes Σ_i w_i θ_iʲ,
+
+    and ``log(1 - ρx) = -Σ_j ρʲ xʲ / j`` means the low-order terms of the SLQ
+    estimate are exactly ``-Σ_j (ρʲ/j) m̂_j``.  Since ``tr(Wʲ)`` is available
+    exactly and probe-free for small ``j`` (:func:`~._cheb_stochastic._power_traces`,
+    at most two sparse-sparse products), replacing the estimated moments with the
+    exact ones removes their sampling error at **no additional matrix-vector
+    products** — the same axis on which ``cheb_stochastic``'s ``n_exact`` is free.
+
+    This is a control variate on the existing Gauss rule, not eigenpair
+    deflation: it needs no eigenvectors and costs no extra Krylov work.
+
+    Returns ``None`` when ``n_exact`` is zero or the moments cannot be formed.
+    """
+    if n_exact <= 0:
+        return None
+    from ._cheb_stochastic import _power_traces
+
+    exact = _power_traces(W_sp, n_exact)
+    est = np.array(
+        [
+            float(np.real(np.mean(np.sum(weights * nodes**j, axis=1))))
+            for j in range(n_exact + 1)
+        ]
+    )
+    return est[1:] - exact[1 : n_exact + 1]
 
 
 def _slq_log_vals(vals: np.ndarray, method: str) -> np.ndarray:
@@ -479,7 +599,8 @@ def _slq_log_vals(vals: np.ndarray, method: str) -> np.ndarray:
 def slq_logdet_eval(pre: SLQPrecompute, rho: float) -> float:
     """Evaluate log|I - ρW| from precomputed SLQ quadrature rules."""
     log_vals = _slq_log_vals(1.0 - rho * pre.nodes, pre.method)
-    return float(np.real(np.sum(pre.weights * log_vals)) / pre.n_probes)
+    base = float(np.real(np.sum(pre.weights * log_vals)) / pre.n_probes)
+    return base + float(pre._cv_correction(rho))
 
 
 def slq_logdet_eval_vec(pre: SLQPrecompute, rho_arr: np.ndarray) -> np.ndarray:
@@ -487,9 +608,10 @@ def slq_logdet_eval_vec(pre: SLQPrecompute, rho_arr: np.ndarray) -> np.ndarray:
     rho_arr = np.asarray(rho_arr, dtype=np.float64)
     vals = 1.0 - rho_arr[:, None, None] * pre.nodes[None, :, :]
     log_vals = _slq_log_vals(vals, pre.method)
-    return (
+    base = (
         np.real(np.sum(pre.weights[None, :, :] * log_vals, axis=(1, 2))) / pre.n_probes
     )
+    return base + pre._cv_correction(rho_arr)
 
 
 # ---------------------------------------------------------------------------

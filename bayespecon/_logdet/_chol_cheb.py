@@ -30,25 +30,31 @@ use ``eigenvalue`` (exact eigendecomposition).  For ``n > 60000`` use
 non-symmetric ``W`` (directed graphs: KNN, travel time) use ``aaa`` (rational
 approximation via sparse LU).
 
-**Benchmark** (2D rook grid, adaptive order, ρ ∈ [0.1, 0.8], 2026-07):
+**Benchmark** (2D rook grid, adaptive order, ρ ∈ [0.1, 0.8], 200 probes,
+stochastic error averaged over 8 probe draws, 2026-08):
 
-========== ============= ============= =========== ==================
-n          chol setup    chol eval     chol error  stoch(200)
-========== ============= ============= =========== ==================
-484        3.8ms         1.7μs         5e-9        2.7ms, 0.42 err
-4,900      30ms          1.7μs         2e-7        26ms, 0.69 err
-10,000     96ms          1.7μs         5e-7        62ms, 0.75 err
-19,881     248ms         1.7μs         9e-7        110ms, 1.7 err
-40,000     583ms         1.7μs         1.8e-6      236ms, 1.8 err
-59,536     1.18s         1.7μs         2.6e-6      328ms, 3.5 err
-========== ============= ============= =========== ==================
+========== ============= ============= =========== ============= ==========
+n          chol setup    chol eval     chol error  stoch setup   stoch err
+========== ============= ============= =========== ============= ==========
+484        3.3ms         1.7μs         3.7e-8      5.3ms         0.01
+4,900      33ms          1.7μs         2.9e-7      34ms          0.05
+10,000     98ms          1.7μs         5.7e-7      51ms          0.08
+19,881     237ms         1.7μs         1.1e-6      101ms         0.08
+40,000     624ms         1.7μs         2.2e-6      252ms         0.17
+59,536     1.16s         1.7μs         3.2e-6      362ms         0.14
+========== ============= ============= =========== ============= ==========
 
-Cholesky-Chebyshev is the accuracy leader across this range: exact (5e-9 to
-2.6e-6 vs 0.4-3.5 for stochastic) and ~30× faster eval (1.7μs vs ~57μs).  Its
-setup grows with Cholesky fill-in, reaching ~3.6× the stochastic cost by
-n≈60k — small in absolute terms against any chain that runs for seconds, which
-is why the auto-selection cutoff sits at 60,000 rather than where the setup
-curves first cross.
+Cholesky-Chebyshev remains the accuracy leader across this range — exact
+(3.7e-8 to 3.2e-6) against 0.01-0.17 for stochastic — and ~34× faster to
+evaluate (1.7μs vs ~58μs).  Its setup grows with Cholesky fill-in, reaching
+~3.2× the stochastic cost by n≈60k, which is why the auto-selection cutoff sits
+at 60,000 rather than where the setup curves first cross.
+
+The stochastic column improved 11-27× over the previous release from the exact
+low-order moments (``n_exact``, see :mod:`._cheb_stochastic`), at 5-10% more
+setup: on this *narrow* interval the order rule still returns 15, so the depth
+is bought without paying for a higher order.  Over the full stability region
+``[-0.99, 0.99]`` the order must rise too and the setup roughly triples.
 """
 
 from __future__ import annotations
@@ -163,7 +169,135 @@ def _clamp_interval(rho_min: float, rho_max: float) -> tuple[float, float]:
     return max(float(rho_min), -0.99), min(float(rho_max), 0.99)
 
 
-class CholChebContext:
+class _ChebContextBase:
+    """Interval fitting for a Chebyshev interpolant, given exact node values.
+
+    The factorizer and the interpolant are independent choices: everything below
+    depends on the factorizer only through :meth:`logdet_at`, so a subclass
+    supplies exact node values by whatever means suits ``W`` — sparse Cholesky
+    when it is D-symmetrizable (:class:`CholChebContext`), sparse LU otherwise
+    (:class:`LUChebContext`) — and inherits the node placement, the order rule
+    and the coefficient fit unchanged.
+
+    Subclasses must define ``n`` and :meth:`logdet_at`.
+    """
+
+    __slots__ = ()
+
+    def logdet_at(self, rho_nodes: np.ndarray) -> np.ndarray:  # pragma: no cover
+        raise NotImplementedError
+
+    def coeffs_on(
+        self,
+        rho_min: float = 0.1,
+        rho_max: float = 0.8,
+        order: int | None = None,
+        tol: float | None = None,
+    ) -> CholChebPrecompute:
+        """Fit the Chebyshev interpolant on ``[rho_min, rho_max]``.
+
+        Parameters
+        ----------
+        rho_min, rho_max : float
+            The ρ interval, clamped to ``[-0.99, 0.99]``.
+        order : int or None, default None
+            Number of nodes.  ``None`` selects it from the interval, ``n`` and
+            ``tol`` via :func:`~._chebyshev.cheb_order_for_tolerance`.
+        tol : float, optional
+            Target absolute error when ``order`` is ``None``.  Defaults to the
+            relative target ``DEFAULT_CHEB_RTOL · n``.
+        """
+        rho_min, rho_max = _clamp_interval(rho_min, rho_max)
+        if rho_max <= rho_min:
+            raise ValueError(
+                f"Invalid rho interval: rho_min={rho_min}, rho_max={rho_max}."
+            )
+        if order is None:
+            order = cheb_order_for_tolerance(rho_min, rho_max, self.n, tol=tol)
+
+        rho_nodes, _ = chebyshev_gauss_nodes(order, rho_min, rho_max)
+        coeffs = chebyshev_coeffs_dct1(self.logdet_at(rho_nodes))
+
+        return CholChebPrecompute(
+            coeffs=coeffs,
+            rho_min=rho_min,
+            rho_max=rho_max,
+            order=order,
+            n=self.n,
+            err_est=cheb_tail_error(coeffs),
+        )
+
+
+class LUChebContext(_ChebContextBase):
+    """Reusable sparse-LU symbolic analysis for one ``W``, Chebyshev nodes.
+
+    The LU counterpart of :class:`CholChebContext`, and the fourth cell of the
+    factorizer × interpolant grid: it pairs the factorizer that works on *any*
+    sparse ``W`` with the interpolant that carries a convergence rate computable
+    from the interval alone.  Directed weights — KNN, travel time — admit no
+    symmetrizing diagonal, so Cholesky is unavailable and this is the only way to
+    put a Chebyshev interpolant on them.
+
+    KLU's symbolic analysis is computed once and reused for every later numeric
+    factorisation, exactly as CHOLMOD's is in :class:`CholChebContext`, since all
+    ``I - ρW`` share one sparsity pattern.  It falls back to UMFPACK/SuperLU when
+    ``sksparse.klu`` is unavailable.
+
+    Expect it to be slower than :class:`CholChebContext` on weights that *are*
+    D-symmetrizable — LU does roughly twice the work of Cholesky on an SPD system
+    — so prefer the Cholesky context where it applies.  On fragmented graphs that
+    ordering can reverse; see the empirical results in the paper.
+
+    Parameters
+    ----------
+    W : array-like or scipy.sparse matrix
+        Spatial weights matrix.  No symmetrizability requirement.
+    """
+
+    __slots__ = ("W", "_eye", "_lu", "n")
+
+    def __init__(self, W):
+        if sp.issparse(W) or hasattr(W, "format"):
+            W_sp = sp.csr_matrix(W, dtype=np.float64)
+        else:
+            W_sp = sp.csr_matrix(np.asarray(W, dtype=np.float64))
+        self.n = int(W_sp.shape[0])
+        self.W = W_sp
+        self._eye = sp.eye(self.n, format="csc")
+        self._lu = None
+
+    def logdet_at(self, rho_nodes: np.ndarray) -> np.ndarray:
+        """Exact ``log|I - ρW|`` at each node, by sparse LU."""
+        from ._aaa import _make_reusable_lu_logdet
+
+        if self._lu is None:
+            self._lu = _make_reusable_lu_logdet()
+        out = np.empty(len(rho_nodes), dtype=np.float64)
+        for i, rho in enumerate(rho_nodes):
+            out[i] = self._lu(sp.csc_matrix(self._eye - float(rho) * self.W))
+        return out
+
+
+def lu_cheb_logdet_precompute(
+    W,
+    order: int | None = None,
+    rho_min: float = 0.1,
+    rho_max: float = 0.8,
+    tol: float | None = None,
+) -> CholChebPrecompute:
+    """Chebyshev interpolant of ``log|I - ρW|`` from exact sparse-LU nodes.
+
+    The LU counterpart of :func:`chol_cheb_logdet_precompute`, applicable to any
+    sparse ``W`` including directed graphs.  A one-shot wrapper over
+    :class:`LUChebContext`; hold the context directly to refit on a second
+    interval without repeating the symbolic analysis.
+    """
+    return LUChebContext(W).coeffs_on(
+        rho_min=rho_min, rho_max=rho_max, order=order, tol=tol
+    )
+
+
+class CholChebContext(_ChebContextBase):
     """Reusable D-symmetrisation and CHOLMOD symbolic analysis for one ``W``.
 
     Everything a Chebyshev interpolant of ``log|I - ρW|`` needs that does *not*
@@ -226,46 +360,6 @@ class CholChebContext:
                 self._factor.factorize(A)
             out[i] = self._factor.logdet()
         return out
-
-    def coeffs_on(
-        self,
-        rho_min: float = 0.1,
-        rho_max: float = 0.8,
-        order: int | None = None,
-        tol: float | None = None,
-    ) -> CholChebPrecompute:
-        """Fit the Chebyshev interpolant on ``[rho_min, rho_max]``.
-
-        Parameters
-        ----------
-        rho_min, rho_max : float
-            The ρ interval, clamped to ``[-0.99, 0.99]``.
-        order : int or None, default None
-            Number of nodes.  ``None`` selects it from the interval, ``n`` and
-            ``tol`` via :func:`~._chebyshev.cheb_order_for_tolerance`.
-        tol : float, optional
-            Target absolute error when ``order`` is ``None``.  Defaults to the
-            relative target ``DEFAULT_CHEB_RTOL · n``.
-        """
-        rho_min, rho_max = _clamp_interval(rho_min, rho_max)
-        if rho_max <= rho_min:
-            raise ValueError(
-                f"Invalid rho interval: rho_min={rho_min}, rho_max={rho_max}."
-            )
-        if order is None:
-            order = cheb_order_for_tolerance(rho_min, rho_max, self.n, tol=tol)
-
-        rho_nodes, _ = chebyshev_gauss_nodes(order, rho_min, rho_max)
-        coeffs = chebyshev_coeffs_dct1(self.logdet_at(rho_nodes))
-
-        return CholChebPrecompute(
-            coeffs=coeffs,
-            rho_min=rho_min,
-            rho_max=rho_max,
-            order=order,
-            n=self.n,
-            err_est=cheb_tail_error(coeffs),
-        )
 
 
 def chol_cheb_logdet_precompute(

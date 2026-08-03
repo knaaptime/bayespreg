@@ -29,7 +29,7 @@ factorisation entirely).
 
 **Cost**: ``n_coarse`` sparse LU factorisations + ``O(m)`` per-ρ
 evaluation, where ``n_coarse`` is the coarse-grid size (adaptive: 16 for the
-narrow default interval, up to 30 for wide/near-singular intervals) and
+narrow default interval, up to 96 for wide/near-singular intervals) and
 ``m ≤ n_coarse // 2`` is the number of AAA support points actually selected.
 All ``I - ρW`` share one sparsity pattern, so KLU's symbolic analysis is
 computed once and reused for every subsequent numeric factorisation (measured
@@ -39,6 +39,7 @@ grid).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import numpy as np
@@ -157,7 +158,7 @@ def _make_reusable_lu_logdet():
 def _aaa_algorithm(
     z: np.ndarray,
     f: np.ndarray,
-    tol: float = 1e-10,
+    tol: float = 1e-13,
     max_iter: int = 100,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Core AAA algorithm for rational approximation.
@@ -165,14 +166,33 @@ def _aaa_algorithm(
     Given sample points ``z`` and function values ``f``, find support
     points, values, and barycentric weights for a rational approximant.
 
+    **The greedy loop runs on values that have already been paid for.**  Every
+    sample in ``f`` cost one sparse factorisation before this function was
+    called, so stopping early saves nothing — it discards resolution the caller
+    has already bought.  Two consequences shape the loop:
+
+    * ``tol`` is an **absolute** residual threshold, not one scaled by
+      ``max|f|``.  Scaling by ``max|f|`` made the attainable floor grow with
+      ``n`` (``|log|I - ρW|| = O(n)``), so on large problems the loop stopped
+      while the residual was still orders above what the samples supported.  It
+      also contradicted the invariant that matters for inference, which is
+      absolute error in the log-density, not relative.
+    * The loop **returns its best iterate, not its last**.  Pushing AAA past the
+      point where the Loewner least-squares becomes ill-conditioned introduces
+      Froissart doublets and the delivered error rises again, non-monotonically.
+      Tracking the best-scoring iterate makes overshoot harmless, so ``tol`` acts
+      as a safety valve rather than as the binding constraint.
+
     Parameters
     ----------
     z : np.ndarray, shape (M,)
         Sample points (dense grid of ρ values).
     f : np.ndarray, shape (M,)
         Function values at sample points.
-    tol : float, default 1e-10
-        Relative tolerance for the nonlinear residual.
+    tol : float, default 1e-13
+        **Absolute** tolerance on the nonlinear residual.  Set near the level at
+        which the Loewner system stops being solvable in double precision; the
+        best-iterate rule above protects against setting it too tight.
     max_iter : int, default 100
         Maximum number of AAA iterations (support points).
 
@@ -194,6 +214,12 @@ def _aaa_algorithm(
     support_idx = []  # indices into z
     weights_list = []
 
+    # Best iterate seen so far, by max |residual| over the non-support samples.
+    # Returned in place of the final iterate; see the note in the docstring.
+    best: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+    best_resid = np.inf
+    stalled = 0
+
     # Residual at all non-support points
     residual = f.copy()
 
@@ -204,7 +230,7 @@ def _aaa_algorithm(
         candidate_residual[is_support] = -1  # exclude support points
         next_idx = np.argmax(candidate_residual)
 
-        if candidate_residual[next_idx] < tol * np.max(np.abs(f)):
+        if candidate_residual[next_idx] < tol:
             break
 
         is_support[next_idx] = True
@@ -266,12 +292,33 @@ def _aaa_algorithm(
         residual[non_support] = f_ns - r_ns
         # At support points, residual is 0 (interpolation)
 
-    # Extract final support points, values, weights
-    support_points = z[is_support]
-    support_values = f[is_support]
-    weights = np.array(weights_list, dtype=np.float64)
+        # Score this iterate and keep it if it is the best so far.  The score is
+        # the max residual over the samples AAA did *not* interpolate, which is
+        # the only error estimate available without further factorisations.
+        score = float(np.max(np.abs(residual[non_support]))) if n_ns else 0.0
+        if score < best_resid:
+            best_resid = score
+            best = (
+                z[is_support].copy(),
+                f[is_support].copy(),
+                np.array(w, dtype=np.float64),
+            )
+            stalled = 0
+        else:
+            # Conditioning has started to cost more than the extra pole buys.
+            stalled += 1
+            if stalled >= 3:
+                break
 
-    return support_points, support_values, weights
+    if best is None:
+        # Fewer than two support points were selected (the constant fit already
+        # met `tol`); fall back to whatever the loop produced.
+        return (
+            z[is_support],
+            f[is_support],
+            np.array(weights_list, dtype=np.float64),
+        )
+    return best
 
 
 def _adaptive_n_coarse(rho_min: float, rho_max: float) -> int:
@@ -282,11 +329,29 @@ def _adaptive_n_coarse(rho_min: float, rho_max: float) -> int:
     grid, capped at ``n_coarse // 2``) is what determines accuracy, and both
     grow as the interval widens toward the ``ρ = ±1`` logdet singularities.
 
-    Empirically (rook + knn, n∈{1600, 2000}): the default narrow interval
-    ``[0.1, 0.8]`` reaches ~1e-10 max error with only 16 nodes, while intervals
-    that approach ``±0.95`` need the full 30 nodes for ~1e-7.  This mirrors
-    :func:`~._chebyshev.cheb_order_for_tolerance`, which sizes the Chebyshev
-    order the same way.
+    Empirically (rook + knn, n∈{1936, 10000, 40000}), scoring on the *closed*
+    interval with the endpoints included: the default narrow interval
+    ``[0.1, 0.8]`` reaches ~1e-10 max error with only 16 nodes, while the full
+    stability region ``[-0.99, 0.99]`` needs ~64-80 for 1e-6 and ~96 to reach
+    the ~1e-10 range.  The cap sits at 96 because that is where the accuracy a
+    posterior can use is already reached, not because the method stops
+    improving there.
+
+    An earlier version of this docstring described a ~1e-7--1e-8 "floor where
+    AAA saturates" past ~96 nodes.  That floor was an artefact of the greedy
+    loop's stopping rule, which was scaled by ``max|f| = O(n)`` and so cut the
+    fit short on large problems; see :func:`_aaa_algorithm`.  With an absolute
+    tolerance and best-iterate retention the delivered error keeps falling with
+    the node count and the non-monotonicity is gone.
+
+    The cap matters only for callers that stay on a wide interval.  A
+    post-warmup refit narrows ``[rho_min, rho_max]``, which raises the
+    Bernstein rate and pulls the count back down through the same formula.
+
+    This mirrors :func:`~._chebyshev.cheb_order_for_tolerance`, which sizes the
+    Chebyshev order the same way.  At matched node counts on the full interval
+    AAA is three to four orders more accurate than the polynomial, and stays
+    ahead at every count tested up to 128.
 
     Parameters
     ----------
@@ -309,14 +374,17 @@ def _adaptive_n_coarse(rho_min: float, rho_max: float) -> int:
     # so could not exploit a post-warmup range at all.
     rho_b = bernstein_rho(rho_min, rho_max)
     if not np.isfinite(rho_b) or rho_b <= 1.0:
-        return 30
-    return int(np.clip(int(np.ceil(16.0 / np.log(rho_b))), 8, 30))
+        _c0 = os.getenv("BAYESPECON_LOGDET_NODE_CAP")
+        return int(_c0) if _c0 else 96
+    _c = os.getenv("BAYESPECON_LOGDET_NODE_CAP")
+    hi = int(_c) if _c else 96
+    return int(np.clip(int(np.ceil(16.0 / np.log(rho_b))), 8, hi))
 
 
 def _aaa_algorithm_lazy(
     z: np.ndarray,
     eval_fn,
-    tol: float = 1e-10,
+    tol: float = 1e-13,
     max_iter: int = 30,
     n_coarse: int = 30,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -338,7 +406,7 @@ def _aaa_algorithm_lazy(
         Sample points (dense grid of ρ values).
     eval_fn : callable
         Function ``f(ρ) -> float``.  Called at ``n_coarse`` + refinement points.
-    tol : float, default 1e-10
+    tol : float, default 1e-13
         Relative tolerance for AAA convergence.
     max_iter : int, default 30
         Maximum number of support points.
@@ -407,7 +475,7 @@ class AAAContext:
         rho_min: float = 0.1,
         rho_max: float = 0.8,
         n_samples: int = 200,
-        tol: float = 1e-10,
+        tol: float = 1e-13,
         max_iter: int = 30,
         n_coarse: int | None = None,
     ) -> AAAPrecompute:
@@ -439,7 +507,7 @@ def aaa_logdet_precompute(
     rho_min: float = 0.1,
     rho_max: float = 0.8,
     n_samples: int = 200,
-    tol: float = 1e-10,
+    tol: float = 1e-13,
     max_iter: int = 30,
     n_coarse: int | None = None,
 ) -> AAAPrecompute:
@@ -468,7 +536,7 @@ def aaa_logdet_precompute(
         Number of sample points for the AAA residual grid.  Does **not**
         affect the number of LU factorisations — only the resolution of
         the greedy selection.
-    tol : float, default 1e-10
+    tol : float, default 1e-13
         Relative tolerance for AAA convergence.
     max_iter : int, default 30
         Maximum number of AAA support points selected from the coarse grid.
@@ -636,7 +704,7 @@ class CholAAAContext:
         rho_min: float = 0.1,
         rho_max: float = 0.8,
         n_samples: int = 200,
-        tol: float = 1e-10,
+        tol: float = 1e-13,
         max_iter: int = 30,
         n_coarse: int | None = None,
     ) -> AAAPrecompute:
@@ -663,7 +731,7 @@ def chol_aaa_logdet_precompute(
     rho_min: float = 0.1,
     rho_max: float = 0.8,
     n_samples: int = 200,
-    tol: float = 1e-10,
+    tol: float = 1e-13,
     max_iter: int = 30,
     n_coarse: int | None = None,
 ) -> AAAPrecompute:
@@ -682,7 +750,7 @@ def chol_aaa_logdet_precompute(
         The ρ approximation interval.
     n_samples : int, default 200
         Number of sample points for the AAA residual grid (no factorisations).
-    tol : float, default 1e-10
+    tol : float, default 1e-13
         Relative tolerance for AAA convergence.
     max_iter : int, default 30
         Maximum number of AAA support points.

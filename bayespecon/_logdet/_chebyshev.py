@@ -10,6 +10,8 @@ Two computation strategies:
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import scipy.sparse as sp
 
@@ -136,7 +138,7 @@ def cheb_order_for_tolerance(
     tol: float | None = None,
     rtol: float = DEFAULT_CHEB_RTOL,
     floor: int = 4,
-    cap: int = 200,
+    cap: int | None = None,
 ) -> int:
     """Chebyshev order meeting an error target on ``[rho_min, rho_max]``.
 
@@ -169,6 +171,14 @@ def cheb_order_for_tolerance(
     int
         Number of Chebyshev nodes (= exact factorisations at setup).
     """
+    # Node cap.  ``BAYESPECON_LOGDET_NODE_CAP`` forces every interpolant to the
+    # same ceiling, which is how a probe-matched comparison is set up: on a wide
+    # interval each rule is clipped to the shared budget, while on a narrow
+    # post-warmup interval both ask for far less than the cap and adapt freely.
+    if cap is None:
+        _c = os.getenv("BAYESPECON_LOGDET_NODE_CAP")
+        cap = int(_c) if _c else 200
+
     rho_b = bernstein_rho(rho_min, rho_max)
     if not np.isfinite(rho_b) or rho_b <= 1.0:
         return int(cap)

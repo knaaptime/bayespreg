@@ -112,14 +112,25 @@ def logdet_grad_aaa(rho, support_points, support_values, weights, *, xp=np):
     return (dn * d_val - n_val * dd) / d_val**2
 
 
-def logdet_grad_slq(rho, nodes, weights, n_probes, *, xp=np):
+def logdet_grad_slq(rho, nodes, weights, n_probes, *, cv_coeffs=None, xp=np):
     """``g(ρ) = −(1/P) Re(Σ wᵢθᵢ/(1 − ρθᵢ))`` — the SLQ resolvent-trace estimate.
 
     The analytic derivative of the frozen-probe SLQ surrogate
     ``(1/P) Σ wᵢ log(1 − ρθᵢ)``.  Real (Lanczos) and complex (Arnoldi) rules are
     handled by the same expression; ``real`` keeps the Arnoldi cross term.
+
+    ``cv_coeffs`` carries the exact-moment control variate of
+    :func:`~._slq._slq_cv_coeffs`.  It must be differentiated with the value it
+    corrects, or the gradient stops being the derivative of the function the
+    evaluator returns: the correction ``Σⱼ (ρʲ/j)·cⱼ`` contributes
+    ``Σⱼ ρ^{j-1}·cⱼ``.
     """
     theta = xp.asarray(nodes)
     w = xp.asarray(weights)
     res = w * theta / (1.0 - rho * theta)
-    return -xp.real(xp.sum(res)) / n_probes
+    grad = -xp.real(xp.sum(res)) / n_probes
+    if cv_coeffs is not None and len(cv_coeffs) > 0:
+        c = xp.asarray(cv_coeffs)
+        j = xp.arange(1, len(cv_coeffs) + 1)
+        grad = grad + xp.sum(rho ** (j - 1) * c)
+    return grad

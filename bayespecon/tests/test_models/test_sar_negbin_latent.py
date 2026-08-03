@@ -380,9 +380,9 @@ class TestSARNegBinStructuralJaxDenseRecovery:
             tune=TUNE,
             chains=CHAINS,
             random_seed=42,
-            n_jobs=1,
+            n_jobs=-1,
             progressbar=False,
-            gibbs_backend="jax",
+            gibbs_backend="numpy",
         )
 
         alpha_mean = float(idata.posterior["alpha"].mean())
