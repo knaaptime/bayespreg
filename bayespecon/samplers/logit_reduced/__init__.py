@@ -58,6 +58,7 @@ def _run_binary_reduced_gibbs(
     slice_width=0.4,
     krylov_degree=12,
     krylov_dmax=0.4,
+    krylov_reuse=True,
     timeout=None,
 ):
     """Registry runner for the reduced-form SAR-logit Pólya-Gamma Gibbs."""
@@ -74,6 +75,7 @@ def _run_binary_reduced_gibbs(
         slice_width=slice_width,
         krylov_degree=krylov_degree,
         krylov_dmax=krylov_dmax,
+        krylov_reuse=krylov_reuse,
         timeout=timeout,
     )
 
@@ -89,6 +91,7 @@ register(
         "slice_width",
         "krylov_degree",
         "krylov_dmax",
+        "krylov_reuse",
         "timeout",
     },
 )

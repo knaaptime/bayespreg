@@ -1586,6 +1586,7 @@ class SARNegBinFlowPanel(SARFlowPanel):
         random_seed: Optional[int] = None,
         progressbar: bool = True,
         n_jobs: int = -1,
+        krylov_reuse: bool = True,
     ) -> az.InferenceData:
         """Sample posterior via reduced-form PG-Gibbs (unrestricted 3-ρ panel)."""
         from ..flow._nb_gibbs import run_negbin_flow_gibbs
@@ -1602,6 +1603,7 @@ class SARNegBinFlowPanel(SARFlowPanel):
             random_seed=random_seed,
             progressbar=progressbar,
             n_jobs=n_jobs,
+            krylov_reuse=krylov_reuse,
         )
 
     def _compute_spatial_effects_posterior(
@@ -1825,6 +1827,7 @@ class SARNegBinFlowSeparablePanel(SARFlowSeparablePanel):
         random_seed: Optional[int] = None,
         progressbar: bool = True,
         n_jobs: int = -1,
+        krylov_reuse: bool = True,
     ) -> az.InferenceData:
         """Sample posterior via reduced-form PG-Gibbs (separable 2-ρ panel)."""
         from ..flow._nb_gibbs import run_negbin_flow_gibbs
@@ -1841,6 +1844,7 @@ class SARNegBinFlowSeparablePanel(SARFlowSeparablePanel):
             random_seed=random_seed,
             progressbar=progressbar,
             n_jobs=n_jobs,
+            krylov_reuse=krylov_reuse,
         )
 
     def _compute_spatial_effects_posterior(

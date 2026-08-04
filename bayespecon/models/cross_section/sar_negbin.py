@@ -159,6 +159,7 @@ class SARNegBin(SpatialModel):
         krylov_degree: int = _KRYLOV_DEGREE_DEFAULT,
         krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
         n_rho_omega_cycles: int = 1,
+        krylov_reuse: bool = True,
         timeout: float | None = None,
     ) -> "az.InferenceData":
         r"""Sample the reduced-form posterior via Pólya-Gamma block Gibbs.
@@ -330,6 +331,7 @@ class SARNegBin(SpatialModel):
                 krylov_degree=krylov_degree,
                 krylov_dmax=krylov_dmax,
                 slice_width=slice_width,
+                krylov_reuse=krylov_reuse,
             )
 
             # Stack chains
@@ -477,6 +479,7 @@ class SARNegBin(SpatialModel):
                 W_eig_max=W_eig_max,
                 W_eig_min=W_eig_min,
                 n_rho_omega_cycles=n_rho_omega_cycles,
+                krylov_reuse=krylov_reuse,
             )
             return run_chain(
                 y=self._y,

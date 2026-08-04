@@ -373,33 +373,52 @@ def run_chain(
 
     _n_cycles = cache.n_rho_omega_cycles
 
+    # Per-chain Krylov basis cache for reuse across sweeps.
+    _prev_basis = None
+    _prev_rho = None
+
     for i in range(total_iters):
         # --- Build Krylov basis at current ρ (or factorise for legacy) ---
         if use_krylov:
-            try:
-                basis = _build_krylov_basis(
-                    state.rho,
-                    X,
-                    cache.W_csc,
-                    n,
-                    degree=krylov_degree,
-                    cholmod_solver=cholmod_solver,
-                    W_eig_max=cache.W_eig_max,
-                    W_eig_min=cache.W_eig_min,
-                )
-            except (RuntimeError, ValueError):
-                state.rho = 0.0
-                basis = _build_krylov_basis(
-                    0.0,
-                    X,
-                    cache.W_csc,
-                    n,
-                    degree=krylov_degree,
-                    cholmod_solver=cholmod_solver,
-                    W_eig_max=cache.W_eig_max,
-                    W_eig_min=cache.W_eig_min,
-                )
-            eta = basis.V_stack[0] @ state.beta
+            if (
+                cache.krylov_reuse
+                and _prev_basis is not None
+                and abs(state.rho - _prev_rho) < cache.krylov_reuse_threshold
+            ):
+                basis = _prev_basis
+            else:
+                try:
+                    basis = _build_krylov_basis(
+                        state.rho,
+                        X,
+                        cache.W_csc,
+                        n,
+                        degree=krylov_degree,
+                        cholmod_solver=cholmod_solver,
+                        W_eig_max=cache.W_eig_max,
+                        W_eig_min=cache.W_eig_min,
+                    )
+                except (RuntimeError, ValueError):
+                    state.rho = 0.0
+                    basis = _build_krylov_basis(
+                        0.0,
+                        X,
+                        cache.W_csc,
+                        n,
+                        degree=krylov_degree,
+                        cholmod_solver=cholmod_solver,
+                        W_eig_max=cache.W_eig_max,
+                        W_eig_min=cache.W_eig_min,
+                    )
+                _prev_basis = basis
+                _prev_rho = state.rho
+
+            # η = U(ρ) @ β — use Horner when basis was reused at a different ρ.
+            if abs(state.rho - basis.rho_basis) < 1e-12:
+                eta = basis.V_stack[0] @ state.beta
+            else:
+                _drho_eta = state.rho - basis.rho_basis
+                eta = _eval_U_from_basis(basis, _drho_eta) @ state.beta
         else:
             try:
                 solver = _make_solver(

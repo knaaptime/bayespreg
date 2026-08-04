@@ -466,6 +466,7 @@ def _make_reduced_gibbs_step(
     intercept_col=0,
     krylov_degree=8,
     krylov_dmax=0.15,
+    krylov_reuse=True,
 ):
     """Build a JIT-compiled reduced-form Gibbs step (ω → ρ → β → α).
 
@@ -556,6 +557,8 @@ def _make_reduced_gibbs_step(
     _intercept_col = intercept_col
     _krylov_degree = krylov_degree
     _krylov_dmax = jnp.float64(krylov_dmax)
+    _reuse_threshold = jnp.float64(0.15) if krylov_reuse else jnp.float64(0.0)
+    V_stack_init = jnp.zeros((krylov_degree + 1, n, k), dtype=jnp.float64)
 
     @jax.jit
     def gibbs_step(state, key, slice_width):
@@ -584,18 +587,40 @@ def _make_reduced_gibbs_step(
 
         key_rho, key_beta, key_alpha = jax.random.split(key, 3)
 
+        # ── Krylov basis: reuse or rebuild ──
+        # The basis at rho_basis is valid for |rho - rho_basis| < krylov_dmax.
+        # When |Δρ| < reuse_threshold, skip the sparsax factorisation + (m+1)
+        # solves and evaluate η via the Horner polynomial instead.
+        V_stack_prev = state.get("V_stack", jnp.zeros_like(V_stack_init))
+        rho_basis_prev = state.get("rho_basis", jnp.float64(0.0))
+        _drho_check = rho - rho_basis_prev
+
+        def _rebuild_basis(_):
+            V = _build_krylov_basis_jax(
+                lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _krylov_degree
+            )
+            _eta = V[0] @ beta
+            return V, rho, _eta
+
+        def _reuse_basis(_):
+            _U = _eval_U_from_basis_jax(V_stack_prev, _drho_check)
+            _eta = _U @ beta
+            return V_stack_prev, rho_basis_prev, _eta
+
+        V_stack, rho_basis, eta = jax.lax.cond(
+            jnp.abs(_drho_check) < _reuse_threshold,
+            _reuse_basis,
+            _rebuild_basis,
+            operand=None,
+        )
+
         # ── Block 0: ω ~ PG(y + α, η) ──
-        # η = (I − ρW)⁻¹ Xβ at the current ρ (sparse sparsax; W never densified).
-        eta = _solve(rho, X_jax @ beta)
         key, key_pg = jax.random.split(key)
         h = jnp.maximum(y_jax + alpha, 1e-3)
         z = jnp.clip(eta - jnp.log(alpha), -20.0, 20.0)
         omega = _draw_pg(h, z, key_pg)
 
         # ── Block 1: ρ — slice sampling with Krylov basis ──
-        V_stack = _build_krylov_basis_jax(
-            lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _krylov_degree
-        )
 
         # Krylov-only slice: solve_at=None means candidates outside the Krylov
         # radius are rejected (−inf) rather than evaluated with a per-candidate
@@ -607,7 +632,7 @@ def _make_reduced_gibbs_step(
         rho_new = _slice_sample_rho_jax(
             rho_current=rho,
             V_stack=V_stack,
-            rho_basis=rho,
+            rho_basis=rho_basis,
             omega=omega,
             y_jax=y_jax,
             alpha=alpha,
@@ -626,7 +651,7 @@ def _make_reduced_gibbs_step(
         # ── Block 2: β | ρ, ω, α, y — conjugate normal ──
         # Krylov-only guarantees |Δρ| ≤ dmax, so the basis evaluation of
         # X̃ = (I−ρ_new W)⁻¹X is always valid — no direct-solve fallback needed.
-        drho_new = rho_new - rho
+        drho_new = rho_new - rho_basis
         Xtilde = _eval_U_from_basis_jax(V_stack, drho_new)
 
         reparam_beta = (_intercept_col >= 0) & (jnp.abs(rho_new) > 1e-8)
@@ -686,6 +711,8 @@ def _make_reduced_gibbs_step(
             "rho": rho_new,
             "alpha": alpha_new,
             "omega": omega,
+            "V_stack": V_stack,
+            "rho_basis": rho_basis,
         }
         # Return the fitted latent η = (I−ρ_new W)⁻¹Xβ_new so the runner can form
         # the pointwise NB log-likelihood on-device (reusing the sweep's solve),
@@ -912,6 +939,7 @@ def run_chains_jax_reduced(
     krylov_degree: int = 8,
     krylov_dmax: float = 0.15,
     slice_width: float = 0.2,
+    krylov_reuse: bool = True,
 ) -> list[dict]:
     """Run multiple reduced-form SAR-NB Gibbs chains using JAX.
 
@@ -986,14 +1014,20 @@ def run_chains_jax_reduced(
         intercept_col=intercept_col,
         krylov_degree=krylov_degree,
         krylov_dmax=krylov_dmax,
+        krylov_reuse=krylov_reuse,
     )
 
     # Stack per-chain inits into a batched pytree (leading axis = chain).
+    # V_stack and rho_basis are initialised to zeros — the first sweep always
+    # rebuilds because |rho_init - 0| > reuse_threshold.
+    _V_init = jnp.zeros((krylov_degree + 1, n, k), dtype=jnp.float64)
     state0 = {
         "beta": jnp.asarray(np.stack([i.beta for i in inits]), dtype=jnp.float64),
         "rho": jnp.asarray([float(i.rho) for i in inits], dtype=jnp.float64),
         "alpha": jnp.asarray([float(i.alpha) for i in inits], dtype=jnp.float64),
         "omega": jnp.asarray(np.stack([i.omega for i in inits]), dtype=jnp.float64),
+        "V_stack": jnp.broadcast_to(_V_init, (chains,) + _V_init.shape),
+        "rho_basis": jnp.zeros(chains, dtype=jnp.float64),
     }
     warm_keys = jnp.stack([jax.random.PRNGKey(int(s)) for s in jax_seeds])
     draw_keys = jnp.stack(

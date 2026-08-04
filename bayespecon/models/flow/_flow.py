@@ -1872,6 +1872,7 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
         progressbar: bool = True,
         n_jobs: int = -1,
         gibbs_backend: str = "numpy",
+        krylov_reuse: bool = True,
         sample_kwargs: dict[str, Any] | None = None,
     ) -> az.InferenceData:
         """Sample posterior via reduced-form PG-Gibbs (unrestricted 3-ρ)."""
@@ -1889,6 +1890,7 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
             random_seed=random_seed,
             progressbar=progressbar,
             n_jobs=n_jobs,
+            krylov_reuse=krylov_reuse,
         )
 
 
@@ -2004,6 +2006,7 @@ class SARNegBinFlowSeparable(_NegBinFlowMixin, SARFlowSeparable):
         progressbar: bool = True,
         n_jobs: int = -1,
         gibbs_backend: str = "numpy",
+        krylov_reuse: bool = True,
         sample_kwargs: dict[str, Any] | None = None,
     ) -> az.InferenceData:
         """Sample posterior via reduced-form PG-Gibbs (separable 2-ρ)."""
@@ -2021,6 +2024,7 @@ class SARNegBinFlowSeparable(_NegBinFlowMixin, SARFlowSeparable):
             random_seed=random_seed,
             progressbar=progressbar,
             n_jobs=n_jobs,
+            krylov_reuse=krylov_reuse,
         )
 
 

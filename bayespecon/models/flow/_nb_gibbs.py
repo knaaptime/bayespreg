@@ -27,6 +27,7 @@ def run_negbin_flow_gibbs(
     progressbar: bool = True,
     n_jobs: int = -1,
     gibbs_backend: str = "numpy",
+    krylov_reuse: bool = True,
 ) -> az.InferenceData:
     """Run the reduced-form PG-Gibbs sampler for an NB SAR flow model.
 
@@ -80,6 +81,7 @@ def run_negbin_flow_gibbs(
         rho_lower=model.priors.get("rho_lower", -0.999),
         rho_upper=model.priors.get("rho_upper", 0.999),
         T=T,
+        krylov_reuse=krylov_reuse,
     )
     if not separable:
         cache_kwargs["positive"] = model.restrict_positive
@@ -144,35 +146,51 @@ def run_negbin_flow_gibbs(
 
     # --- Run chains ---
     if gibbs_backend == "jax":
-        if separable:
-            raise ValueError(
-                "gibbs_backend='jax' is currently available only for the "
-                "unrestricted 3-ρ flow NB model; the separable Kronecker model "
-                "is NumPy-only.  Use gibbs_backend='numpy'."
-            )
-        from ...samplers.negbin_reduced._flow_jax import run_chains_jax_flow
-
         if random_seed is not None:
             seeds = [random_seed + i for i in range(chains)]
         else:
             seeds = [int(s) for s in np.random.SeedSequence().generate_state(chains)]
         # One init per chain (same closure the NumPy path uses).
         inits = [_make_init(np.random.default_rng(s)) for s in seeds]
-        chain_results = run_chains_jax_flow(
-            y=y,
-            X=X,
-            Wd=model._Wd,
-            Wo=model._Wo,
-            Ww=model._Ww,
-            priors=priors,
-            inits=inits,
-            draws=draws,
-            tune=tune,
-            positive=model.restrict_positive,
-            n_cycles=cache.n_rho_omega_cycles,
-            jax_seeds=seeds,
-            progressbar=progressbar,
-        )
+
+        if separable:
+            from ...samplers.negbin_reduced._flow_jax import (
+                run_chains_jax_flow_separable,
+            )
+
+            chain_results = run_chains_jax_flow_separable(
+                y=y,
+                X=X,
+                W_csc=W_csc,
+                n=model._n,
+                priors=priors,
+                inits=inits,
+                draws=draws,
+                tune=tune,
+                krylov_reuse=krylov_reuse,
+                n_cycles=cache.n_rho_omega_cycles,
+                jax_seeds=seeds,
+                progressbar=progressbar,
+            )
+        else:
+            from ...samplers.negbin_reduced._flow_jax import run_chains_jax_flow
+
+            chain_results = run_chains_jax_flow(
+                y=y,
+                X=X,
+                Wd=model._Wd,
+                Wo=model._Wo,
+                Ww=model._Ww,
+                priors=priors,
+                inits=inits,
+                draws=draws,
+                tune=tune,
+                positive=model.restrict_positive,
+                n_cycles=cache.n_rho_omega_cycles,
+                jax_seeds=seeds,
+                progressbar=progressbar,
+                krylov_reuse=krylov_reuse,
+            )
     else:
         chain_results = run_chains(
             chain_fn=_chain_fn,
