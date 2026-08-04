@@ -218,6 +218,7 @@ class SARLogit(SpatialModel):
         slice_width: float = 0.4,
         krylov_degree: int = _KRYLOV_DEGREE_DEFAULT,
         krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
+        krylov_reuse: bool = True,
         timeout: float | None = None,
     ) -> az.InferenceData:
         r"""Sample the reduced-form posterior via Pólya–Gamma block Gibbs.
@@ -313,6 +314,7 @@ class SARLogit(SpatialModel):
                 slice_width=slice_width,
                 jax_seeds=chain_seeds,
                 progressbar=progressbar,
+                krylov_reuse=krylov_reuse,
             )
         else:
             # ── NumPy / CHOLMOD path ──
@@ -342,6 +344,7 @@ class SARLogit(SpatialModel):
                     W_eig_max=W_eig_max,
                     W_eig_min=W_eig_min,
                     n_rho_omega_cycles=1,
+                    krylov_reuse=krylov_reuse,
                 )
                 return run_chain(
                     y=y,

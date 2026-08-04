@@ -394,3 +394,106 @@ class TestCholChebContext:
 
         with pytest.raises(ValueError, match="Invalid rho interval"):
             CholChebContext(small_W).coeffs_on(0.8, 0.2)
+
+
+class TestLUCheb:
+    """The LU-Chebyshev cell: same interpolant, different factorizer.
+
+    ``lu_cheb`` completes the factorizer x interpolant grid.  Its value is that
+    it isolates the two choices -- comparing it against ``cheb_cholesky`` varies
+    only the factorizer, and against ``aaa`` only the interpolant -- and that it
+    is the only way to put a Chebyshev interpolant on a directed ``W``.
+    """
+
+    @staticmethod
+    def _rook(side):
+        import numpy as np
+        import scipy.sparse as sp
+
+        n = side * side
+        rows, cols = [], []
+        for i in range(side):
+            for j in range(side):
+                k = i * side + j
+                for di, dj in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    a, b = i + di, j + dj
+                    if 0 <= a < side and 0 <= b < side:
+                        rows.append(k)
+                        cols.append(a * side + b)
+        A = sp.csr_matrix(
+            (np.ones(len(rows)), (rows, cols)), shape=(n, n), dtype=np.float64
+        )
+        deg = np.asarray(A.sum(axis=1)).ravel()
+        return sp.diags(1.0 / deg) @ A
+
+    def test_matches_cholesky_on_symmetrizable_W(self):
+        """Same nodes, same order, different factorizer -> same interpolant.
+
+        This is the factorizer/interpolant independence claim in its sharpest
+        form: the two agree to floating-point noise, not merely to tolerance.
+        """
+        import numpy as np
+
+        from bayespecon._logdet._chol_cheb import (
+            chol_cheb_logdet_eval,
+            chol_cheb_logdet_precompute,
+            lu_cheb_logdet_precompute,
+        )
+
+        W = self._rook(20)
+        lo, hi = -0.9, 0.9
+        pc = chol_cheb_logdet_precompute(W, rho_min=lo, rho_max=hi)
+        pl = lu_cheb_logdet_precompute(W, rho_min=lo, rho_max=hi)
+
+        assert pl.order == pc.order
+        assert pl.n == pc.n
+        np.testing.assert_allclose(pl.coeffs, pc.coeffs, rtol=1e-9, atol=1e-9)
+
+        for r in np.linspace(lo, hi, 11):
+            assert chol_cheb_logdet_eval(pl, float(r)) == pytest.approx(
+                chol_cheb_logdet_eval(pc, float(r)), rel=1e-9, abs=1e-9
+            )
+
+    def test_works_on_directed_W_where_cholesky_cannot(self):
+        """Directed ``W`` has no symmetrizing diagonal; LU does not care."""
+        import numpy as np
+        import scipy.sparse as sp
+
+        from bayespecon._logdet._chol_cheb import (
+            CholChebContext,
+            chol_cheb_logdet_eval,
+            lu_cheb_logdet_precompute,
+        )
+
+        rng = np.random.default_rng(0)
+        n, k = 60, 4
+        rows, cols = [], []
+        for i in range(n):
+            for j in rng.choice([x for x in range(n) if x != i], size=k, replace=False):
+                rows.append(i)
+                cols.append(int(j))
+        A = sp.csr_matrix(
+            (np.ones(len(rows)), (rows, cols)), shape=(n, n), dtype=np.float64
+        )
+        W = sp.diags(1.0 / np.asarray(A.sum(axis=1)).ravel()) @ A
+
+        with pytest.raises(ValueError):
+            CholChebContext(W)
+
+        pre = lu_cheb_logdet_precompute(W, rho_min=-0.9, rho_max=0.9)
+        dense = W.toarray()
+        for r in np.linspace(-0.9, 0.9, 9):
+            exact = float(np.linalg.slogdet(np.eye(n) - r * dense)[1])
+            assert chol_cheb_logdet_eval(pre, float(r)) == pytest.approx(
+                exact, abs=1e-6
+            )
+
+    def test_is_refittable(self):
+        from bayespecon._logdet._refit import REFITTABLE_METHODS
+
+        assert "lu_cheb" in REFITTABLE_METHODS
+
+    def test_jax_param_fn_shares_the_chebyshev_parameterisation(self):
+        from bayespecon._logdet._jax import make_logdet_jax_param_fn
+
+        assert make_logdet_jax_param_fn("lu_cheb") is not None

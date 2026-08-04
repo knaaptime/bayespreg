@@ -245,3 +245,107 @@ class TestSLQEndToEndAccuracy:
         assert np.isfinite(est)
         # Directed Arnoldi is weak, but should be in the right ballpark.
         assert abs(est - exact) < 0.5 * abs(exact) + 1.0
+
+
+class TestSLQExactMoments:
+    """The exact-moment control variate (``n_exact``).
+
+    The Gauss rule already implies estimates of ``tr(Wʲ)``; replacing them with
+    the exact traces removes their sampling error at no extra matrix-vector
+    products.  These tests pin the three properties that make that safe: the
+    correction is off when asked to be, it is applied identically by the scalar
+    and vectorised evaluators, and it reduces error rather than merely changing
+    it.
+    """
+
+    def _rook(self, side=30):
+        import numpy as np
+        import scipy.sparse as sp
+
+        n = side * side
+        rows, cols = [], []
+        for i in range(side):
+            for j in range(side):
+                k = i * side + j
+                if i + 1 < side:
+                    rows += [k, (i + 1) * side + j]
+                    cols += [(i + 1) * side + j, k]
+                if j + 1 < side:
+                    rows += [k, i * side + j + 1]
+                    cols += [i * side + j + 1, k]
+        A = sp.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(n, n))
+        deg = np.asarray(A.sum(axis=1)).ravel()
+        return sp.diags(1.0 / deg) @ A
+
+    def test_n_exact_zero_disables_the_correction(self):
+        import numpy as np
+
+        from bayespecon._logdet._slq import slq_logdet_precompute
+
+        W = self._rook()
+        pre = slq_logdet_precompute(
+            W, n_probes=8, lanczos_deg=15, n_exact=0, rng=np.random.default_rng(0)
+        )
+        assert pre.cv_coeffs is None
+        assert pre.n_exact == 0
+        assert pre._cv_correction(0.5) == 0.0
+
+    def test_scalar_and_vector_evaluators_agree_under_correction(self):
+        import numpy as np
+
+        from bayespecon._logdet._slq import (
+            slq_logdet_eval,
+            slq_logdet_eval_vec,
+            slq_logdet_precompute,
+        )
+
+        W = self._rook()
+        pre = slq_logdet_precompute(
+            W, n_probes=8, lanczos_deg=15, n_exact=4, rng=np.random.default_rng(0)
+        )
+        assert pre.n_exact == 4
+        rhos = np.linspace(-0.9, 0.9, 11)
+        vec = slq_logdet_eval_vec(pre, rhos)
+        scalar = np.array([slq_logdet_eval(pre, float(r)) for r in rhos])
+        assert np.allclose(vec, scalar, rtol=1e-12, atol=1e-10)
+
+    def test_correction_vanishes_at_rho_zero(self):
+        """``log|I - 0·W| = 0`` exactly, so the correction must not perturb it."""
+        import numpy as np
+
+        from bayespecon._logdet._slq import slq_logdet_eval, slq_logdet_precompute
+
+        W = self._rook()
+        pre = slq_logdet_precompute(
+            W, n_probes=8, lanczos_deg=15, n_exact=4, rng=np.random.default_rng(0)
+        )
+        assert abs(slq_logdet_eval(pre, 0.0)) < 1e-9
+
+    def test_correction_reduces_error_against_the_exact_logdet(self):
+        import numpy as np
+        import scipy.sparse as sp
+
+        from bayespecon._logdet._slq import (
+            slq_logdet_eval_vec,
+            slq_logdet_precompute,
+        )
+
+        W = self._rook()
+        n = W.shape[0]
+        eye = sp.eye(n, format="csc")
+        rhos = np.linspace(-0.9, 0.9, 9)
+        exact = np.array([np.linalg.slogdet((eye - r * W).toarray())[1] for r in rhos])
+
+        def err(depth, seed):
+            pre = slq_logdet_precompute(
+                W,
+                n_probes=30,
+                lanczos_deg=15,
+                n_exact=depth,
+                rng=np.random.default_rng(seed),
+            )
+            return np.max(np.abs(slq_logdet_eval_vec(pre, rhos) - exact))
+
+        plain = np.median([err(0, s) for s in range(5)])
+        corrected = np.median([err(4, s) for s in range(5)])
+        assert corrected < plain, f"CV made it worse: {corrected} vs {plain}"

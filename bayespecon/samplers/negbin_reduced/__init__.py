@@ -77,6 +77,7 @@ def _run_count_reduced_gibbs(
     krylov_degree=12,
     krylov_dmax=0.4,
     n_rho_omega_cycles=1,
+    krylov_reuse=True,
     timeout=None,
 ):
     """Registry runner for reduced-form SAR NegBin Pólya-Gamma Gibbs."""
@@ -94,6 +95,7 @@ def _run_count_reduced_gibbs(
         krylov_degree=krylov_degree,
         krylov_dmax=krylov_dmax,
         n_rho_omega_cycles=n_rho_omega_cycles,
+        krylov_reuse=krylov_reuse,
         timeout=timeout,
     )
 
@@ -110,6 +112,7 @@ register(
         "krylov_degree",
         "krylov_dmax",
         "n_rho_omega_cycles",
+        "krylov_reuse",
         "timeout",
     },
 )

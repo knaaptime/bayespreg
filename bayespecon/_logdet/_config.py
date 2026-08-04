@@ -50,6 +50,7 @@ class LogDetMethod(str, Enum):
     CHEBYSHEV = "chebyshev"
     CHEB_STOCHASTIC = "cheb_stochastic"
     CHEB_CHOLESKY = "cheb_cholesky"
+    LU_CHEB = "lu_cheb"
     AAA = "aaa"
     CHOL_AAA = "chol_aaa"
     TRACES = "traces"
@@ -64,6 +65,7 @@ LogDetMethodName = Literal[
     "chebyshev",
     "cheb_stochastic",
     "cheb_cholesky",
+    "lu_cheb",
     "aaa",
     "chol_aaa",
     "traces",

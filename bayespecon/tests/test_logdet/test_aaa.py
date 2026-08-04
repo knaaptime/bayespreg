@@ -340,11 +340,20 @@ class TestAdaptiveNCoarse:
         # Default [0.1, 0.8]: clear of the ±1 singularities → trimmed grid.
         assert _adaptive_n_coarse(0.1, 0.8) == 16
 
-    def test_adaptive_wide_intervals_are_30(self):
-        assert _adaptive_n_coarse(-0.5, 0.95) == 30
-        assert _adaptive_n_coarse(-0.95, 0.95) == 30
-        # Narrow but hugging the singularity → keep the full grid.
-        assert _adaptive_n_coarse(0.85, 0.99) == 30
+    def test_adaptive_wide_intervals_scale_with_bernstein_rate(self):
+        # These used to all read 30 because the cap sat there and saturated
+        # them; the cap is now 96, so they report what the rule actually asks
+        # for.  Monotone in proximity to the ±1 singularities.
+        assert _adaptive_n_coarse(-0.5, 0.95) == 44
+        assert _adaptive_n_coarse(-0.95, 0.95) == 50
+        # Narrow but hugging the singularity → still needs a full-ish grid.
+        assert _adaptive_n_coarse(0.85, 0.99) == 31
+
+    def test_adaptive_full_stability_region_is_capped_at_96(self):
+        # The unclamped rule asks for 113 on [-0.99, 0.99]; AAA saturates near
+        # 1e-7--1e-8 by ~96 nodes and is flat and non-monotone beyond, so the
+        # cap binds here and nowhere narrower.
+        assert _adaptive_n_coarse(-0.99, 0.99) == 96
 
     def test_n_coarse_equals_lu_factorisation_count(self):
         """`_aaa_algorithm_lazy` evaluates exactly n_coarse times (one LU each)."""

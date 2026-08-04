@@ -9,11 +9,23 @@ import scipy.sparse as sp
 from bayespecon._logdet import make_logdet_numpy_fn, make_logdet_numpy_vec_fn
 from bayespecon._logdet._cheb_stochastic import (
     ChebStochasticPrecompute,
+    _exact_cheb_moments,
     _log_cheb_coeffs,
+    _power_traces,
+    _probe_noise_rtol,
     cheb_stochastic_logdet_eval,
     cheb_stochastic_logdet_eval_vec,
     cheb_stochastic_logdet_precompute,
+    cheb_stochastic_order,
 )
+
+
+def _d_sym(W):
+    """D-symmetrised W_sym = D^{1/2} W D^{-1/2} (same spectrum, symmetric)."""
+    from bayespecon._logdet._slq import _recover_symmetrizing_diagonal
+
+    s = np.sqrt(_recover_symmetrizing_diagonal(W))
+    return sp.csr_matrix(sp.diags(s) @ W @ sp.diags(1.0 / s))
 
 
 def _weighted_ring_W(n, k=3, seed=0):
@@ -366,3 +378,177 @@ class TestDeflation:
         # Fallback runs the identical plain path → identical moments.
         np.testing.assert_allclose(deflated.moments, plain.moments)
         assert np.all(np.isfinite(deflated.moments))
+
+
+# ---------------------------------------------------------------------------
+# Exact low-order moments (Hutchinson control variates)
+# ---------------------------------------------------------------------------
+
+
+class TestExactMoments:
+    """``n_exact`` replaces leading moments with probe-free exact values."""
+
+    @staticmethod
+    def _eig_moments(W, depth):
+        """tr(T_j(W)) from a dense eigendecomposition (spectrum already in [-1,1])."""
+        lam = np.linalg.eigvalsh(_d_sym(W).toarray())
+        T = np.empty((depth + 1, lam.size))
+        T[0] = 1.0
+        if depth >= 1:
+            T[1] = lam
+        for j in range(1, depth):
+            T[j + 1] = 2.0 * lam * T[j] - T[j - 1]
+        return T.sum(axis=1)
+
+    @pytest.mark.parametrize("depth", [2, 3, 4, 5, 6])
+    def test_matches_eigenvalue_moments(self, depth):
+        """Exact moments agree with the eigenvalue computation to machine precision."""
+        W = _weighted_ring_W(60, k=2, seed=3)
+        got = _exact_cheb_moments(W, depth, -1.0, 1.0)
+        np.testing.assert_allclose(
+            got, self._eig_moments(W, depth), rtol=1e-10, atol=1e-8
+        )
+
+    def test_power_traces_match_dense(self):
+        """The two-product trace scheme matches dense matrix powers."""
+        W = _weighted_ring_W(40, k=2, seed=1)
+        dense = W.toarray()
+        want = [float(np.trace(np.linalg.matrix_power(dense, k))) for k in range(7)]
+        np.testing.assert_allclose(_power_traces(W, 6), want, rtol=1e-10, atol=1e-9)
+
+    def test_directed_W_power_traces(self):
+        """tr(W^k) is basis-free, so the scheme holds for non-symmetric W too."""
+        rng = np.random.default_rng(0)
+        A = sp.random(50, 50, density=0.15, random_state=rng, format="csr")
+        W = (
+            sp.diags(1.0 / np.maximum(np.asarray(A.sum(1)).ravel(), 1e-12)) @ A
+        ).tocsr()
+        dense = W.toarray()
+        want = [float(np.trace(np.linalg.matrix_power(dense, k))) for k in range(5)]
+        np.testing.assert_allclose(_power_traces(W, 4), want, rtol=1e-9, atol=1e-9)
+
+    def test_moments_are_recorded_and_applied(self):
+        W = _weighted_ring_W(80, k=2, seed=5)
+        pre = cheb_stochastic_logdet_precompute(W, order=25, n_exact=4, n_probes=8)
+        assert pre.n_exact == 4
+        np.testing.assert_allclose(
+            pre.moments[:5],
+            _exact_cheb_moments(W, 4, pre.lam_min, pre.lam_max),
+            rtol=1e-10,
+        )
+
+    def test_deeper_is_more_accurate(self):
+        """Variance falls monotonically with depth over repeated probe draws."""
+        W = _weighted_ring_W(200, k=3, seed=11)
+        lam = np.linalg.eigvalsh(_d_sym(W).toarray())
+        rhos = np.array([0.5, 0.8, 0.9])
+        exact = np.array([np.sum(np.log1p(-r * lam)) for r in rhos])
+        rmse = {}
+        for depth in (1, 2, 4):
+            errs = [
+                cheb_stochastic_logdet_eval_vec(
+                    cheb_stochastic_logdet_precompute(
+                        W,
+                        order=30,
+                        n_probes=12,
+                        n_exact=depth,
+                        rng=np.random.default_rng(s),
+                    ),
+                    rhos,
+                )
+                - exact
+                for s in range(12)
+            ]
+            rmse[depth] = np.sqrt((np.array(errs) ** 2).mean(axis=0))
+        assert np.all(rmse[2] < rmse[1])
+        assert np.all(rmse[4] < rmse[2])
+
+    def test_default_is_depth_four(self):
+        W = _weighted_ring_W(60, k=2, seed=2)
+        assert cheb_stochastic_logdet_precompute(W, order=25, n_probes=8).n_exact == 4
+
+    def test_depth_never_exceeds_order(self):
+        W = _weighted_ring_W(60, k=2, seed=2)
+        pre = cheb_stochastic_logdet_precompute(W, order=3, n_probes=8, n_exact=6)
+        assert pre.n_exact <= 3
+        assert np.all(np.isfinite(pre.moments))
+
+    def test_legacy_depth_one_reproduces_historical_moments(self):
+        """n_exact=1 keeps the mu_0 = n, mu_1 = tr(W~) behaviour unchanged."""
+        W = _weighted_ring_W(60, k=2, seed=4)
+        pre = cheb_stochastic_logdet_precompute(
+            W, order=20, n_probes=10, n_exact=1, rng=np.random.default_rng(0)
+        )
+        assert pre.n_exact == 1
+        assert pre.moments[0] == pytest.approx(W.shape[0])
+
+
+class TestDegreeGuard:
+    def test_dense_W_degrades_to_two(self):
+        n = 120
+        W = sp.csr_matrix((np.full((n, n), 1.0 / (n - 1)) - np.eye(n) / (n - 1)))
+        with pytest.warns(UserWarning, match="max_degree"):
+            pre = cheb_stochastic_logdet_precompute(W, order=20, n_probes=8, n_exact=6)
+        assert pre.n_exact == 2
+
+    def test_raising_max_degree_overrides(self):
+        n = 120
+        W = sp.csr_matrix((np.full((n, n), 1.0 / (n - 1)) - np.eye(n) / (n - 1)))
+        pre = cheb_stochastic_logdet_precompute(
+            W, order=20, n_probes=8, n_exact=6, max_degree=1e6
+        )
+        assert pre.n_exact == 6
+
+    def test_sparse_W_keeps_requested_depth(self):
+        W = _weighted_ring_W(200, k=2, seed=6)  # degree 8
+        pre = cheb_stochastic_logdet_precompute(W, order=25, n_probes=8, n_exact=4)
+        assert pre.n_exact == 4
+
+
+class TestOrderSelection:
+    def test_wider_interval_needs_higher_order(self):
+        orders = [
+            cheb_stochastic_order(-b, b, n=10_000) for b in (0.5, 0.8, 0.9, 0.95, 0.99)
+        ]
+        assert orders == sorted(orders)
+        assert orders[-1] > orders[0]
+
+    def test_tail_bound_is_respected(self):
+        """The selected order's rigorous tail bound meets the noise-floor target."""
+        rho, n, k = 0.95, 10_000, 50
+        p = cheb_stochastic_order(-rho, rho, n=n, n_probes=k)
+        coeffs = np.abs(_log_cheb_coeffs(rho, -1.0, 1.0, 256))
+        assert coeffs[p + 1 :].sum() <= _probe_noise_rtol(rho, n, k) or p >= 120
+
+    def test_order_none_requires_bounds(self):
+        W = _weighted_ring_W(40, k=2, seed=0)
+        with pytest.raises(ValueError, match="rho_min and rho_max"):
+            cheb_stochastic_logdet_precompute(W, order=None)
+
+    def test_order_none_sizes_from_interval(self):
+        W = _weighted_ring_W(60, k=2, seed=0)
+        narrow = cheb_stochastic_logdet_precompute(
+            W, order=None, rho_min=0.1, rho_max=0.8, n_probes=8
+        )
+        wide = cheb_stochastic_logdet_precompute(
+            W, order=None, rho_min=-0.99, rho_max=0.99, n_probes=8
+        )
+        assert wide.order > narrow.order
+
+    def test_low_pinned_order_degrades_depth_with_warning(self):
+        W = _weighted_ring_W(60, k=2, seed=0)
+        with pytest.warns(UserWarning, match="binding error"):
+            pre = cheb_stochastic_logdet_precompute(
+                W, order=15, rho_min=-0.99, rho_max=0.99, n_probes=8, n_exact=6
+            )
+        assert pre.n_exact == 1
+
+    def test_no_bounds_means_no_order_check(self):
+        """Without an interval there is nothing to validate, so no warning fires."""
+        import warnings
+
+        W = _weighted_ring_W(60, k=2, seed=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            pre = cheb_stochastic_logdet_precompute(W, order=15, n_probes=8, n_exact=4)
+        assert pre.n_exact == 4

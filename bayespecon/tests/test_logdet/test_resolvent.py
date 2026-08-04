@@ -218,7 +218,11 @@ class TestSLQGrad:
         pre = slq_logdet_precompute(W)
         assert pre.method == "lanczos"
         for rho in [-0.3, 0.0, 0.3, 0.6]:
-            g = float(logdet_grad_slq(rho, pre.nodes, pre.weights, pre.n_probes))
+            g = float(
+                logdet_grad_slq(
+                    rho, pre.nodes, pre.weights, pre.n_probes, cv_coeffs=pre.cv_coeffs
+                )
+            )
             fd = _fd(lambda r: slq_logdet_eval(pre, r), rho)
             np.testing.assert_allclose(g, fd, rtol=1e-5, atol=1e-6)
 
@@ -227,7 +231,11 @@ class TestSLQGrad:
         pre = slq_logdet_precompute(W)
         assert pre.method == "arnoldi"
         for rho in [0.0, 0.2, 0.4]:
-            g = float(logdet_grad_slq(rho, pre.nodes, pre.weights, pre.n_probes))
+            g = float(
+                logdet_grad_slq(
+                    rho, pre.nodes, pre.weights, pre.n_probes, cv_coeffs=pre.cv_coeffs
+                )
+            )
             fd = _fd(lambda r: slq_logdet_eval(pre, r), rho)
             np.testing.assert_allclose(g, fd, rtol=1e-5, atol=1e-6)
 
@@ -377,7 +385,11 @@ class TestAutodiffParity:
         pre = slq_logdet_precompute(W)
         fn = make_logdet_jax_fn(W, method="slq")
         for rho in [-0.3, 0.0, 0.3, 0.6]:
-            g_core = float(logdet_grad_slq(rho, pre.nodes, pre.weights, pre.n_probes))
+            g_core = float(
+                logdet_grad_slq(
+                    rho, pre.nodes, pre.weights, pre.n_probes, cv_coeffs=pre.cv_coeffs
+                )
+            )
             g_ad = float(jax.grad(fn)(jnp.float64(rho)))
             np.testing.assert_allclose(g_core, g_ad, rtol=1e-9, atol=1e-10)
 

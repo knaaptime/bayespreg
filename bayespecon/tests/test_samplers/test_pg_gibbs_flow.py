@@ -365,21 +365,22 @@ class TestNegativeBinomialSARFlowGibbs:
             assert np.isfinite(idata.posterior[v].to_numpy()).all()
         assert "log_likelihood" in idata.groups()
 
-    def test_separable_jax_backend_raises(self):
-        """The separable Kronecker model is NumPy-only; jax must raise clearly."""
+    def test_separable_jax_backend_works(self):
+        """The separable Kronecker model now supports the JAX backend."""
         from bayespecon.models.flow._flow import SARNegBinFlowSeparable
 
         data = _make_flow_data()
         model = SARNegBinFlowSeparable(data["y_vec"], data["X"], data["G"])
-        with pytest.raises(ValueError, match="unrestricted"):
-            model.fit(
-                draws=10,
-                tune=10,
-                chains=1,
-                sampler="gibbs",
-                gibbs_backend="jax",
-                progressbar=False,
-            )
+        idata = model.fit(
+            draws=10,
+            tune=10,
+            chains=1,
+            sampler="gibbs",
+            gibbs_backend="jax",
+            progressbar=False,
+        )
+        assert "rho_d" in idata.posterior
+        assert "rho_o" in idata.posterior
 
     def test_gibbs_shapes(self):
         """Gibbs posterior has correct shapes for unrestricted model."""

@@ -118,8 +118,11 @@ def make_logdet_jax_param_fn(method: str, T: int = 1):
     Parameters
     ----------
     method : str
-        ``"cheb_cholesky"`` (Chebyshev coefficients) or ``"aaa"`` (barycentric
-        support points, values and weights).
+        ``"cheb_cholesky"`` (Chebyshev coefficients), or ``"aaa"`` /
+        ``"chol_aaa"`` (barycentric support points, values and weights).  The
+        two AAA variants differ only in the factorizer used to obtain the
+        support values at precompute time — LU versus Cholesky — and share one
+        evaluation form, so they share this parameterisation.
     T : int, default 1
         Panel replication factor applied to the result.
 
@@ -131,7 +134,7 @@ def make_logdet_jax_param_fn(method: str, T: int = 1):
     """
     T = int(T)
 
-    if method == "cheb_cholesky":
+    if method in ("cheb_cholesky", "lu_cheb"):
 
         def _cheb(rho, params):
             coeffs, rmin, rmax = params
@@ -140,7 +143,7 @@ def make_logdet_jax_param_fn(method: str, T: int = 1):
 
         return _cheb
 
-    if method == "aaa":
+    if method in ("aaa", "chol_aaa"):
 
         def _aaa(rho, params):
             import jax.numpy as jnp
@@ -156,7 +159,8 @@ def make_logdet_jax_param_fn(method: str, T: int = 1):
 
     raise ValueError(
         f"make_logdet_jax_param_fn does not support method {method!r}; "
-        "only 'cheb_cholesky' and 'aaa' carry a refittable parameterisation."
+        "only 'cheb_cholesky', 'lu_cheb', 'aaa' and 'chol_aaa' carry a refittable "
+        "parameterisation."
     )
 
 
@@ -255,6 +259,15 @@ def make_logdet_jax_fn(
         weights = np.asarray(pre.weights)
         n_probes = pre.n_probes
 
+        # The exact-moment control variate is part of the value the numpy
+        # evaluator returns, so it has to be carried into the traced graph too;
+        # otherwise the JAX and numpy paths compute different functions.
+        cv = (
+            np.zeros(0)
+            if pre.cv_coeffs is None
+            else np.asarray(pre.cv_coeffs, dtype=np.float64)
+        )
+
         nodes_real = np.ascontiguousarray(nodes.real.astype(np.float64))
         nodes_imag = np.ascontiguousarray(nodes.imag.astype(np.float64))
         w_real = np.ascontiguousarray(weights.real.astype(np.float64))
@@ -277,16 +290,20 @@ def make_logdet_jax_fn(
             # term vanishes for real (Lanczos) weights but keeps the cross term
             # that a magnitude-only log would drop for the complex Arnoldi case.
             val = jnp.sum(wr * log_re - wi * log_im) / n_probes
+            if cv.size:
+                j = jnp.arange(1, cv.size + 1, dtype=jnp.float64)
+                val = val + jnp.sum(rho**j / j * jnp.asarray(cv))
             return val if T == 1 else T * val
 
         return _jax_slq
 
-    if method == "cheb_cholesky":
-        from ._chol_cheb import chol_cheb_logdet_precompute
+    if method in ("cheb_cholesky", "lu_cheb"):
+        from ._factories import _cheb_precompute_for
 
-        # Precompute Chebyshev coefficients via sparse Cholesky in numpy,
-        # then evaluate via JAX-native Clenshaw (differentiable, JIT-compatible).
-        pre = chol_cheb_logdet_precompute(
+        # Precompute Chebyshev coefficients in numpy — via sparse Cholesky for
+        # ``cheb_cholesky``, sparse LU for ``lu_cheb`` — then evaluate via
+        # JAX-native Clenshaw (differentiable, JIT-compatible).
+        pre = _cheb_precompute_for(method)(
             W_sparse, order=None, rho_min=rho_min, rho_max=rho_max
         )
         coeffs = pre.coeffs.astype(np.float64)

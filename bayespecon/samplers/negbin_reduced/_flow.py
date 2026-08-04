@@ -45,7 +45,7 @@ from ._core import (
     _KRYLOV_DEGREE_DEFAULT,
     _KRYLOV_DMAX_DEFAULT,
     ReducedGibbsPriors,
-    _build_krylov_basis,
+    ReducedKrylovBasis,
     _eval_U_from_basis,
     _sample_beta,
     _sample_omega,
@@ -133,6 +133,8 @@ class FlowReducedGibbsCache:
         n_rho_omega_cycles: int = 1,
         positive: bool = False,
         T: int = 1,
+        krylov_reuse: bool = True,
+        krylov_reuse_threshold: float = 0.15,
     ):
         self.Wd = Wd
         self.Wo = Wo
@@ -148,6 +150,8 @@ class FlowReducedGibbsCache:
         self.positive = positive
         self.T = int(T)
         self.Nf = int(Wd.shape[0])  # per-period flow count (n²)
+        self.krylov_reuse = krylov_reuse
+        self.krylov_reuse_threshold = krylov_reuse_threshold
 
         # Eigenvalue bounds for the regional W (n×n).
         # For row-standardised W: eigenvalues in [-1, 1].
@@ -246,6 +250,107 @@ def _solve_A_separable(
     Nf = n * n
     Xb = _stack_periods(X, Nf, T)
     return _unstack_periods(kron_solve_matrix(Lo, Ld, Xb, n), Nf, T)
+
+
+# ---------------------------------------------------------------------------
+# Kronecker-aware Krylov basis for the separable flow model
+# ---------------------------------------------------------------------------
+
+
+def _build_kron_krylov_basis(
+    rho_d_c: float,
+    rho_o_c: float,
+    X: np.ndarray,
+    W_csc: sp.csc_matrix,
+    n: int,
+    direction: str,
+    degree: int,
+) -> ReducedKrylovBasis:
+    """Build a shift-invert Krylov basis for the separable Kronecker system.
+
+    When varying ρ_d (holding ρ_o fixed), the system matrix is
+
+    .. math::
+        A(\\rho_d) = L_o \\otimes L_d(\\rho_d)
+        = A_c - \\Delta\\rho_d \\, (L_o \\otimes W)
+
+    so the Krylov recurrence uses the matvec ``(L_o ⊗ W) v`` and the
+    solve ``A_c⁻¹ rhs`` (a Kronecker two-step).  Symmetrically for ρ_o,
+    the matvec is ``(W ⊗ L_d) v``.
+
+    Parameters
+    ----------
+    rho_d_c, rho_o_c : float
+        Centre values at which ``A_c`` is factored.
+    X : ndarray, shape (N, k)
+        Design matrix on the flow lattice (N = n²).
+    W_csc : csc_matrix, shape (n, n)
+        Regional weights matrix.
+    n : int
+        Number of regions.
+    direction : {"rho_d", "rho_o"}
+        Which ρ the basis is for — determines the matvec operator.
+    degree : int
+        Krylov degree m.
+
+    Returns
+    -------
+    ReducedKrylovBasis
+        With ``rho_basis`` set to the ρ_k being varied, ``V_stack`` of
+        shape ``(m+1, N, k)``, and ``solver`` set to ``None`` (the solve
+        is done via Kronecker two-step, not a single factor).
+    """
+    from ..._ops import kron_solve_matrix
+
+    I_n = sp.eye(n, format="csr", dtype=np.float64)
+    Ld_c = (I_n - rho_d_c * W_csc).tocsr()
+    Lo_c = (I_n - rho_o_c * W_csc).tocsr()
+    N = n * n
+    m = degree
+    V_stack = np.empty((m + 1, N, X.shape[1]), dtype=np.float64)
+
+    def _kron_solve(rhs):
+        return kron_solve_matrix(Lo_c, Ld_c, rhs, n)
+
+    # V_0 = A_c⁻¹ X
+    V_stack[0] = _kron_solve(X)
+
+    if direction == "rho_d":
+        # Matvec: (L_o ⊗ W) v = vec(W H L_o^T)  where v = vec(H)
+        # For V_j of shape (N, k): reshape to (n, n, k), apply W on axis 0,
+        # L_o^T on axis 1, reshape back.
+        def _matvec(v):
+            v3 = v.reshape(n, n, -1, order="F")
+            # W @ v3 on axis 0: (n, n, k) → W applied to first n-axis
+            Wv = W_csc @ v3.reshape(n, -1, order="F")  # (n, n*k)
+            Wv3 = Wv.reshape(n, n, -1, order="F")
+            # L_o^T @ Wv3 on axis 1: transpose, apply, transpose back
+            LoT_v = Lo_c.T @ Wv3.transpose(1, 0, 2).reshape(n, -1, order="F")
+            result = LoT_v.reshape(n, n, -1, order="F").transpose(1, 0, 2)
+            return result.reshape(N, -1, order="F")
+    else:  # rho_o
+        # Matvec: (W ⊗ L_d) v = vec(L_d H W^T)
+        def _matvec(v):
+            v3 = v.reshape(n, n, -1, order="F")
+            # L_d @ v3 on axis 1: transpose, apply, transpose back
+            Ld_v = Ld_c @ v3.transpose(1, 0, 2).reshape(n, -1, order="F")
+            Ld_v3 = Ld_v.reshape(n, n, -1, order="F").transpose(1, 0, 2)
+            # W^T @ Ld_v3 on axis 0
+            WT_v = W_csc.T @ Ld_v3.reshape(n, -1, order="F")
+            result = WT_v.reshape(n, n, -1, order="F")
+            return result.reshape(N, -1, order="F")
+
+    for j in range(m):
+        Wv = _matvec(V_stack[j])
+        V_stack[j + 1] = _kron_solve(Wv)
+
+    rho_basis_val = rho_d_c if direction == "rho_d" else rho_o_c
+    return ReducedKrylovBasis(
+        rho_basis=rho_basis_val,
+        solver=None,  # Kronecker solve, not a single factor
+        V_stack=V_stack,
+        degree=m,
+    )
 
 
 def _compute_eta_unrestricted(
@@ -772,6 +877,12 @@ def run_chain_separable(
     use_krylov = cache.krylov_degree > 0 and cache.T == 1
     krylov_degree = cache.krylov_degree
 
+    # Per-chain Krylov basis caches for reuse across sweeps.
+    _prev_basis_d = None
+    _prev_rho_d = None
+    _prev_basis_o = None
+    _prev_rho_o = None
+
     for i in range(total_iters):
         # Compute η = A⁻¹ Xβ at current ρ's (per period for panels)
         Xbeta = X @ state.beta
@@ -787,34 +898,53 @@ def run_chain_separable(
         _n_cycles = cache.n_rho_omega_cycles
         Xtilde = None
 
-        # Build Krylov bases for ρ_d and ρ_o at current values
+        # Build Krylov bases for ρ_d and ρ_o at current values (with reuse)
         basis_d = None
         basis_o = None
         if use_krylov:
-            try:
-                basis_d = _build_krylov_basis(
-                    state.rho_d,
-                    X,
-                    W_csc,
-                    n,
-                    degree=krylov_degree,
-                    W_eig_max=cache.W_eig_max,
-                    W_eig_min=cache.W_eig_min,
-                )
-            except (RuntimeError, ValueError):
-                basis_d = None
-            try:
-                basis_o = _build_krylov_basis(
-                    state.rho_o,
-                    X,
-                    W_csc,
-                    n,
-                    degree=krylov_degree,
-                    W_eig_max=cache.W_eig_max,
-                    W_eig_min=cache.W_eig_min,
-                )
-            except (RuntimeError, ValueError):
-                basis_o = None
+            if (
+                cache.krylov_reuse
+                and _prev_basis_d is not None
+                and abs(state.rho_d - _prev_rho_d) < cache.krylov_reuse_threshold
+            ):
+                basis_d = _prev_basis_d
+            else:
+                try:
+                    basis_d = _build_kron_krylov_basis(
+                        state.rho_d,
+                        state.rho_o,
+                        X,
+                        W_csc,
+                        n,
+                        direction="rho_d",
+                        degree=krylov_degree,
+                    )
+                except (RuntimeError, ValueError):
+                    basis_d = None
+                _prev_basis_d = basis_d
+                _prev_rho_d = state.rho_d
+
+            if (
+                cache.krylov_reuse
+                and _prev_basis_o is not None
+                and abs(state.rho_o - _prev_rho_o) < cache.krylov_reuse_threshold
+            ):
+                basis_o = _prev_basis_o
+            else:
+                try:
+                    basis_o = _build_kron_krylov_basis(
+                        state.rho_d,
+                        state.rho_o,
+                        X,
+                        W_csc,
+                        n,
+                        direction="rho_o",
+                        degree=krylov_degree,
+                    )
+                except (RuntimeError, ValueError):
+                    basis_o = None
+                _prev_basis_o = basis_o
+                _prev_rho_o = state.rho_o
 
         for _cycle in range(_n_cycles):
             # --- ρ_d | ω, α, y (β marginalised) ---

@@ -85,6 +85,7 @@ def _make_reduced_logit_gibbs_step(
     intercept_col,
     krylov_degree,
     krylov_dmax,
+    krylov_reuse=True,
 ):
     """Build a JIT-compiled reduced-form SAR-logit Gibbs step (ω → ρ → β)."""
     import jax
@@ -132,6 +133,8 @@ def _make_reduced_logit_gibbs_step(
     rho_lo = jnp.float64(priors.rho_lower)
     rho_hi = jnp.float64(priors.rho_upper)
     dmax = jnp.float64(krylov_dmax)
+    _reuse_threshold = jnp.float64(0.15) if krylov_reuse else jnp.float64(0.0)
+    _V_init = jnp.zeros((krylov_degree + 1, n, k), dtype=jnp.float64)
     _ic = int(intercept_col)
     _deg = int(krylov_degree)
 
@@ -141,20 +144,39 @@ def _make_reduced_logit_gibbs_step(
         rho = state["rho"]
         key_rho, key_beta, key_pg = jax.random.split(key, 3)
 
+        # ── Krylov basis: reuse or rebuild ──
+        V_stack_prev = state.get("V_stack", jnp.zeros_like(_V_init))
+        rho_basis_prev = state.get("rho_basis", jnp.float64(0.0))
+        _drho_check = rho - rho_basis_prev
+
+        def _rebuild_basis(_):
+            V = _build_krylov_basis_jax(
+                lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _deg
+            )
+            _eta = V[0] @ beta
+            return V, rho, _eta
+
+        def _reuse_basis(_):
+            _U = _eval_U_from_basis_jax(V_stack_prev, _drho_check)
+            _eta = _U @ beta
+            return V_stack_prev, rho_basis_prev, _eta
+
+        V_stack, rho_basis, eta = jax.lax.cond(
+            jnp.abs(_drho_check) < _reuse_threshold,
+            _reuse_basis,
+            _rebuild_basis,
+            operand=None,
+        )
+
         # ── Block 0: ω ~ PG(1, η) ── (Bernoulli augmentation)
-        eta = _solve(rho, X_jax @ beta)
         z = jnp.clip(eta, -20.0, 20.0)
         h = jnp.ones_like(z)  # per-device (n,)
         omega = _draw_pg(h, z, key_pg)
 
         # ── Block 1: ρ — Krylov-only slice ──
-        V_stack = _build_krylov_basis_jax(
-            lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _deg
-        )
-
         def _dens(rv):
             return _rho_log_density_logit(
-                rv, V_stack, rho, omega, y_jax, V0_inv_diag, mu0, _ic, dmax
+                rv, V_stack, rho_basis, omega, y_jax, V0_inv_diag, mu0, _ic, dmax
             )
 
         rho_new, _ = jax_slice_sample_1d(
@@ -162,7 +184,7 @@ def _make_reduced_logit_gibbs_step(
         )
 
         # ── Block 2: β | ρ, ω, y — conjugate normal ──
-        drho_new = rho_new - rho
+        drho_new = rho_new - rho_basis
         Xtilde = _eval_U_from_basis_jax(V_stack, drho_new)  # within dmax (Krylov-only)
 
         reparam_beta = (_ic >= 0) & (jnp.abs(rho_new) > 1e-8)
@@ -189,7 +211,13 @@ def _make_reduced_logit_gibbs_step(
         )
 
         eta_new = Xtilde @ beta_new
-        new_state = {"beta": beta_new, "rho": rho_new, "omega": omega}
+        new_state = {
+            "beta": beta_new,
+            "rho": rho_new,
+            "omega": omega,
+            "V_stack": V_stack,
+            "rho_basis": rho_basis,
+        }
         return new_state, eta_new  # η for the on-device Bernoulli log-lik
 
     return gibbs_step
@@ -211,6 +239,7 @@ def run_chains_jax_reduced_logit(
     slice_width=0.4,
     jax_seeds=None,
     progressbar=False,
+    krylov_reuse=True,
 ):
     """Run the reduced-form SAR-logit PG-Gibbs sampler (device-parallel).
 
@@ -251,12 +280,16 @@ def run_chains_jax_reduced_logit(
         intercept_col=intercept_col,
         krylov_degree=krylov_degree,
         krylov_dmax=krylov_dmax,
+        krylov_reuse=krylov_reuse,
     )
 
+    _V_init = jnp.zeros((krylov_degree + 1, n, k), dtype=jnp.float64)
     state0 = {
         "beta": jnp.asarray(np.stack([i.beta for i in inits]), dtype=jnp.float64),
         "rho": jnp.asarray([float(i.rho) for i in inits], dtype=jnp.float64),
         "omega": jnp.asarray(np.stack([i.omega for i in inits]), dtype=jnp.float64),
+        "V_stack": jnp.broadcast_to(_V_init, (chains,) + _V_init.shape),
+        "rho_basis": jnp.zeros(chains, dtype=jnp.float64),
     }
     warm_keys = jnp.stack([jax.random.PRNGKey(int(s)) for s in jax_seeds])
     draw_keys = jnp.stack(

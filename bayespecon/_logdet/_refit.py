@@ -59,7 +59,7 @@ _log = logging.getLogger(__name__)
 #: ``eigenvalue`` is excluded because it is already exact and interval-free;
 #: the stochastic estimators are excluded because their error is dominated by
 #: probe noise rather than by the interval, so narrowing it buys nothing.
-REFITTABLE_METHODS = frozenset({"cheb_cholesky", "aaa", "chol_aaa"})
+REFITTABLE_METHODS = frozenset({"cheb_cholesky", "lu_cheb", "aaa", "chol_aaa"})
 
 #: Default padding, in warmup posterior standard deviations.
 DEFAULT_PAD_SD = 10.0
@@ -266,10 +266,14 @@ class LogdetRefitter:
 
     def _build_context(self):
         if self._context is None:
-            if self.method == "cheb_cholesky":
+            if self.method in ("cheb_cholesky", "lu_cheb"):
                 from ._chol_cheb import CholChebContext
 
                 self._context = CholChebContext(self.W_sparse)
+            elif self.method == "lu_cheb":
+                from ._chol_cheb import LUChebContext
+
+                self._context = LUChebContext(self.W_sparse)
             elif self.method == "aaa":
                 from ._aaa import AAAContext
 
@@ -324,13 +328,13 @@ class LogdetRefitter:
         only bites when the window is barely narrower, exactly where there was
         little to gain.
         """
-        if self.method == "cheb_cholesky":
+        if self.method in ("cheb_cholesky", "lu_cheb"):
             from ._chebyshev import cheb_order_for_tolerance
 
             n = int(self.W_sparse.shape[0])
             return int(cheb_order_for_tolerance(prior_min, prior_max, n))
         # AAA selects m ≤ n_coarse // 2 support points, and n_coarse is capped
-        # at 30 by ``_adaptive_n_coarse``.
+        # at 96 by ``_adaptive_n_coarse``.
         return 32
 
     def _fit(
@@ -347,7 +351,7 @@ class LogdetRefitter:
         instance target, which is how the scouting fit gets its looser one.
         """
         ctx = self._build_context()
-        if self.method == "cheb_cholesky":
+        if self.method in ("cheb_cholesky", "lu_cheb"):
             from ._chebyshev import cheb_order_for_tolerance
 
             order = cheb_order_for_tolerance(
@@ -362,7 +366,7 @@ class LogdetRefitter:
 
     def scout_order(self, prior_min: float, prior_max: float) -> int:
         """Nodes the scouting interpolant will use on the prior interval."""
-        if self.method != "cheb_cholesky":
+        if self.method not in ("cheb_cholesky", "lu_cheb"):
             # AAA's coarse grid is already small and its size is not a
             # tolerance dial, so there is no coarse variant to offer.
             return self.capacity(prior_min, prior_max)
@@ -388,7 +392,7 @@ class LogdetRefitter:
     def _numpy_fns(self, pre):
         """NumPy ``(scalar, vectorised)`` evaluators for an already-fitted precompute."""
         T = self.T
-        if self.method == "cheb_cholesky":
+        if self.method in ("cheb_cholesky", "lu_cheb"):
             # ``clenshaw_*`` already apply the panel factor, so no wrapper is
             # needed here — the same route ``make_logdet_numpy_fn`` takes.
             from ._clenshaw import clenshaw_scalar, clenshaw_vec
@@ -470,7 +474,7 @@ class LogdetRefitter:
                 f"Refit needs {order} terms but the parameter capacity is {cap}."
             )
 
-        if self.method == "cheb_cholesky":
+        if self.method in ("cheb_cholesky", "lu_cheb"):
             coeffs = np.zeros(cap, dtype=np.float64)
             coeffs[:order] = pre.coeffs
             params = (
