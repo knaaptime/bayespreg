@@ -133,6 +133,41 @@ def _d_symmetrize(W: sp.csr_matrix) -> sp.csc_matrix:
     if diff.nnz == 0 or np.all(np.abs(diff.data) <= 1e-12):
         return sp.csc_matrix(W)
 
+    # Numba-accelerated path (opt-in via BAYESPECON_NUMBA_SYMMETRIZE=1).
+    #
+    # The pure-NumPy scipy path (below) takes ~40 ms on an 85k-node matrix
+    # and is called once per precompute.  The numba kernel is ~25 ms warm
+    # but pays a ~1.2 s JIT compilation on the first-ever call (cached to
+    # disk via ``cache=True``).  Since symmetrization is not a hot loop,
+    # the compile penalty outweighs the warm savings unless the kernel is
+    # reused across many matrices in the same session.  Default: off.
+    import os
+
+    if os.environ.get("BAYESPECON_NUMBA_SYMMETRIZE", "") == "1":
+        from ._slq import _numba_available
+
+        if _numba_available:
+            from ._slq import _d_symmetrize_numba
+
+            W_sym = _d_symmetrize_numba(W)
+            if W_sym is None:
+                raise ValueError(
+                    "cheb_cholesky requires a D-symmetrizable W (row-"
+                    "standardised undirected graph); no valid symmetrizing "
+                    'diagonal was found. Use logdet_method="aaa" for '
+                    "directed or non-symmetrizable W."
+                )
+            sym_diff = (W_sym - W_sym.T).tocoo()
+            sym_err = float(np.abs(sym_diff.data).max()) if sym_diff.nnz else 0.0
+            if sym_err > 1e-10:
+                raise ValueError(
+                    f"D-symmetrization failed (max asymmetry {sym_err:.2e}); "
+                    "W is not of the form D^-1 A with symmetric A. Use "
+                    'logdet_method="aaa" for this weights matrix.'
+                )
+            return W_sym
+
+    # Pure-NumPy path (default).
     from ._slq import _recover_symmetrizing_diagonal
 
     D = _recover_symmetrizing_diagonal(W)
