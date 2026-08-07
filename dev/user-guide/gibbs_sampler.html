@@ -1616,7 +1616,7 @@
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (4 chains in 2 jobs)
 NUTS: [rho, beta, sigma2]
-Sampling 4 chains for 1_000 tune and 2_000 draw iterations (4_000 + 8_000 draws total) took 15 seconds.
+Sampling 4 chains for 1_000 tune and 2_000 draw iterations (4_000 + 8_000 draws total) took 12 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">/home/runner/micromamba/envs/test/lib/python3.14/site-packages/rich/live.py:260: UserWarning: install "ipywidgets" 
@@ -1629,12 +1629,12 @@ for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 4s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3112</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3997</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>NUTS posterior means:
   rho   = 0.4117
-  beta  = [45.6977791  -1.04474323 -0.25777658]
-  sigma = 10.4805
+  beta  = [45.68129164 -1.04716181 -0.25613474]
+  sigma = 10.4891
 
 Gibbs posterior means:
   rho   = 0.4055
@@ -1667,7 +1667,7 @@ for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3815</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4487</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div></div>
 </div>
@@ -1678,12 +1678,12 @@ for Jupyter support
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>beta[x0]    3523.0
-beta[x1]    4018.0
-beta[x2]    5147.0
-rho         3859.0
-sigma2      5252.0
-sigma       5252.0
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>beta[x0]    3399.0
+beta[x1]    3485.0
+beta[x2]    4393.0
+rho         3805.0
+sigma2      4858.0
+sigma       4858.0
 Name: ess_bulk, dtype: float64
 </code></pre></div>
 </div>
@@ -1801,7 +1801,7 @@ for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3450</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4247</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>JAX Slice posterior means:
   rho   = 0.4055
@@ -1939,7 +1939,7 @@ for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 4s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2872</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3607</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">/home/runner/micromamba/envs/test/lib/python3.14/site-packages/rich/live.py:260: UserWarning: install "ipywidgets" 
 for Jupyter support
@@ -1951,14 +1951,14 @@ SDEM Gibbs: lam = 0.4968, beta shape = (4, 2000, 5)
 </code></pre></div>
 </div>
 <div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 4s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3218</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4033</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">/home/runner/micromamba/envs/test/lib/python3.14/site-packages/rich/live.py:260: UserWarning: install "ipywidgets" 
 for Jupyter support
   warnings.warn('install "ipywidgets" for Jupyter support')
 </pre>
 </div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 4s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2832</span> draws/s<span style="font-weight: bold">)</span>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 3s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">3467</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div></div>
 </div>
