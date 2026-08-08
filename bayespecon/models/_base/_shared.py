@@ -642,6 +642,34 @@ class SharedSpatialMethods:
         return np.linalg.eigvals(self._W_sparse.toarray().astype(np.float64))
 
     @cached_property
+    def _W_spectral_bounds(self) -> tuple[float, float]:
+        r"""``(λ_max, λ_min)`` bounds on ``W``'s spectrum, without densifying.
+
+        The Gibbs samplers need these only to bracket ``A_ρ = I - ρW``: the
+        SPD guard ``min(1-ρλ_max, 1-ρλ_min) > 0``, the Chebyshev interval for
+        the iterative fallback, and the Krylov convergence radius. All three
+        are correct with *bounds* — none needs the actual spectrum.
+
+        Taking them from :attr:`_W_eigs` costs a dense O(n³) eigendecomposition
+        that dominated the whole fit (89% of a 12.8 s run at n=4900) and hard
+        failed past ``BAYESPECON_LOGDET_EIGEN_HARD_MAX_N``. Avoiding it is the
+        point of the sparse factorizations.
+
+        For row-standardized ``W`` the bounds are not merely cheap but
+        *exact*: ``W1 = 1`` makes 1 an eigenvalue, and row-stochasticity puts
+        every eigenvalue in the closed unit disc, so ``λ_max = 1``. Otherwise
+        fall back to the Gershgorin/``∞``-norm bound ``|λ| ≤ max_i Σ_j |W_ij|``,
+        which is O(nnz).
+        """
+        if self._W_sparse is None:
+            return 1.0, -1.0
+        if getattr(self, "_is_row_std", False):
+            return 1.0, -1.0
+        radius = float(abs(self._W_sparse).sum(axis=1).max())
+        radius = max(radius, 1e-12)
+        return radius, -radius
+
+    @cached_property
     def _T_ww(self) -> float:
         """Sparse trace ``tr(WᵀW + WW)`` used by LM diagnostics (lazy)."""
         from ...graph import sparse_trace_WtW_plus_WW

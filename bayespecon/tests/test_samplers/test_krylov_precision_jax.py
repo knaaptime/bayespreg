@@ -149,8 +149,10 @@ class TestJaxMatchesNumpy:
         (_, _, _, safe), np_basis, _ = _both_bases()
         assert float(safe) == pytest.approx(np_basis.safe_dmax, rel=1e-6)
 
-    def test_one_factorization_per_solve_plus_logdet_nodes(self):
+    def test_build_refactors_only_for_logdet_nodes(self):
         """The recurrence must reuse the held factor, not refactor per step.
+
+        Only the exact logdet nodes are allowed to factor again.
 
         ``omega_val`` is unique to this test so sparsax's content-addressed
         cache cannot serve a factor built by another test and deflate the
@@ -160,8 +162,8 @@ class TestJaxMatchesNumpy:
 
         before = sparsax.factorization_count()
         _both_bases(omega_val=0.3717, seed=3)
-        # 1 basis factor + 4 Chebyshev logdet nodes; the degree-12 recurrence
-        # and the seed solve all run against the held factor.
+        # 1 for P_c + 4 Chebyshev logdet nodes; the degree-12 recurrence and
+        # the seed solve all run against the held factor.
         assert sparsax.factorization_count() - before == 1 + 4
 
 

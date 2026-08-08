@@ -516,12 +516,10 @@ class SARZINB(SpatialModel):
         W_cnt_csr = self._W_sparse.tocsr()
         W_cnt_csc = self._W_sparse.tocsc()
 
-        if self._W_eigs is not None:
-            W_eig_max = float(np.max(np.abs(self._W_eigs)))
-            W_eig_min = float(np.min(np.real(self._W_eigs)))
-        else:
-            W_eig_max = 1.0
-            W_eig_min = -1.0
+        # Spectrum bounds for the solve path.  Deliberately *not* from
+        # ``_W_eigs``: that densifies W for an O(n^3) eigendecomposition, and
+        # only bounds are needed here.  See ``_W_spectral_bounds``.
+        W_eig_max, W_eig_min = self._W_spectral_bounds
 
         W_cnt_sym, W_cnt_tW, cnt_pattern = _make_cholmod_pattern(W_cnt_csc, n)
         cnt_cholmod_pattern = cnt_pattern

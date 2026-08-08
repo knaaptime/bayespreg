@@ -408,36 +408,34 @@ def _make_gibbs_step_with_data(
                 if _use_krylov:
                     drho = rho_val - rho
                     within = jnp.abs(drho) <= _safe_dmax_nb
-                    # Horner in pure JAX against the basis built at ρ_c
-                    sol_all = eval_precision_solve_from_basis_jax(_V_stack_nb, drho)
-                    # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹Xβ/σ², P(ρ)⁻¹WtXβ/σ²]
-                    Pkappa = sol_all[:, 0]
-                    PXbeta = sol_all[:, 1:2]
-                    PWtXbeta = sol_all[:, 2:]
-                    # rhs = Xβ/σ² − ρ·WtXβ/σ² + κ
-                    m_kry = (PXbeta - rho_val * PWtXbeta).ravel() + Pkappa
-                    log_det_P_kry = eval_precision_logdet_from_basis_jax(
-                        _ld_coefs_nb, drho
+
+                    def _from_basis(_):
+                        # Horner in pure JAX against the basis built at ρ_c.
+                        # Columns: [P(ρ)⁻¹κ, P(ρ)⁻¹Xβ/σ², P(ρ)⁻¹WtXβ/σ²]
+                        sol_all = eval_precision_solve_from_basis_jax(_V_stack_nb, drho)
+                        # rhs = Xβ/σ² − ρ·WtXβ/σ² + κ
+                        m_k = (
+                            sol_all[:, 1:2] - rho_val * sol_all[:, 2:]
+                        ).ravel() + sol_all[:, 0]
+                        ld_k = eval_precision_logdet_from_basis_jax(_ld_coefs_nb, drho)
+                        return m_k, ld_k, rhs_r @ m_k
+
+                    def _direct(_):
+                        Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
+                        m_d, ld_d = _solve_logdet(Ax_r, rhs_r)
+                        return m_d, ld_d, rhs_r @ m_d
+
+                    # `lax.cond`, not `jnp.where`: `where` evaluates *both*
+                    # operands, so the direct factorization would run on every
+                    # candidate and the basis would be pure added work (measured
+                    # 0.84x end-to-end).  `cond` genuinely branches here because
+                    # chains are mapped with `pmap` — one chain per CPU device,
+                    # configured at import by `_auto_configure_cpu_devices` — and
+                    # each device runs real control flow.  Under `vmap` it would
+                    # lower back to `select`; see the `_use_pmap` gate below.
+                    m, log_det_P, quad_r = jax.lax.cond(
+                        within, _from_basis, _direct, operand=None
                     )
-                    quad_kry = rhs_r @ m_kry
-                    # Direct solve for candidates outside the Krylov radius.
-                    #
-                    # `jnp.where` evaluates both operands, so this factorization
-                    # runs on every candidate and the basis is pure added work —
-                    # `krylov_degree > 0` measures 0.84x end-to-end rather than
-                    # the ~3x the per-candidate microbenchmark suggests.
-                    # `lax.cond` does not help (chains run under vmap, where
-                    # cond lowers to select), and dropping the fallback to make
-                    # the basis authoritative was tried and reverted: rejecting
-                    # out-of-radius candidates walls off the slice and collapsed
-                    # the ρ posterior (sd 0.290 -> 0.153, ESS 114 -> 62) for no
-                    # real speed gain.  Hence `krylov_degree` defaults to 0.
-                    Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
-                    m_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_r)
-                    quad_dir = rhs_r @ m_dir
-                    m = jnp.where(within, m_kry, m_dir)
-                    log_det_P = jnp.where(within, log_det_P_kry, log_det_P_dir)
-                    quad_r = jnp.where(within, quad_kry, quad_dir)
                 else:
                     Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
                     # Solve + logdet from one factorization (factor_solve on 0.4).

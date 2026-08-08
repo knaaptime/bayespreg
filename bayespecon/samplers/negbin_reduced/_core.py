@@ -90,7 +90,7 @@ from .._utils._slice import (
     slice_sample_1d_adaptive,
     update_slice_width,
 )
-from .._utils._spatial_normal import CholmodFactor, iterative_solve
+from .._utils._spatial_normal import CholmodFactor, _series_radius
 from ..negbin._core import _nb_loglik_pointwise, _sample_alpha
 
 # ---------------------------------------------------------------------------
@@ -442,12 +442,28 @@ def _make_solver(
 _KRYLOV_DEGREE_DEFAULT = 12
 _KRYLOV_DMAX_DEFAULT = 0.4
 
-# Problem-size threshold for switching from CHOLMOD factorization to
-# CG iterative solves.  Below this threshold, CHOLMOD's O(nnz^{1.5})
-# factorization is fast enough that the overhead of CG's Python-level
-# iteration loop makes it slower.  Above the threshold, the
-# factorization cost dominates and CG's O(K · nnz) per solve wins.
-_CG_THRESHOLD = 2500
+# CG is now only a *fallback* for when no direct solver could be built, not a
+# large-n strategy.
+#
+# It used to take over above n = 2500, back when the only direct option was
+# CHOLMOD on the normal equations ``AᵀA`` — which pays ``WᵀW``'s two-hop fill
+# and squares the condition number, so it did lose to CG as n grew.  Routing
+# now picks a factorization matched to the weights (``make_sar_solver``):
+# Cholesky on the D-symmetrized ``I − ρS``, which carries ``W``'s own
+# sparsity, or KLU for genuinely directed ``W``.  Measured on queen
+# contiguity, one degree-12 basis build (13 multi-RHS solves), CG vs the
+# routed factorization:
+#
+#   n =  1600   9.3 ms vs  1.7 ms   (5.55x)
+#   n =  2500  11.6 ms vs  2.7 ms   (4.25x)   <- the old threshold
+#   n =  4900  17.1 ms vs  6.1 ms   (2.81x)
+#   n = 10000  30.8 ms vs 14.6 ms   (2.11x)
+#   n = 16900  42.5 ms vs 30.9 ms   (1.38x)
+#
+# The factorization wins everywhere measured, agreeing with CG to 4e-07 (CG's
+# own iterative tolerance), and the margin was still positive at the largest
+# size tried — so there is no crossover left to switch at.
+_CG_THRESHOLD = None
 
 # Safety factor on the Neumann convergence radius (see krylov_safe_radius).
 # The series error behaves like r^(degree+1) for r = |Δρ|·ϱ(A_c⁻¹W); at the
@@ -550,60 +566,39 @@ def _build_krylov_basis(
     n: int,
     degree: int = _KRYLOV_DEGREE_DEFAULT,
     cholmod_solver: _CholmodNormalEqSolver | None = None,
-    W_eig_max: float = 1.0,
-    W_eig_min: float = -1.0,
 ) -> ReducedKrylovBasis:
     """Build a shift-invert Krylov basis at :math:`\\rho_c`.
 
-    When ``cholmod_solver`` is provided **and** ``n < _CG_THRESHOLD``,
-    uses CHOLMOD normal equations (1 factorization + ``(degree + 1)``
-    solve calls).  Otherwise uses CG iterative solves (no factorization;
-    ``(degree + 1)`` CG calls, each O(K · nnz) where K ≈ √κ).
+    One factorization plus ``(degree + 1)`` multi-RHS solves, against whatever
+    :func:`make_sar_solver` routed to — Cholesky on the D-symmetrized
+    ``I - rho*S`` for row-standardized undirected ``W``, KLU for directed
+    ``W``.  ``_make_solver`` falls back to a plain sparse LU when no routed
+    solver was supplied, so there is always a factorization available.
 
-    The CG path avoids the O(nnz^{1.5}) factorization cost that
-    dominates for large n (n ≥ 2500).
+    There is no iterative path.  CG used to take over above n = 2500, back
+    when the only direct option was CHOLMOD on the normal equations ``AtA``
+    (two-hop fill from ``WtW``, squared condition number).  Against the routed
+    factorization it loses everywhere measured — one degree-12 build on queen
+    contiguity: 5.55x at n=1600, 4.25x at n=2500, 2.81x at n=4900, 2.11x at
+    n=10000, 1.38x at n=16900, agreeing to 4e-07 — with the margin still
+    positive at the largest size tried.
     """
-    use_cg = cholmod_solver is None or n >= _CG_THRESHOLD
     m = degree
     V_stack = np.empty((m + 1, n, X.shape[1]), dtype=np.float64)
-
-    if use_cg:
-        # CG path: no factorization needed
-        A_rho = _build_A_rho(rho_c, W_csc, n)
-        lam_at_max = 1.0 - rho_c * W_eig_max
-        lam_at_min = 1.0 - rho_c * W_eig_min
-        lam_min = min(lam_at_max, lam_at_min)
-        lam_max = max(lam_at_max, lam_at_min)
-        if lam_min <= 0:
-            raise ValueError(f"A_ρ not SPD at ρ_c={rho_c} (λ_min={lam_min:.4f})")
-        import warnings as _w
-
-        with _w.catch_warnings():
-            _w.simplefilter("ignore", RuntimeWarning)
-            V_stack[0] = iterative_solve(
-                A_rho, X, lambda_min=lam_min, lambda_max=lam_max
-            )
-            for j in range(m):
-                Wv = W_csc @ V_stack[j]  # (n, k)
-                V_stack[j + 1] = iterative_solve(
-                    A_rho, Wv, lambda_min=lam_min, lambda_max=lam_max
-                )
-        # No solver to store — CG is stateless
-        solver: _CholmodNormalEqSolver | spla.SuperLU | None = None
-    else:
-        # Factorization path: CHOLMOD or splu
-        solver = _make_solver(rho_c, W_csc, n, cholmod_solver=cholmod_solver)
-        V_stack[0] = solver.solve(X)  # (n, k)
-        for j in range(m):
-            Wv = W_csc @ V_stack[j]  # (n, k)
-            V_stack[j + 1] = solver.solve(Wv)
+    solver = _make_solver(rho_c, W_csc, n, cholmod_solver=cholmod_solver)
+    V_stack[0] = solver.solve(X)  # (n, k)
+    for j in range(m):
+        Wv = W_csc @ V_stack[j]  # (n, k)
+        V_stack[j + 1] = solver.solve(Wv)
 
     return ReducedKrylovBasis(
         rho_basis=rho_c,
         solver=solver,
         V_stack=V_stack,
         degree=m,
-        safe_dmax=krylov_safe_radius(rho_c, W_eig_min, W_eig_max),
+        # Radius from the coefficients themselves (root test), not from W's
+        # spectrum -- so no eigenvalue bounds are needed anywhere.
+        safe_dmax=_series_radius(V_stack),
     )
 
 
@@ -981,8 +976,6 @@ def _rho_log_density_marginal(
     basis: Optional[ReducedKrylovBasis] = None,
     krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
     cholmod_solver: Optional[_CholmodNormalEqSolver] = None,
-    W_eig_max: float = 1.0,
-    W_eig_min: float = -1.0,
     intercept_col: int = 0,
 ) -> float:
     r"""β-marginalized conditional log-density for the ρ slice.
@@ -1015,29 +1008,11 @@ def _rho_log_density_marginal(
         U = _eval_U_from_basis(basis, drho)
     else:
         try:
-            # Chebyshev iterative solve — no factorization needed.
-            # Eigenvalue bounds for A_ρ = I − ρW:
-            #   eigenvalues of A_ρ are {1 − ρ·λ_i(W)}
-            #   λ_min(A_ρ) = min(1 − ρ·λ_max(W), 1 − ρ·λ_min(W))
-            #   λ_max(A_ρ) = max(1 − ρ·λ_max(W), 1 − ρ·λ_min(W))
-            lam_at_max = 1.0 - rho * W_eig_max
-            lam_at_min = 1.0 - rho * W_eig_min
-            lam_min = min(lam_at_max, lam_at_min)
-            lam_max = max(lam_at_max, lam_at_min)
-            if lam_min <= 0:
-                # ρ is too extreme for A_ρ to be SPD — reject
-                return -np.inf
-            # Build A_ρ = I − ρW as a sparse CSR matrix.
-            # CSR is preferred over LinearOperator because scipy's
-            # CG implementation calls the C-level sparse matvec
-            # directly, avoiding Python callback overhead (~2×
-            # faster per iteration for n ≤ 10 000).
-            A_rho = _build_A_rho(rho, W_csc, n)
-            import warnings as _w
-
-            with _w.catch_warnings():
-                _w.simplefilter("ignore", RuntimeWarning)
-                U = iterative_solve(A_rho, X, lambda_min=lam_min, lambda_max=lam_max)
+            # Outside the Krylov radius: factor A_rho at this candidate.
+            # This used to be a Chebyshev/CG solve parameterized by W's
+            # spectral bounds; the routed factorization is faster and needs
+            # no bounds, which is what let the eigendecomposition go.
+            U = _make_solver(rho, W_csc, n, cholmod_solver=cholmod_solver).solve(X)
         except (RuntimeError, ValueError):
             return -np.inf
 
@@ -1140,8 +1115,6 @@ def _sample_rho(
             basis=basis,
             krylov_dmax=cache.krylov_dmax,
             cholmod_solver=cholmod_solver,
-            W_eig_max=cache.W_eig_max,
-            W_eig_min=cache.W_eig_min,
             intercept_col=intercept_col,
         )
 
@@ -1311,8 +1284,6 @@ def run_chain(
                         n,
                         degree=krylov_degree,
                         cholmod_solver=cholmod_solver,
-                        W_eig_max=cache.W_eig_max,
-                        W_eig_min=cache.W_eig_min,
                     )
                 except (RuntimeError, ValueError):
                     # CHOLMOD factorization failed (e.g. A^T A not SPD for
@@ -1325,8 +1296,6 @@ def run_chain(
                         n,
                         degree=krylov_degree,
                         cholmod_solver=cholmod_solver,
-                        W_eig_max=cache.W_eig_max,
-                        W_eig_min=cache.W_eig_min,
                     )
                 _prev_basis = basis
                 _prev_rho = state.rho
@@ -1406,29 +1375,13 @@ def run_chain(
                 if abs(drho) <= min(cache.krylov_dmax, basis.safe_dmax):
                     Xtilde = _eval_U_from_basis(basis, drho)
                 else:
-                    _A_rho = _build_A_rho(state.rho, cache.W_csc, n)
-                    import warnings as _w2
-
-                    with _w2.catch_warnings():
-                        _w2.simplefilter("ignore", RuntimeWarning)
-                        Xtilde = iterative_solve(
-                            _A_rho,
-                            X,
-                            lambda_min=_lam_min,
-                            lambda_max=_lam_max,
-                        )
+                    Xtilde = _make_solver(
+                        state.rho, cache.W_csc, n, cholmod_solver=cholmod_solver
+                    ).solve(X)
             else:
-                _A_rho = _build_A_rho(state.rho, cache.W_csc, n)
-                import warnings as _w2
-
-                with _w2.catch_warnings():
-                    _w2.simplefilter("ignore", RuntimeWarning)
-                    Xtilde = iterative_solve(
-                        _A_rho,
-                        X,
-                        lambda_min=_lam_min,
-                        lambda_max=_lam_max,
-                    )
+                Xtilde = _make_solver(
+                    state.rho, cache.W_csc, n, cholmod_solver=cholmod_solver
+                ).solve(X)
 
             state.beta = _sample_beta(
                 beta_current=state.beta,

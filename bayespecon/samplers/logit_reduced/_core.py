@@ -36,12 +36,11 @@ from .._utils._slice import (
     slice_sample_1d_adaptive,
     update_slice_width,
 )
-from .._utils._spatial_normal import CholmodFactor, iterative_solve
+from .._utils._spatial_normal import CholmodFactor
 from ..negbin_reduced._core import (
     _KRYLOV_DMAX_DEFAULT,
     ReducedGibbsCache,
     ReducedKrylovBasis,
-    _build_A_rho,
     _build_krylov_basis,
     _CholmodNormalEqSolver,
     _eval_U_from_basis,
@@ -94,8 +93,7 @@ def _rho_log_density_marginal(
     *,
     basis: Optional[ReducedKrylovBasis] = None,
     krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
-    W_eig_max: float = 1.0,
-    W_eig_min: float = -1.0,
+    cholmod_solver: Optional[_CholmodNormalEqSolver] = None,
     intercept_col: int = 0,
 ) -> float:
     r"""β-marginalized conditional log-density of ρ for the reduced logit.
@@ -104,8 +102,8 @@ def _rho_log_density_marginal(
     with the Bernoulli working response :math:`s = \kappa/\omega`
     (:math:`\kappa = y - \tfrac12`) and no ``log α`` offset.  The
     ``log|I − ρW|`` Jacobian cancels under β-marginalization, so the density is
-    a plain Gaussian normalising constant.  Candidates outside the Krylov radius
-    fall back to a Chebyshev iterative solve.
+    a plain Gaussian normalizing constant.  Candidates outside the Krylov radius
+    fall back to a direct factorization of ``A_rho``.
     """
     if rho <= rho_lower or rho >= rho_upper:
         return -np.inf
@@ -118,19 +116,10 @@ def _rho_log_density_marginal(
     if use_basis:
         U = _eval_U_from_basis(basis, rho - basis.rho_basis)
     else:
-        lam_at_max = 1.0 - rho * W_eig_max
-        lam_at_min = 1.0 - rho * W_eig_min
-        lam_min = min(lam_at_max, lam_at_min)
-        lam_max = max(lam_at_max, lam_at_min)
-        if lam_min <= 0:
-            return -np.inf
-        A_rho = _build_A_rho(rho, W_csc, n)
-        import warnings as _w
-
         try:
-            with _w.catch_warnings():
-                _w.simplefilter("ignore", RuntimeWarning)
-                U = iterative_solve(A_rho, X, lambda_min=lam_min, lambda_max=lam_max)
+            # Outside the Krylov radius: factor A_rho at this candidate rather
+            # than running a Chebyshev/CG solve off W's spectral bounds.
+            U = _make_solver(rho, W_csc, n, cholmod_solver=cholmod_solver).solve(X)
         except (RuntimeError, ValueError):
             return -np.inf
 
@@ -251,6 +240,7 @@ def _sample_rho(
     sweep_idx: int,
     tune: int,
     basis: Optional[ReducedKrylovBasis] = None,
+    cholmod_solver: Optional[_CholmodNormalEqSolver] = None,
     intercept_col: int = 0,
 ) -> tuple[float, float]:
     """Block 3: 1-D adaptive slice on ρ with β marginalized."""
@@ -273,8 +263,7 @@ def _sample_rho(
             rho_upper=rho_upper,
             basis=basis,
             krylov_dmax=cache.krylov_dmax,
-            W_eig_max=cache.W_eig_max,
-            W_eig_min=cache.W_eig_min,
+            cholmod_solver=cholmod_solver,
             intercept_col=intercept_col,
         )
 
@@ -396,8 +385,6 @@ def run_chain(
                         n,
                         degree=krylov_degree,
                         cholmod_solver=cholmod_solver,
-                        W_eig_max=cache.W_eig_max,
-                        W_eig_min=cache.W_eig_min,
                     )
                 except (RuntimeError, ValueError):
                     state.rho = 0.0
@@ -408,8 +395,6 @@ def run_chain(
                         n,
                         degree=krylov_degree,
                         cholmod_solver=cholmod_solver,
-                        W_eig_max=cache.W_eig_max,
-                        W_eig_min=cache.W_eig_min,
                     )
                 _prev_basis = basis
                 _prev_rho = state.rho
@@ -448,10 +433,11 @@ def run_chain(
                 sweep_idx=i,
                 tune=tune,
                 basis=basis,
+                cholmod_solver=cholmod_solver,
                 intercept_col=intercept_col,
             )
 
-            # Xtilde = (I − ρW)⁻¹X at the new ρ (Krylov eval or iterative).
+            # Xtilde = (I − ρW)⁻¹X at the new ρ (Krylov eval or direct solve).
             _lam_at_max = 1.0 - state.rho * cache.W_eig_max
             _lam_at_min = 1.0 - state.rho * cache.W_eig_min
             _lam_min = min(_lam_at_max, _lam_at_min)
@@ -464,23 +450,13 @@ def run_chain(
                 if abs(drho) <= min(cache.krylov_dmax, basis.safe_dmax):
                     Xtilde = _eval_U_from_basis(basis, drho)
                 else:
-                    _A_rho = _build_A_rho(state.rho, cache.W_csc, n)
-                    import warnings as _w2
-
-                    with _w2.catch_warnings():
-                        _w2.simplefilter("ignore", RuntimeWarning)
-                        Xtilde = iterative_solve(
-                            _A_rho, X, lambda_min=_lam_min, lambda_max=_lam_max
-                        )
+                    Xtilde = _make_solver(
+                        state.rho, cache.W_csc, n, cholmod_solver=cholmod_solver
+                    ).solve(X)
             else:
-                _A_rho = _build_A_rho(state.rho, cache.W_csc, n)
-                import warnings as _w2
-
-                with _w2.catch_warnings():
-                    _w2.simplefilter("ignore", RuntimeWarning)
-                    Xtilde = iterative_solve(
-                        _A_rho, X, lambda_min=_lam_min, lambda_max=_lam_max
-                    )
+                Xtilde = _make_solver(
+                    state.rho, cache.W_csc, n, cholmod_solver=cholmod_solver
+                ).solve(X)
 
             state.beta = _sample_beta(
                 beta_current=state.beta,

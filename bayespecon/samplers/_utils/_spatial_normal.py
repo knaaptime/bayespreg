@@ -1880,14 +1880,18 @@ def build_precision_krylov_basis_jax(
         * jnp.min((n0 / jnp.maximum(norms[1:], 1e-300)) ** (1.0 / jj)),
     )
 
-    # log|P(ρ)| by interpolation through *exact* values.  P(ρ_c+Δρ) shares
-    # P_c's pattern — its COO values are just Ax_c − Δρ·G + Δρ²·G2 — so each
-    # node logdet is one exact sparsax factorization, no trace estimation and
-    # nothing stochastic.  Node positions are traced (they scale with
-    # safe_dmax); the cosine factors and the node count are static.
-    cos_factors = jnp.asarray(
-        _chebyshev_nodes(1.0, logdet_nodes), dtype=jnp.float64
-    )
+    # log|P(ρ)| by interpolation through *exact* node values.  P(ρ_c+Δρ)
+    # shares P_c's pattern — its COO values are just Ax_c − Δρ·G + Δρ²·G2 — so
+    # each node is one exact factorization: nothing stochastic, and accurate
+    # across the whole radius.
+    #
+    # A `selinv`-based expansion was tried instead, to get the logdet off the
+    # single held factor at zero extra factorizations.  It is *correct* (tr(A)
+    # and tr(B) come out exact) but far slower: at n=900 the selected inverse
+    # costs 3.99 ms against 0.37 ms for a factorization and 0.34 ms for an
+    # entire direct candidate — ~12 candidates' worth of work to avoid 4
+    # factorizations.  Nodes win on both cost and accuracy (0.03 vs 0.23 nats).
+    cos_factors = jnp.asarray(_chebyshev_nodes(1.0, logdet_nodes), dtype=jnp.float64)
     nodes = safe_dmax * cos_factors
 
     def _node_logdet(d):

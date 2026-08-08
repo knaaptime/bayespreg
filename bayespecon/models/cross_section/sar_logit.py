@@ -311,11 +311,10 @@ class SARLogit(SpatialModel):
         else:
             # ── NumPy / CHOLMOD path ──
             W_csc = self._W_sparse.tocsc()
-            if self._W_eigs is not None:
-                W_eig_max = float(np.max(np.abs(self._W_eigs)))
-                W_eig_min = float(np.min(np.real(self._W_eigs)))
-            else:
-                W_eig_max, W_eig_min = 1.0, -1.0
+            # Spectrum bounds for the solve path.  Deliberately *not* from
+            # ``_W_eigs``: that densifies W for an O(n^3) eigendecomposition, and
+            # only bounds are needed here.  See ``_W_spectral_bounds``.
+            W_eig_max, W_eig_min = self._W_spectral_bounds
             W_sym, WtW, cholmod_pattern = _make_cholmod_pattern(W_csc, n)
 
             def _run_one_chain(chain_id, seed, progress_manager=None, chain_id_kw=None):

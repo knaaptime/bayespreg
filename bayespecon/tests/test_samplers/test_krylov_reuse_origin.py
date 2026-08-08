@@ -49,7 +49,7 @@ def test_offset_must_be_measured_from_basis_center(rho_c, drift):
     rng = np.random.default_rng(0)
     X = rng.standard_normal((n, 3))
 
-    basis = _build_krylov_basis(rho_c, X, W, n, degree=12, cholmod_solver=None)
+    basis = _build_krylov_basis(rho_c, X, W, n, degree=12)
     assert basis.rho_basis == rho_c
 
     rho_current = rho_c + drift  # where the chain drifted to
@@ -100,6 +100,17 @@ class TestSafeRadius:
         assert radii[0] == pytest.approx(0.4)  # configured dmax kept where safe
         assert radii[-1] < 0.1  # heavily tightened near the stability edge
 
+    def test_basis_radius_tracks_rho(self):
+        """The basis reports a radius that tightens as ρ_c nears stability."""
+        n = 300
+        W = _ring_W(n)
+        X = np.random.default_rng(2).standard_normal((n, 3))
+        radii = [
+            _build_krylov_basis(r, X, W, n, degree=12).safe_dmax
+            for r in (0.1, 0.5, 0.9)
+        ]
+        assert radii == sorted(radii, reverse=True), radii
+
     @pytest.mark.parametrize("rho_c", [0.3, 0.6, 0.8, 0.9])
     def test_series_accurate_at_the_clamped_radius(self, rho_c):
         """Evaluating out to ``basis.safe_dmax`` must stay accurate for every ρ_c.
@@ -110,11 +121,13 @@ class TestSafeRadius:
         n = 300
         W = _ring_W(n)
         X = np.random.default_rng(1).standard_normal((n, 3))
-        basis = _build_krylov_basis(rho_c, X, W, n, degree=12, cholmod_solver=None)
+        basis = _build_krylov_basis(rho_c, X, W, n, degree=12)
 
-        assert basis.safe_dmax <= 0.4
-        rho = rho_c + basis.safe_dmax
+        # ``safe_dmax`` is the raw convergence radius; consumers evaluate out
+        # to ``min(krylov_dmax, safe_dmax)``, so test at that effective edge.
+        effective = min(0.4, basis.safe_dmax)
+        rho = rho_c + effective
         exact = _exact_U(rho, W, X)
-        approx = _eval_U_from_basis(basis, basis.safe_dmax)
+        approx = _eval_U_from_basis(basis, effective)
         rel = np.linalg.norm(approx - exact) / np.linalg.norm(exact)
         assert rel < 1e-2, f"rho_c={rho_c}: rel err {rel:.2e} at clamped radius"

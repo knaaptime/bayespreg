@@ -888,11 +888,7 @@ def _make_gibbs_step_with_data_sem(
                 (lam_val >= lam_lower_jax) & (lam_val <= lam_upper_jax), 0.0, -jnp.inf
             )
             return (
-                logdet_W
-                - 0.5 * log_det_P
-                + 0.5 * quad_r
-                + xbeta_correction
-                + log_prior
+                logdet_W - 0.5 * log_det_P + 0.5 * quad_r + xbeta_correction + log_prior
             )
 
         # ── Slice sampling for λ (shared JAX helper) ──
