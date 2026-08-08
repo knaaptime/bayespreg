@@ -46,7 +46,7 @@ def _make_test_data(n=20, k=2, rho_true=0.3, seed=42):
     """
     rng = np.random.default_rng(seed)
 
-    # Row-standardised W (tridiagonal)
+    # Row-standardized W (tridiagonal)
     W = sp.diags([1.0, 1.0], [-1, 1], shape=(n, n), format="csr")
     row_sums = np.array(W.sum(axis=1)).flatten()
     row_sums[row_sums == 0] = 1.0

@@ -3,7 +3,7 @@
 Five methods are supported:
 
 * ``"eigenvalue"`` — exact O(n) per-call after one-time O(n³) eigendecomposition.
-* ``"slq"`` — stochastic Lanczos quadrature; D-symmetrised batched Lanczos
+* ``"slq"`` — stochastic Lanczos quadrature; D-symmetrized batched Lanczos
   with Gauss quadrature trace estimation → Chebyshev coefficients.
 * ``"chebyshev"`` — Barry-Pace Monte Carlo traces → Chebyshev approximation; O(m) per call.
 * ``"cheb_stochastic"`` — stochastic Chebyshev expansion (Han et al. 2015);
@@ -131,8 +131,8 @@ def _is_symmetric_W(W) -> bool:
     """Check whether ``W`` describes an undirected graph → the Cholesky logdet.
 
     The discriminator is **D-symmetrizability**, not literal matrix symmetry:
-    a *row-standardised* undirected graph ``W = D⁻¹A`` (``A`` symmetric) is not
-    literally symmetric, yet ``cheb_cholesky`` handles it via D-symmetrisation.
+    a *row-standardized* undirected graph ``W = D⁻¹A`` (``A`` symmetric) is not
+    literally symmetric, yet ``cheb_cholesky`` handles it via D-symmetrization.
     Only genuinely directed graphs (asymmetric adjacency, e.g. KNN / travel time
     / migration) fall through to the LU-based ``aaa`` path.
 
@@ -150,7 +150,7 @@ def _is_symmetric_W(W) -> bool:
         return True  # default: assume symmetric
 
     # libpysal Graph: use built-in topology asymmetry check (intrinsic=False
-    # ignores weight values, so row-standardisation does not read as directed).
+    # ignores weight values, so row-standardization does not read as directed).
     if hasattr(W, "asymmetry"):
         try:
             asym = W.asymmetry(intrinsic=False)
@@ -165,8 +165,8 @@ def _is_symmetric_W(W) -> bool:
         if diff.nnz == 0 or bool(np.all(np.abs(diff.data) <= 1e-10)):
             return True
         # Not literally symmetric: may still be a D-symmetrizable (row-
-        # standardised undirected) graph, which cheb_cholesky handles.  Test
-        # with the actual symmetrisation so routing == applicability.
+        # standardized undirected) graph, which cheb_cholesky handles.  Test
+        # with the actual symmetrization so routing == applicability.
         try:
             from ._chol_cheb import _d_symmetrize
 
@@ -201,12 +201,12 @@ def _auto_logdet_method(n: int, W=None) -> str:
     - ``aaa`` for n ≤ cheb_cutoff when W is non-symmetric (directed graph):
       exact logdet via sparse LU (KLU with symbolic reuse) at adaptively-selected
       AAA support points.  Rational approximation converges exponentially near
-      singularities.  Uses an adaptive coarse grid of 8–30 LU factorisations,
+      singularities.  Uses an adaptive coarse grid of 8–30 LU factorizations,
       sized from the interval's Bernstein-ellipse rate, selecting ~7 support
       points.  Measured setup ~157ms at n=10k; eval ~5μs/ρ; error 1e-8 to 5e-8.
     - ``cheb_stochastic`` for n > cheb_cutoff: stochastic Chebyshev expansion.
       Lower setup cost (~62ms at n=10k, ~328ms at n=60k) but carries stochastic
-      error 0.7 to 3.5 with 200 probes.  Eval: ~57μs/ρ.  Use when factorisation
+      error 0.7 to 3.5 with 200 probes.  Eval: ~57μs/ρ.  Use when factorization
       fill-in makes exact setup too expensive.
 
     The ``cheb_cutoff`` default of 60,000 is where the benchmark ends, not where
@@ -292,7 +292,7 @@ def resolve_logdet_bounds(
 ) -> LogdetBounds:
     """Resolve rho bounds from explicit overrides, priors, or defaults.
 
-    For row-standardised W the stability interval is approximately (-1, 1).
+    For row-standardized W the stability interval is approximately (-1, 1).
 
     ``W`` (when supplied) participates in auto-selection so that the
     method recorded here agrees with every other resolution site —

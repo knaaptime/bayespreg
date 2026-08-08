@@ -12,11 +12,11 @@ The sampler uses:
   :func:`jax_polyagamma` with ``method="exp"``.  Since h = 1 for
   binary logit, the Exp method is exact (no truncation bias) and
   fast (single exponential draw per observation).
-- **η and β draws**: Dense Cholesky factorisation via ``jnp.linalg.cholesky``
+- **η and β draws**: Dense Cholesky factorization via ``jnp.linalg.cholesky``
   and ``jnp.linalg.solve``.  O(n³) but fast for n ≤ ~2000.
 - **ρ/λ draw**: 1-D slice sampler on the doubly-collapsed log-density.
-  For SAR-logit, the density marginalises out both η and β via a
-  multi-RHS Cholesky solve.  For SEM-logit, the density marginalises
+  For SAR-logit, the density marginalizes out both η and β via a
+  multi-RHS Cholesky solve.  For SEM-logit, the density marginalizes
   out η but conditions on β.  Slice sampling avoids the expensive
   gradient computation that MALA requires (autodiff through Cholesky
   + solve is ~3× the forward cost).
@@ -117,7 +117,7 @@ def _make_gibbs_step_with_data(
     X_jax : jax.numpy.ndarray of shape (n, k)
         Design matrix (JAX array).
     W_bcoo : jax.experimental.sparse.BCOO of shape (n, n)
-        Row-standardised W as a sparse BCOO matrix (for ``W @ x``).
+        Row-standardized W as a sparse BCOO matrix (for ``W @ x``).
     Wt_bcoo : jax.experimental.sparse.BCOO of shape (n, n)
         Transpose ``Wᵀ`` as a sparse BCOO matrix (for ``Wᵀ @ x``).
     n : int
@@ -191,7 +191,7 @@ def _make_gibbs_step_with_data(
     # For logit: h = 1 always, kappa = y - 0.5
     kappa = y_jax - 0.5
 
-    # Precompute W^T X for the β-marginalised density (sparse, O(nnz·k))
+    # Precompute W^T X for the β-marginalized density (sparse, O(nnz·k))
     WtX = Wt_bcoo @ X_jax  # (n, k)
 
     # ── sparsax setup (optional sparse SPD Cholesky path) ──
@@ -261,7 +261,7 @@ def _make_gibbs_step_with_data(
         else:
             P_diag = jnp.ones(n) + omega_new
             P = jnp.diag(P_diag) - rho * W_sym + rho**2 * WtW
-            P = P + 1e-6 * jnp.eye(n)  # regularisation for numerical stability
+            P = P + 1e-6 * jnp.eye(n)  # regularization for numerical stability
 
             L = jnp.linalg.cholesky(P)
             P_inv_rhs = cho_solve((L, True), rhs)
@@ -384,7 +384,7 @@ def _make_gibbs_step_with_data(
 
             # Σ_β*⁻¹ = X^TX + V₀⁻¹ - u^T M  — (k, k)
             Sig_beta_inv = XtX_jax + beta_prior_prec - u.T @ M_mat
-            Sig_beta_inv = Sig_beta_inv + 1e-10 * jnp.eye(k)  # regularise
+            Sig_beta_inv = Sig_beta_inv + 1e-10 * jnp.eye(k)  # regularize
 
             L_sig = jnp.linalg.cholesky(Sig_beta_inv)
             log_det_Sig_inv = 2.0 * jnp.sum(jnp.log(jnp.diag(L_sig)))
@@ -669,7 +669,7 @@ def _make_gibbs_step_with_data_sem(
     use_sparsax = sparsax_pattern is not None
 
     # Sparse W matvecs — never densify W.  (W+Wᵀ)@x and (WᵀW)@x compose the
-    # base W @ x / Wᵀ @ x BCOO matvecs, so no dense W_sym/WtW is materialised.
+    # base W @ x / Wᵀ @ x BCOO matvecs, so no dense W_sym/WtW is materialized.
     def W_matvec(x):
         return W_bcoo @ x
 
@@ -1100,7 +1100,7 @@ def _run_chain_logit_warmup(gibbs_step, init_state, key, n_iters, slice_width):
     """Run ``n_iters`` Gibbs steps and return only the final state + key.
 
     Uses :func:`jax.lax.fori_loop` so no per-iteration traces are
-    materialised — memory cost is independent of ``n_iters``.
+    materialized — memory cost is independent of ``n_iters``.
     The final PRNG key is returned so chunked runs can resume from a
     deterministic point without breaking the chain.
     """

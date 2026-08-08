@@ -86,7 +86,7 @@ class GraphTheme:
     rankdir : str
         Graphviz layout direction (``"TB"``, ``"LR"``, …).
     bgcolor : str
-        Background colour of the canvas.
+        Background color of the canvas.
     margin : str
         Graph margin in inches.
     nodesep : str
@@ -98,7 +98,7 @@ class GraphTheme:
     title_fontsize : str
         Font size for the graph title (if any).
     title_fontcolor : str
-        Font colour for the graph title.
+        Font color for the graph title.
     test_node, predicate_node, leaf_chosen, leaf_other : NodeStyle
         Styles for the four node categories.
     node_on_path : NodeStyle | None
@@ -142,7 +142,7 @@ class GraphTheme:
 # Built-in themes
 # ---------------------------------------------------------------------------
 
-# --- Default (enhanced, colour-blind-friendly) --------------------------------
+# --- Default (enhanced, color-blind-friendly) --------------------------------
 
 _DEFAULT_TEST = NodeStyle(
     shape="ellipse",

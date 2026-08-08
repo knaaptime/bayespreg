@@ -47,7 +47,7 @@ class SEM(GaussianLikelihoodMixin, SpatialModel):
         :class:`libpysal.graph.Graph` or any :class:`scipy.sparse`
         matrix. The legacy :class:`libpysal.weights.W` object is **not**
         accepted; pass ``w.sparse`` or ``libpysal.graph.Graph.from_W(w)``.
-        Should be row-standardised; a :class:`UserWarning` is raised
+        Should be row-standardized; a :class:`UserWarning` is raised
         otherwise.
     priors : dict, optional
         Override default priors. Supported keys:
@@ -81,7 +81,7 @@ class SEM(GaussianLikelihoodMixin, SpatialModel):
         the prior.  A post-warmup range is typically one to two orders of
         magnitude narrower, which needs far fewer interpolation nodes and
         drives the approximation error over the posterior's support down to
-        the factorisation's roundoff floor.  Applies to ``"cheb_cholesky"``
+        the factorization's roundoff floor.  Applies to ``"cheb_cholesky"``
         and ``"aaa"``; ignored otherwise.
 
         Off by default because it is not free of consequences: the

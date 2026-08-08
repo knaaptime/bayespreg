@@ -1,15 +1,15 @@
 """AAA rational approximation log-determinant for non-symmetric ``I - ρW``.
 
-For row-standardised ``W`` from a **directed** graph (KNN, travel time,
+For row-standardized ``W`` from a **directed** graph (KNN, travel time,
 migration flows), the matrix ``I - ρW`` is non-symmetric and cannot be
-symmetrised via D-symmetrisation.  Sparse Cholesky is unavailable; the
+symmetrized via D-symmetrization.  Sparse Cholesky is unavailable; the
 options are sparse LU (exact but expensive) or stochastic methods
 (approximate).
 
 This module implements the **AAA rational approximation** strategy:
 
 1. Evaluate ``log|det(I - ρW)|`` exactly at ``n_coarse`` Chebyshev-spaced
-   points via sparse LU, reusing one symbolic factorisation across all of
+   points via sparse LU, reusing one symbolic factorization across all of
    them (KLU, falling back to scipy SuperLU).
 2. Fit a rational function in barycentric form via the AAA algorithm
    [@nakatsukasa2018], which selects ``m`` support points from the coarse
@@ -25,15 +25,15 @@ typically needing only 6-15 support points for the same accuracy.
 **When to use**: non-symmetric ``W`` (directed graph) where Cholesky is
 unavailable.  For symmetric ``W``, use ``cheb_cholesky`` (exact, faster).
 For very large ``n`` (>20,000), use ``cheb_stochastic`` (avoids
-factorisation entirely).
+factorization entirely).
 
-**Cost**: ``n_coarse`` sparse LU factorisations + ``O(m)`` per-ρ
+**Cost**: ``n_coarse`` sparse LU factorizations + ``O(m)`` per-ρ
 evaluation, where ``n_coarse`` is the coarse-grid size (adaptive: 16 for the
 narrow default interval, up to 96 for wide/near-singular intervals) and
 ``m ≤ n_coarse // 2`` is the number of AAA support points actually selected.
 All ``I - ρW`` share one sparsity pattern, so KLU's symbolic analysis is
-computed once and reused for every subsequent numeric factorisation (measured
-1.6-3.4× faster than a fresh scipy SuperLU factorisation per node over the
+computed once and reused for every subsequent numeric factorization (measured
+1.6-3.4× faster than a fresh scipy SuperLU factorization per node over the
 coarse grid).
 """
 
@@ -77,7 +77,7 @@ class AAAPrecompute:
 def _klu_logdet_from_factor(factor) -> float:
     """Recover ``log|det(A)|`` from a ``sksparse.klu`` factor.
 
-    KLU factorises ``P R A Q = L U`` with a diagonal row scaling ``R``; the
+    KLU factorizes ``P R A Q = L U`` with a diagonal row scaling ``R``; the
     permutations affect only the sign, so
     ``log|det(A)| = Σ log|diag(U)| + Σ log|diag(L)| - Σ log|diag(R)|``.
     """
@@ -91,10 +91,10 @@ def _klu_logdet_from_factor(factor) -> float:
 
 
 def _lu_logdet(A: sp.csc_matrix) -> float:
-    """Compute ``log|det(A)|`` via sparse LU factorisation (single shot).
+    """Compute ``log|det(A)|`` via sparse LU factorization (single shot).
 
     Prefers KLU (``sksparse.klu``), then falls back to scipy SuperLU.  For
-    repeated factorisations of matrices sharing a sparsity pattern (the AAA
+    repeated factorizations of matrices sharing a sparsity pattern (the AAA
     coarse grid), use :func:`_make_reusable_lu_logdet`, which reuses KLU's
     symbolic analysis.
     """
@@ -116,14 +116,14 @@ def _lu_logdet(A: sp.csc_matrix) -> float:
 def _make_reusable_lu_logdet():
     """Return a callable ``A -> log|det(A)|`` that reuses symbolic analysis.
 
-    On the first call it computes KLU's symbolic + numeric factorisation; on
-    subsequent calls it refactorises numerically only (``KLUFactor.factorize``),
+    On the first call it computes KLU's symbolic + numeric factorization; on
+    subsequent calls it refactorizes numerically only (``KLUFactor.factorize``),
     valid because every ``I - ρW`` shares one sparsity pattern.  This mirrors
     the CHOLMOD symbolic reuse in :func:`chol_cheb_logdet_precompute` and is
-    measured 1.6-3.4× faster than a fresh scipy SuperLU factorisation per node.
+    measured 1.6-3.4× faster than a fresh scipy SuperLU factorization per node.
 
     Falls back to the single-shot :func:`_lu_logdet` (scipy SuperLU) when
-    ``sksparse.klu`` is unavailable or its first factorisation fails.
+    ``sksparse.klu`` is unavailable or its first factorization fails.
     """
     state = {"factor": None, "use_klu": True}
 
@@ -159,7 +159,7 @@ def _aaa_algorithm(
     points, values, and barycentric weights for a rational approximant.
 
     **The greedy loop runs on values that have already been paid for.**  Every
-    sample in ``f`` cost one sparse factorisation before this function was
+    sample in ``f`` cost one sparse factorization before this function was
     called, so stopping early saves nothing — it discards resolution the caller
     has already bought.  Two consequences shape the loop:
 
@@ -286,7 +286,7 @@ def _aaa_algorithm(
 
         # Score this iterate and keep it if it is the best so far.  The score is
         # the max residual over the samples AAA did *not* interpolate, which is
-        # the only error estimate available without further factorisations.
+        # the only error estimate available without further factorizations.
         score = float(np.max(np.abs(residual[non_support]))) if n_ns else 0.0
         if score < best_resid:
             best_resid = score
@@ -314,9 +314,9 @@ def _aaa_algorithm(
 
 
 def _adaptive_n_coarse(rho_min: float, rho_max: float) -> int:
-    """Choose the coarse-grid size (= number of exact LU factorisations).
+    """Choose the coarse-grid size (= number of exact LU factorizations).
 
-    Each coarse-grid point costs one sparse LU factorisation, so ``n_coarse``
+    Each coarse-grid point costs one sparse LU factorization, so ``n_coarse``
     directly sets the setup cost.  The AAA support count ``m`` (a subset of the
     grid, capped at ``n_coarse // 2``) is what determines accuracy, and both
     grow as the interval widens toward the ``ρ = ±1`` logdet singularities.
@@ -353,7 +353,7 @@ def _adaptive_n_coarse(rho_min: float, rho_max: float) -> int:
     Returns
     -------
     int
-        Number of Chebyshev-spaced coarse-grid points (LU factorisations).
+        Number of Chebyshev-spaced coarse-grid points (LU factorizations).
     """
     from ._chebyshev import bernstein_rho
 
@@ -385,7 +385,7 @@ def _aaa_algorithm_lazy(
     Instead of evaluating at all ``M = len(z)`` sample points, this function
     evaluates at ``n_coarse`` Chebyshev-spaced points and runs the standard
     AAA algorithm on those.  This reduces expensive evaluations (e.g. sparse
-    LU factorisations) from ``M`` to ``n_coarse`` (default 30), a ~7× speedup
+    LU factorizations) from ``M`` to ``n_coarse`` (default 30), a ~7× speedup
     for the default ``M=200``.
 
     The full sample grid ``z`` is used only for the curvature-based refinement
@@ -434,9 +434,9 @@ class AAAContext:
 
     The LU counterpart of
     :class:`~._chol_cheb.CholChebContext`: everything independent of the ρ
-    interval — the matrix, the identity, and KLU's symbolic factorisation — is
+    interval — the matrix, the identity, and KLU's symbolic factorization — is
     held here, so fitting a second approximant on a different interval costs
-    only its numeric refactorisations.  This is what makes a warmup-adaptive
+    only its numeric refactorizations.  This is what makes a warmup-adaptive
     refit affordable on directed weights, where Cholesky is unavailable.
 
     Parameters
@@ -475,10 +475,10 @@ class AAAContext:
         if n_coarse is None:
             n_coarse = _adaptive_n_coarse(rho_min, rho_max)
 
-        # Dense sample grid for AAA (no factorisation here — just the grid)
+        # Dense sample grid for AAA (no factorization here — just the grid)
         z = np.linspace(rho_min, rho_max, n_samples)
 
-        # Run lazy AAA: exactly n_coarse LU factorisations (m ≤ n_coarse//2 of
+        # Run lazy AAA: exactly n_coarse LU factorizations (m ≤ n_coarse//2 of
         # the grid points become support points).
         support_points, support_values, weights = _aaa_algorithm_lazy(
             z, self.logdet_at, tol=tol, max_iter=max_iter, n_coarse=n_coarse
@@ -510,9 +510,9 @@ def aaa_logdet_precompute(
     fits a rational function via the AAA algorithm, which greedily selects
     ``m`` support points (``m ≤ n_coarse // 2``, typically 5-15) from that grid.
 
-    The number of exact LU factorisations equals ``n_coarse`` — **not** the
+    The number of exact LU factorizations equals ``n_coarse`` — **not** the
     support count ``m`` and **not** ``n_samples`` (the 200-point sample grid is
-    only the AAA residual proxy and involves no factorisations).  ``n_coarse``
+    only the AAA residual proxy and involves no factorizations).  ``n_coarse``
     defaults to :func:`_adaptive_n_coarse`: 16 for the narrow default interval,
     30 for wider or near-singular intervals.
 
@@ -526,14 +526,14 @@ def aaa_logdet_precompute(
         Upper bound of the ρ approximation interval.
     n_samples : int, default 200
         Number of sample points for the AAA residual grid.  Does **not**
-        affect the number of LU factorisations — only the resolution of
+        affect the number of LU factorizations — only the resolution of
         the greedy selection.
     tol : float, default 1e-13
         Relative tolerance for AAA convergence.
     max_iter : int, default 30
         Maximum number of AAA support points selected from the coarse grid.
     n_coarse : int, optional
-        Number of exact LU factorisations (coarse-grid size).  ``None``
+        Number of exact LU factorizations (coarse-grid size).  ``None``
         (default) selects it adaptively from the interval via
         :func:`_adaptive_n_coarse`.
 
@@ -643,20 +643,20 @@ def aaa_logdet_eval_vec(pre: AAAPrecompute, rho_arr: np.ndarray) -> np.ndarray:
 
 
 class CholAAAContext:
-    """Reusable D-symmetrisation and CHOLMOD symbolic analysis for AAA.
+    """Reusable D-symmetrization and CHOLMOD symbolic analysis for AAA.
 
     The Cholesky counterpart of :class:`AAAContext`: for symmetrizable ``W``
     (undirected graph), it evaluates exact logdet values via sparse Cholesky of
-    the D-symmetrised system — the same factorizer :class:`CholChebContext`
+    the D-symmetrized system — the same factorizer :class:`CholChebContext`
     uses — but feeds them to the AAA rational approximant instead of a
     Chebyshev DCT.  This combines the cheaper factorizer (CHOLMOD is ~2×
     faster than KLU on symmetric SPD systems) with the better interpolator
     (AAA's root-exponential convergence beats the polynomial's geometric
     rate on wide intervals).
 
-    Everything interval-independent — the symmetrised matrix, the identity,
+    Everything interval-independent — the symmetrized matrix, the identity,
     and CHOLMOD's symbolic analysis — is held here, so a warmup refit costs
-    only its numeric factorisations, exactly as with
+    only its numeric factorizations, exactly as with
     :class:`CholChebContext`.
 
     Raises
@@ -730,9 +730,9 @@ def chol_aaa_logdet_precompute(
     """Precompute AAA rational approximant via sparse Cholesky.
 
     Like :func:`aaa_logdet_precompute` but evaluates exact logdet values via
-    sparse Cholesky of the D-symmetrised system, which is ~2× cheaper than
+    sparse Cholesky of the D-symmetrized system, which is ~2× cheaper than
     KLU for symmetrizable ``W``.  Requires ``W`` to be D-symmetrizable
-    (row-standardised undirected graph).
+    (row-standardized undirected graph).
 
     Parameters
     ----------
@@ -741,13 +741,13 @@ def chol_aaa_logdet_precompute(
     rho_min, rho_max : float
         The ρ approximation interval.
     n_samples : int, default 200
-        Number of sample points for the AAA residual grid (no factorisations).
+        Number of sample points for the AAA residual grid (no factorizations).
     tol : float, default 1e-13
         Relative tolerance for AAA convergence.
     max_iter : int, default 30
         Maximum number of AAA support points.
     n_coarse : int, optional
-        Number of exact Cholesky factorisations (coarse-grid size).
+        Number of exact Cholesky factorizations (coarse-grid size).
 
     Returns
     -------

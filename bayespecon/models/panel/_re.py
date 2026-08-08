@@ -62,7 +62,7 @@ class OLSPanelRE(SpatialPanelModel):
         Spatial weights of shape ``(N, N)``. Accepts a
         :class:`libpysal.graph.Graph` or any :class:`scipy.sparse`
         matrix; legacy ``libpysal.weights.W`` is not accepted (use
-        ``w.sparse``). Should be row-standardised. Unused in the RE
+        ``w.sparse``). Should be row-standardized. Unused in the RE
         likelihood but required by the base class for consistency
         (e.g. computing spatial lags for SDM/SDEM variants).
     unit_col : str, optional
@@ -231,7 +231,7 @@ class SARPanelRE(SpatialPanelModel):
     X : array-like or pandas.DataFrame, optional
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
-        Spatial weights of shape ``(N, N)``. Should be row-standardised.
+        Spatial weights of shape ``(N, N)``. Should be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.
@@ -490,7 +490,7 @@ class SEMPanelRE(SpatialPanelModel):
     X : array-like or pandas.DataFrame, optional
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
-        Spatial weights of shape ``(N, N)``. Should be row-standardised.
+        Spatial weights of shape ``(N, N)``. Should be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.
@@ -961,7 +961,7 @@ class SDEMPanelRE(SpatialPanelModel):
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)``. Used to construct the
         ``WX`` block and the spatial filter on the disturbance.
-        Should be row-standardised.
+        Should be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.

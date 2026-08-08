@@ -8,7 +8,7 @@ Architecture
 ------------
 The sampler uses:
 
-- **β draw**: Conjugate normal via Cholesky factorisation.
+- **β draw**: Conjugate normal via Cholesky factorization.
   O(k³) but fast for k ≤ ~2000.
 - **σ² draw**: Conjugate inverse-Gamma (direct, no solve needed).
 - **ρ/λ draw**: Neal (2003) stepping-out slice sampling with
@@ -309,7 +309,7 @@ def _make_gaussian_gibbs_step(
 
         # The interpolant and the ρ support are read from the state, so a
         # warmup refit can swap them between scan phases without a retrace.
-        # With no parameterised evaluator the state carries the prior bounds
+        # With no parameterized evaluator the state carries the prior bounds
         # and ``logdet_params is None``, and this reduces to the closure form.
         rho_lo = state.rho_lo
         rho_hi = state.rho_hi

@@ -39,9 +39,9 @@ def precompute_sparsax_pattern(
     Parameters
     ----------
     W_csc : scipy.sparse.csc_matrix
-        The **raw** (row-standardised) spatial weights matrix ``W`` in CSC
+        The **raw** (row-standardized) spatial weights matrix ``W`` in CSC
         format — *not* ``W+Wᵀ``.  This function derives ``W+Wᵀ`` and ``WᵀW``
-        from it internally; passing an already-symmetrised matrix would double
+        from it internally; passing an already-symmetrized matrix would double
         the symmetric part and corrupt ``WᵀW``.
     n : int
         Matrix dimension.
@@ -183,7 +183,7 @@ def resolve_pg_jax_backend(backend, *, W_sparse, W_sym, WtW, n, logdet_bounds):
     backend : {"jax", "numpy"}
         Resolved execution backend.
     W_sparse, W_sym, WtW : scipy.sparse matrices
-        Raw row-standardised ``W``, ``W + Wᵀ`` and ``WᵀW``.
+        Raw row-standardized ``W``, ``W + Wᵀ`` and ``WᵀW``.
     n : int
         Number of observations.
     logdet_bounds : LogdetBounds
@@ -240,7 +240,7 @@ def resolve_pg_jax_backend(backend, *, W_sparse, W_sym, WtW, n, logdet_bounds):
     )
 
     if method == "cholmod_jax":
-        # Pass the raw (row-standardised) W; the helper derives W+Wᵀ and WᵀW
+        # Pass the raw (row-standardized) W; the helper derives W+Wᵀ and WᵀW
         # internally.  Passing W_sym here would double the symmetric part and
         # corrupt WᵀW.
         jax_parts["sparsax_pattern"] = precompute_sparsax_pattern(W_sparse.tocsc(), n)
@@ -431,7 +431,7 @@ class CachedSparseSolver:
                     dtype=np.float64,
                 )
         else:
-            # Fallback: assemble scipy sparse A and factorise per call.
+            # Fallback: assemble scipy sparse A and factorize per call.
             A_csc = sp.csc_matrix(
                 (self._numpy_Ax(coeffs), (self.Ai, self.Aj)),
                 shape=(self.n, self.n),
@@ -479,7 +479,7 @@ def profile_loglik_rho_grid(
     y, X : ndarray, shapes (n,) and (n, k)
         Response and design matrix.
     W_sparse : scipy.sparse matrix, shape (n, n)
-        Row-standardised spatial weights.
+        Row-standardized spatial weights.
     rho_min, rho_max, rho_step : float
         Grid definition.
 

@@ -314,7 +314,7 @@ class TestNegativeBinomialPanelFlowRecovery:
             f"rho_w: {rho_w_hat:.3f} vs {rho_w_true}"
         )
         # alpha is weakly identified on this sample (52% zeros, heavy tail):
-        # the exact-likelihood MLE on this realisation is ~4.0, so the full
+        # the exact-likelihood MLE on this realization is ~4.0, so the full
         # posterior mean legitimately sits well above the DGP value of 2.2.
         assert abs(alpha_hat - alpha_true) < 3.5, (
             f"alpha: {alpha_hat:.3f} vs {alpha_true}"
@@ -330,7 +330,7 @@ class TestNegativeBinomialPanelFlowRecovery:
         gamma_dist_true = -0.5
         alpha_true = 1.7
 
-        # n=10/T=6 (NT=600): at NT≈250 this realisation has a competing joint
+        # n=10/T=6 (NT=600): at NT≈250 this realization has a competing joint
         # mode (rho_o≈0 with beta_d absorbing the origin-side signal) that
         # beats the DGP truth in exact likelihood — the (rho_o, beta) split is
         # simply not identified there.

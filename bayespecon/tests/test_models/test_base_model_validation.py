@@ -96,7 +96,7 @@ class TestParseW:
 
     def test_warns_non_row_standardized(self):
         W = sp.csr_matrix(np.ones((4, 4)))  # Not row-standardized
-        with pytest.warns(UserWarning, match="row-standardised"):
+        with pytest.warns(UserWarning, match="row-standardized"):
             _parse_W(W, n=4)
 
 

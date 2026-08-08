@@ -52,7 +52,7 @@ class SARNegBinStructural(SpatialModel):
 
     Notes
     -----
-    The structural form parameterises the latent log-mean as
+    The structural form parameterizes the latent log-mean as
     ``eta = rho * W @ eta + X @ beta + nu`` with ``nu ~ N(0, sigma^2 I)``,
     and augments the NB likelihood with Pólya–Gamma auxiliary variables
     to obtain fully conjugate Gibbs updates for eta, beta, and sigma^2.
@@ -289,7 +289,7 @@ class SARNegBinStructural(SpatialModel):
         _cholmod_pattern = sp.eye(n, format="csr") + 0.5 * W_sym + 0.25 * WtW
 
         # Map the resolved backend onto the sampler's solve/logdet/sample paths.
-        # ``auto`` prefers exact CHOLMOD factorisation (3× faster than jax_dense
+        # ``auto`` prefers exact CHOLMOD factorization (3× faster than jax_dense
         # at n=2500 on CPU); ``jax`` is the opt-in dense path.
         method, _jax_parts = resolve_pg_jax_backend(
             backend,
@@ -412,7 +412,7 @@ class SARNegBinStructural(SpatialModel):
                     progress_manager=progress_manager,
                 )
 
-            # Run chains.  Non-JAX paths parallelise across chains when
+            # Run chains.  Non-JAX paths parallelize across chains when
             # the user requests multiple workers.
             parallel = n_jobs != 1
             chain_results = run_chains(

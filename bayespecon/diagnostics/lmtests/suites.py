@@ -144,7 +144,7 @@ SDEM_SUITE = DiagnosticSuite(
 
 # Tobit variants — the Tobit SAR and SDM specifications use ``bayesian_lm_error_test``
 # (which subtracts a fitted-value residual) rather than the SAR/SDM-null
-# variants, matching the pre-suite behaviour preserved verbatim here.
+# variants, matching the pre-suite behavior preserved verbatim here.
 
 SAR_TOBIT_SUITE = DiagnosticSuite(
     name="SAR-Tobit",
@@ -269,7 +269,7 @@ SLX_PANEL_SUITE = DiagnosticSuite(
 
 
 # Dynamic-panel-only variants — these differ from the FE/RE menus above and
-# must remain separate to preserve existing behaviour.
+# must remain separate to preserve existing behavior.
 
 SEM_PANEL_DYNAMIC_SUITE = DiagnosticSuite(
     name="SEM-Panel-Dynamic",

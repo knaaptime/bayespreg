@@ -21,7 +21,7 @@ from bayespecon._logdet._cheb_stochastic import (
 
 
 def _d_sym(W):
-    """D-symmetrised W_sym = D^{1/2} W D^{-1/2} (same spectrum, symmetric)."""
+    """D-symmetrized W_sym = D^{1/2} W D^{-1/2} (same spectrum, symmetric)."""
     from bayespecon._logdet._slq import _recover_symmetrizing_diagonal
 
     s = np.sqrt(_recover_symmetrizing_diagonal(W))
@@ -29,9 +29,9 @@ def _d_sym(W):
 
 
 def _weighted_ring_W(n, k=3, seed=0):
-    """Row-standardised W of an undirected weighted ring (symmetrizable).
+    """Row-standardized W of an undirected weighted ring (symmetrizable).
 
-    Kernel-like weights make ``W = D⁻¹A`` non-binary, so the D-symmetrisation
+    Kernel-like weights make ``W = D⁻¹A`` non-binary, so the D-symmetrization
     used by deflation is genuinely exercised (unlike a binary rook lattice).
     """
     rng = np.random.default_rng(seed)
@@ -303,10 +303,10 @@ class TestDeflation:
     """Correctness of the matrix-free eigen-deflation path.
 
     The previous implementation deflated via randomized SVD, which (a)
-    materialised a dense ``n × n`` residual (OOM at scale) and (b) treated
+    materialized a dense ``n × n`` residual (OOM at scale) and (b) treated
     singular values as eigenvalues — a non-invariant split that biased the
     Chebyshev moments of the indefinite ``W̃``.  These tests pin the fixed
-    behaviour: an eigenpair split that is exact in the full-deflation limit,
+    behavior: an eigenpair split that is exact in the full-deflation limit,
     never densifies, and is confined to symmetrizable (undirected) graphs.
     """
 
@@ -474,7 +474,7 @@ class TestExactMoments:
         assert np.all(np.isfinite(pre.moments))
 
     def test_legacy_depth_one_reproduces_historical_moments(self):
-        """n_exact=1 keeps the mu_0 = n, mu_1 = tr(W~) behaviour unchanged."""
+        """n_exact=1 keeps the mu_0 = n, mu_1 = tr(W~) behavior unchanged."""
         W = _weighted_ring_W(60, k=2, seed=4)
         pre = cheb_stochastic_logdet_precompute(
             W, order=20, n_probes=10, n_exact=1, rng=np.random.default_rng(0)

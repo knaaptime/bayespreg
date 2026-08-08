@@ -185,7 +185,7 @@ class TestParsePanelW:
 
     def test_warns_non_row_standardized(self):
         W = sp.csr_matrix(np.ones((4, 4)))  # Not row-standardized
-        with pytest.warns(UserWarning, match="row-standardised"):
+        with pytest.warns(UserWarning, match="row-standardized"):
             resolve_W(W, n=4, T=3)
 
 
@@ -865,7 +865,7 @@ class TestWDenseMemoryWarning:
             N=4,
             T=3,
         )
-        # Force the threshold to 0 so any materialisation triggers the warning.
+        # Force the threshold to 0 so any materialization triggers the warning.
         original = SpatialPanelModel._DENSE_W_WARN_BYTES
         try:
             SpatialPanelModel._DENSE_W_WARN_BYTES = 0

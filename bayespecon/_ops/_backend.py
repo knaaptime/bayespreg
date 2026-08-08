@@ -15,10 +15,10 @@ import scipy.sparse as sp
 # For n in the regime that fits in memory (n^2 weights matrix), calling
 # ``scipy.linalg.lu_factor`` (LAPACK ``dgetrf``) on the dense ``L_k = I - rho_k W``
 # is several times faster than ``scipy.sparse.linalg.splu``: SuperLU spends
-# most of its time in symbolic factorisation overhead at these sizes, whereas
+# most of its time in symbolic factorization overhead at these sizes, whereas
 # ``dgetrf`` is a single BLAS-3 kernel.  The forward and adjoint passes share
-# the same factorisation (``lu_solve(..., trans=0)`` vs ``trans=1``), so one
-# factorisation per Kronecker leg covers both directions.
+# the same factorization (``lu_solve(..., trans=0)`` vs ``trans=1``), so one
+# factorization per Kronecker leg covers both directions.
 #
 # The threshold below caps the dense path so very large problems still use
 # SuperLU.  Tunable via the ``BAYESPECON_KRON_DENSE_MAX`` env var
@@ -114,7 +114,7 @@ def _get_klu_factor():
 
 
 def _sparse_factor(A_csc, backend: str):
-    """Factorise ``A_csc`` with the requested KLU backend."""
+    """Factorize ``A_csc`` with the requested KLU backend."""
     if backend == "klu":
         return _get_klu_factor()(A_csc)
     raise ValueError(f"Unknown sparse backend: {backend!r}")
@@ -137,7 +137,7 @@ def _solve_sparse_matrix(A: sp.spmatrix, rhs: np.ndarray) -> np.ndarray:
     rhs64 = np.asarray(rhs, dtype=np.float64)
     if backend == "klu":
         # KLU factors accept a 2-D RHS directly (single
-        # factorisation, batched solve).
+        # factorization, batched solve).
         factor = _sparse_factor(A.tocsc(), backend)
         return np.asarray(factor.solve(rhs64), dtype=np.float64)
     lu = sp.linalg.splu(A.tocsc())
@@ -145,7 +145,7 @@ def _solve_sparse_matrix(A: sp.spmatrix, rhs: np.ndarray) -> np.ndarray:
 
 
 def _factor_solve_logdet(A: sp.spmatrix, rhs: np.ndarray) -> tuple[np.ndarray, float]:
-    """Factorise ``A``, solve ``A x = rhs``, and return ``(x, log|det A|)``.
+    """Factorize ``A``, solve ``A x = rhs``, and return ``(x, log|det A|)``.
 
     Uses KLU (scikit-sparse) when available, falling back to
     scipy SuperLU.  The logdet is recovered from the factor's diagonal(s).
@@ -198,7 +198,7 @@ def _make_cached_sparse_solver(
     Parameters
     ----------
     A : scipy.sparse matrix
-        Matrix to factorise.
+        Matrix to factorize.
     backend : {"klu", "scipy"} or None, optional
         Backend to use.  When ``None`` the configured backend is resolved.
 
@@ -206,7 +206,7 @@ def _make_cached_sparse_solver(
     -------
     _SparseFactorSolver | None
         Reusable solver, or ``None`` when the resolved backend is scipy
-        (no reusable KLU factor) or factorisation fails.
+        (no reusable KLU factor) or factorization fails.
     """
     if backend is None:
         backend = _select_sparse_backend()
@@ -245,7 +245,7 @@ def _factor_kron_factor(
     n: int,
     I_dense: np.ndarray | None = None,
 ):
-    """Return an LU factorisation of ``I - rho * W`` using dense LAPACK when small.
+    """Return an LU factorization of ``I - rho * W`` using dense LAPACK when small.
 
     Falls back to ``scipy.sparse.linalg.splu`` for ``n > BAYESPECON_KRON_DENSE_MAX``.
     The returned object exposes ``.solve(rhs, trans=...)`` regardless of path.

@@ -28,9 +28,9 @@ amortising the JIT overhead.
   C extension ``random_polyagamma``.
 - **ρ draw**: JAX slice sampling with a shift-invert Krylov basis.
   The basis is built once per sweep at the current ρ via LU
-  factorisation; each slice-candidate density evaluation is a cheap
+  factorization; each slice-candidate density evaluation is a cheap
   O(m·n·k) Horner polynomial — no linear solve, no autodiff needed.
-- **β draw**: Conjugate Gaussian with intercept reparameterisation
+- **β draw**: Conjugate Gaussian with intercept reparameterization
   δ₀ = β₀/(1−ρ) to break the ρ–β₀ posterior correlation.
 - **α draw**: JAX-compiled slice sampling on log(α).
 
@@ -61,7 +61,7 @@ def _build_sparse_ctx(W_sparse, n) -> dict:
     (so ``Ax(ρ) = eye_vals − ρ·w_vals``) and a BCOO ``W`` for sparse matvecs.
     The fill-reducing symbolic analysis is cached inside sparsax, keyed on the
     (constant) sparsity pattern, so it is computed once and reused for every
-    numeric factorisation across the whole run.
+    numeric factorization across the whole run.
     """
     from jax.experimental import sparse as jsparse
 
@@ -81,7 +81,7 @@ def _make_sparse_solvers(sparse_ctx):
     - ``matvec_W(v)`` → ``W @ v`` via BCOO.
 
     ``sparsax.lu_solve`` (SuiteSparse KLU) is vmap-safe *and* reuses its
-    numeric factorisation: the fill-reducing analysis is cached by pattern, and
+    numeric factorization: the fill-reducing analysis is cached by pattern, and
     a content-addressed LU factor cache keyed on ``Ax`` means the m+1 solves of
     a Krylov basis at a fixed ρ pay one ``klu_factor`` and m cheap solves — per
     chain — even under ``jax.vmap`` over chains.  See ``set_lu_cache_size`` — the
@@ -143,14 +143,14 @@ def _build_krylov_basis_jax(solve1, X_jax, matvec_W, n, k, degree):
     ``j = 1..m`` with ``V_0 = A_c⁻¹ X``.  ``W`` is never densified: the
     ``W @ V_j`` products go through the sparse ``matvec_W`` (BCOO) and each
     solve through the unary ``solve1``.  Taking ``solve1`` as a unary
-    ``rhs -> A_c⁻¹ rhs`` decouples the basis from how ``A_c`` is parameterised
+    ``rhs -> A_c⁻¹ rhs`` decouples the basis from how ``A_c`` is parameterized
     (single-ρ SAR vs 3-ρ flow) and from the sparsax call convention.
 
     Parameters
     ----------
     solve1 : callable ``(rhs) -> A_c⁻¹ rhs``
         Solve against the fixed base matrix ``A_c`` (closes over ρ / the
-        factorisation).
+        factorization).
     X_jax : jax.numpy.ndarray, shape (n, k)
         Design matrix.
     matvec_W : callable ``(v) -> W @ v``
@@ -206,7 +206,7 @@ def _eval_U_from_basis_jax(V_stack, drho):
 
 
 # ---------------------------------------------------------------------------
-# β-marginalised ρ log-density (Krylov-accelerated)
+# β-marginalized ρ log-density (Krylov-accelerated)
 # ---------------------------------------------------------------------------
 
 
@@ -224,7 +224,7 @@ def _rho_log_density_marginal_jax(
     X_jax=None,
     solve_at=None,
 ):
-    """β-marginalised log-density of ρ for the reduced form.
+    """β-marginalized log-density of ρ for the reduced form.
 
     Evaluates U(ρ) via the Krylov basis when |Δρ| ≤ dmax,
     otherwise falls back to a direct sparse sparsax solve (``solve_at``).
@@ -242,7 +242,7 @@ def _rho_log_density_marginal_jax(
     where U = (I−ρW)⁻¹X, M = V₀⁻¹ + UᵀΩU, s = κ/ω + log(α),
     r = s − Uμ₀, w = L⁻¹v, v = UᵀΩr.
 
-    No log|I−ρW| term — it cancels when β is marginalised out.
+    No log|I−ρW| term — it cancels when β is marginalized out.
     """
     import jax.numpy as jnp
     from jax.scipy.linalg import solve_triangular
@@ -263,11 +263,11 @@ def _rho_log_density_marginal_jax(
     else:
         U = U_krylov
 
-    # Intercept reparameterisation: δ₀ = β₀/(1−ρ)
+    # Intercept reparameterization: δ₀ = β₀/(1−ρ)
     reparam = (intercept_col >= 0) & (jnp.abs(rho_val) > 1e-8)
     scale = 1.0 - rho_val
 
-    # Apply reparameterisation: replace intercept column of U
+    # Apply reparameterization: replace intercept column of U
     U_rp = jnp.where(
         reparam,
         U.at[:, intercept_col].set(1.0),
@@ -307,7 +307,7 @@ def _rho_log_density_marginal_jax(
 
     result = -0.5 * log_det_M - 0.5 * (rOr - quad_pen)
 
-    # Jacobian for intercept reparameterisation
+    # Jacobian for intercept reparameterization
     result = jnp.where(reparam, result + jnp.log(scale), result)
 
     # Reject if outside Krylov radius AND no fallback available
@@ -391,7 +391,7 @@ def _slice_sample_rho_jax(
     key, subkey = jax.random.split(key)
     log_u = log_y0 + jnp.log(jax.random.uniform(subkey, dtype=jnp.float64))
 
-    # Stepping out: initialise [L, R]
+    # Stepping out: initialize [L, R]
     key, subkey = jax.random.split(key)
     u_rand = jax.random.uniform(subkey, dtype=jnp.float64)
     w = slice_width
@@ -485,7 +485,7 @@ def _make_reduced_gibbs_step(
     sparse_ctx : dict
         Sparse sparsax context from :func:`_build_sparse_ctx`: keys ``Ai``,
         ``Aj``, ``eye_vals``, ``w_vals`` (aligned COO of ``I − ρW``),
-        ``symbolic`` (cached sparsax symbolic factorisation) and ``W_bcoo``
+        ``symbolic`` (cached sparsax symbolic factorization) and ``W_bcoo``
         (BCOO ``W`` for matvecs).  ``W`` is never densified.
     n : int
         Number of spatial units.
@@ -495,7 +495,7 @@ def _make_reduced_gibbs_step(
         Prior hyperparameters.
     intercept_col : int, default 0
         Column index of the intercept in X. Set to -1 to disable
-        the reparameterisation.
+        the reparameterization.
     krylov_degree : int, default 8
         Krylov basis degree m for the shift-invert polynomial
         approximation of (I − ρW)⁻¹X.
@@ -589,7 +589,7 @@ def _make_reduced_gibbs_step(
 
         # ── Krylov basis: reuse or rebuild ──
         # The basis at rho_basis is valid for |rho - rho_basis| < krylov_dmax.
-        # When |Δρ| < reuse_threshold, skip the sparsax factorisation + (m+1)
+        # When |Δρ| < reuse_threshold, skip the sparsax factorization + (m+1)
         # solves and evaluate η via the Horner polynomial instead.
         V_stack_prev = state.get("V_stack", jnp.zeros_like(V_stack_init))
         rho_basis_prev = state.get("rho_basis", jnp.float64(0.0))
@@ -984,7 +984,7 @@ def run_chains_jax_reduced(
     sparse_ctx = _build_sparse_ctx(W_sparse, n)
 
     # sparsax's KLU factor cache must hold at least one factor per chain (each
-    # chain has its own ρ) for the Krylov basis to reuse the factorisation
+    # chain has its own ρ) for the Krylov basis to reuse the factorization
     # across its m+1 solves under vmap; size generously to also cover the
     # separate ρ_new (X̃) solve and occasional slice fallbacks per sweep.
     import sparsax
@@ -1015,7 +1015,7 @@ def run_chains_jax_reduced(
     )
 
     # Stack per-chain inits into a batched pytree (leading axis = chain).
-    # V_stack and rho_basis are initialised to zeros — the first sweep always
+    # V_stack and rho_basis are initialized to zeros — the first sweep always
     # rebuilds because |rho_init - 0| > reuse_threshold.
     _V_init = jnp.zeros((krylov_degree + 1, n, k), dtype=jnp.float64)
     state0 = {
@@ -1157,7 +1157,7 @@ def _reduced_pointwise_loglik(
     """Per-draw pointwise NB log-likelihood via sparse ``(I−ρW)⁻¹`` solves.
 
     Prefers sparsax's KLU LU solve (one cached symbolic analysis, values
-    rescaled per draw) over a scipy factorisation loop; never densifies ``W``.
+    rescaled per draw) over a scipy factorization loop; never densifies ``W``.
     Runs off-vmap on the host.
     """
     import scipy.sparse as _sp

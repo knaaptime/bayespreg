@@ -201,7 +201,7 @@ class _DynamicPanelMixin:
 
         .. warning::
 
-           This property materialises an ``(N*(T-1)) × (N*(T-1))`` dense matrix
+           This property materializes an ``(N*(T-1)) × (N*(T-1))`` dense matrix
            and grows as ``O(N² (T-1)²)``.  Prefer :meth:`_batch_sparse_lag`
            with ``T_eff=self._n_time_eff`` for batch log-likelihood paths.
            This property is retained for diagnostics requiring the full matrix.
@@ -432,7 +432,7 @@ class OLSPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)``. Used to construct the
-        ``WX`` block. Should be row-standardised.
+        ``WX`` block. Should be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.
@@ -661,7 +661,7 @@ class SDMUPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)``. Should be
-        row-standardised.
+        row-standardized.
     unit_col, time_col : str, optional
         Column names identifying the unit and time period in ``data``.
         Required in formula mode.
@@ -830,7 +830,7 @@ class SARPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)``. Should be
-        row-standardised.
+        row-standardized.
     unit_col, time_col : str, optional
         Column names identifying the unit and time period in ``data``.
         Required in formula mode.
@@ -980,7 +980,7 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)``. Should be
-        row-standardised.
+        row-standardized.
     unit_col, time_col : str, optional
         Column names identifying the unit and time period in ``data``.
         Required in formula mode.
@@ -1192,7 +1192,7 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)``. Should be
-        row-standardised.
+        row-standardized.
     unit_col, time_col : str, optional
         Column names identifying the unit and time period in ``data``.
         Required in formula mode.
@@ -1410,7 +1410,7 @@ class SLXPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)``. Used to construct the
-        ``WX`` block. Should be row-standardised.
+        ``WX`` block. Should be row-standardized.
     unit_col, time_col : str, optional
         Column names identifying the unit and time period in ``data``.
         Required in formula mode.

@@ -8,13 +8,13 @@ r"""Reduced-form SAR-logit with Pólya–Gamma Gibbs sampler.
 This is the canonical spatial binary model: the spatial lag enters the
 *linear predictor* as a deterministic mean-propagator (there is **no**
 latent noise field, so σ does not appear).  The ``|I − ρW|`` Jacobian
-cancels when β is marginalised out, making the ρ conditional linear and
+cancels when β is marginalized out, making the ρ conditional linear and
 Krylov-accelerable.  The Pólya–Gamma augmentation yields fully conjugate
 Gibbs updates for β and ρ (via a collapsed slice sampler).
 
 Both backends fit the same model: ``gibbs_backend="jax"`` (the default via
 ``"auto"``) runs each chain on its own CPU device via ``jax.pmap``;
-``"numpy"`` uses the CHOLMOD factorisation path.  For the *structural*
+``"numpy"`` uses the CHOLMOD factorization path.  For the *structural*
 latent-field SAR-logit, use :class:`SARLogitStructural`.
 
 Use this model when:
@@ -94,11 +94,11 @@ class SARLogit(SpatialModel):
 
     Notes
     -----
-    The reduced form parameterises the log-odds as the deterministic
+    The reduced form parameterizes the log-odds as the deterministic
     mean-propagator ``eta = (I - rho * W)^{-1} X @ beta`` (no latent noise
     field), and augments the logistic likelihood with Pólya–Gamma auxiliary
     variables to obtain fully conjugate Gibbs updates for β and a
-    β-marginalised collapsed slice update for ρ (the ``|I − ρW|`` Jacobian
+    β-marginalized collapsed slice update for ρ (the ``|I − ρW|`` Jacobian
     cancels, so ρ is Krylov-accelerable).
 
     The sampler bypasses PyMC's NUTS entirely. It produces an
@@ -156,7 +156,7 @@ class SARLogit(SpatialModel):
         W_csc = self._W_sparse.tocsc()
         n, k = X.shape
 
-        # --- Profile-log-likelihood initialisation ---
+        # --- Profile-log-likelihood initialization ---
         # Cached sparse solver: A = I - ρW shares its sparsity pattern across
         # the grid, so the symbolic analysis is computed once (sparsax) or
         # the pattern is pre-assembled (scipy fallback).
@@ -230,7 +230,7 @@ class SARLogit(SpatialModel):
         backend : {"numpy", "jax"}
             Execution backend.  ``"jax"`` (the default via ``"auto"``) runs
             each chain on its own CPU device via ``jax.pmap``; ``"numpy"``
-            uses the CHOLMOD factorisation path with adaptive slice sampling.
+            uses the CHOLMOD factorization path with adaptive slice sampling.
         init_jitter : float, default 0.1
             Std-dev of the Gaussian jitter applied to the profile-loglik
             initial state.

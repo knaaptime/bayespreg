@@ -45,7 +45,7 @@ class REGibbsEstimation:
     X : ndarray of shape (n, k)
         Design matrix.
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     Wy : ndarray of shape (n,) or None
         W @ y (precomputed, for SAR).
     priors : REGibbsPriors
@@ -315,7 +315,7 @@ class GaussianSARREGibbs(REGibbsEstimation):
     X : ndarray of shape (n, k)
         Design matrix.
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     Wy : ndarray of shape (n,)
         W @ y (precomputed).
     priors : REGibbsPriors
@@ -389,7 +389,7 @@ class GaussianSEMREGibbs(REGibbsEstimation):
     X : ndarray of shape (n, k)
         Design matrix.
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     priors : REGibbsPriors
         Prior hyperparameters.
     logdet_fn : callable

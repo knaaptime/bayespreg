@@ -119,7 +119,7 @@ class FlowKron:
 
         ``W_Fᵀ = ρ_d(I⊗Wᵀ) + ρ_o(Wᵀ⊗I) + ρ_w(Wᵀ⊗Wᵀ)`` which, using
         ``kron(A, B)`` on CSR matrices, is a sparse N×N matrix with
-        ``O(n²·nnz(W))`` nonzeros.  Used for KLU factorisation when
+        ``O(n²·nnz(W))`` nonzeros.  Used for KLU factorization when
         the dense N×N system is too large but the sparse pattern is
         manageable.
         """
@@ -238,7 +238,7 @@ def flow_logdet_grad(
     Parameters
     ----------
     W : array or sparse
-        The ``n x n`` (row-standardised, possibly directed) weights matrix.
+        The ``n x n`` (row-standardized, possibly directed) weights matrix.
     rho_d, rho_o, rho_w : float
         Flow spatial parameters.
     n_probes : int

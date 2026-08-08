@@ -98,10 +98,10 @@ def test_sar_negbin_fitted_values_and_effects_with_mock_posterior():
 def test_sar_negbin_count_effects_sparse_matches_eigen():
     """Sparse Hutchinson path agrees with eigen path within Monte-Carlo tol.
 
-    Also exercises the cached-LU code path: each draw must factorise A
+    Also exercises the cached-LU code path: each draw must factorize A
     exactly once and reuse the factor across all 20 Hutchinson probes plus
     the eta and row-sum solves. Regression test for the prior bug that
-    re-factorised A on every probe and returned only a 2-tuple.
+    re-factorized A on every probe and returned only a 2-tuple.
     """
     y, X, W = _count_data(seed=103)
     n = X.shape[0]

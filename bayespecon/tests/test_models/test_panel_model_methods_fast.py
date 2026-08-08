@@ -153,7 +153,7 @@ def test_panel_fe_spatial_effects_accept_numeric_row_standardized_graph_without_
     )
 
     assert model._is_row_std is True
-    assert not any("row-standardised" in str(w.message) for w in caught)
+    assert not any("row-standardized" in str(w.message) for w in caught)
 
     effects = model.spatial_effects()
     assert np.all(np.isfinite(effects[["direct", "indirect", "total"]].to_numpy()))
@@ -174,7 +174,7 @@ def test_panel_fe_warns_on_non_row_standardized_graph_without_transform():
 
     assert getattr(W, "transformation", None) == "O"
 
-    with pytest.warns(UserWarning, match="row-standardised"):
+    with pytest.warns(UserWarning, match="row-standardized"):
         model = OLSPanelFE(y=y, X=X, W=W, N=N, T=T, effects=1)
 
     assert model._is_row_std is False

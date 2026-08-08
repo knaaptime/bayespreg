@@ -182,7 +182,7 @@ def _sparsax_jax_enabled() -> bool:
 # and O(N^3) eigendecomposition time, which becomes prohibitive for very
 # large N; the sparse path is O(nnz).
 #
-# Default is 0 (eigen path disabled). The eigen path materialises three
+# Default is 0 (eigen path disabled). The eigen path materializes three
 # N×N complex128 matrices (eigenvalues, eigenvectors, inverse eigenvectors)
 # plus a dense N×N float64 W for the gradient — totalling ~24N² bytes.
 # For n=2000 this is ~96 MB of GPU constants that XLA must trace through,
@@ -200,7 +200,7 @@ def _resolve_auto_sar_solver(n: int) -> str:
     Selection order:
 
     1. ``eigen`` when *n* is at or below ``BAYESPECON_JAX_SAR_EIGEN_N_MAX``
-       (default 0, i.e. opt-in only). The eigen path materialises three
+       (default 0, i.e. opt-in only). The eigen path materializes three
        N×N complex128 matrices plus a dense N×N float64 W and triggers
        multi-minute XLA compile times for n > ~500, so we keep it gated.
     2. ``sparsax`` when installed (default; disable via
@@ -235,7 +235,7 @@ def _select_jax_sar_solver() -> str:
         ``BAYESPECON_JAX_SPARSAX=0``), else ``jax_gmres``.
     BAYESPECON_JAX_SAR_EIGEN_N_MAX : int, default 0
         Maximum N for which ``auto`` selects the eigen path. Default
-        0 disables eigen in ``auto`` because the dense materialisation
+        0 disables eigen in ``auto`` because the dense materialization
         triggers multi-minute XLA compile times for n > ~500.
     BAYESPECON_JAX_SPARSE_STRICT : truthy
         If set, missing requested optional dependencies raise ImportError
@@ -846,7 +846,7 @@ def register_jax_dispatch() -> bool:
         W_T_bcoo = jsparse.BCOO.from_scipy_sparse(op._W.transpose().tocsr())
 
         # Diagonal preconditioner: M^{-1} = diag(1 / (1 - rho * diag(W)))
-        # For row-standardised W, diag(W) is the self-loop weight.
+        # For row-standardized W, diag(W) is the self-loop weight.
         W_diag_np = np.asarray(op._W.diagonal(), dtype=np.float64)
         W_diag_j = jnp.asarray(W_diag_np, dtype=jnp.float64)
 
@@ -899,11 +899,11 @@ def register_jax_dispatch() -> bool:
 
         Precomputes the eigendecomposition of W once, then solves
         ``(I - rho W)^{-1} b = V @ diag(1/(1 - rho*lambda)) @ V^{-1} @ b``
-        using pure dense JAX operations.  This avoids sparse LU factorisation
+        using pure dense JAX operations.  This avoids sparse LU factorization
         entirely and is robust to near-singular system matrices that cause
         ``klu_factor`` to segfault or raise ``INVALID_ARGUMENT``.
 
-        Row-standardised spatial weight matrices are generally non-symmetric,
+        Row-standardized spatial weight matrices are generally non-symmetric,
         so the eigendecomposition uses complex arithmetic.  The final result
         is real-valued (the imaginary parts cancel), and JAX's autodiff
         correctly propagates gradients through the complex→real conversion.
@@ -930,7 +930,7 @@ def register_jax_dispatch() -> bool:
             Vinv_np = Vinv_np[idx, :]
 
         # Use complex128 to handle non-symmetric W correctly.
-        # Row-standardised W can have complex eigenvalues/eigenvectors.
+        # Row-standardized W can have complex eigenvalues/eigenvectors.
         eigs_j = jnp.asarray(eigs_np.astype(np.complex128))
         V_j = jnp.asarray(V_np.astype(np.complex128))
         Vinv_j = jnp.asarray(Vinv_np.astype(np.complex128))
@@ -986,7 +986,7 @@ def register_jax_dispatch() -> bool:
             try:
                 from ._logdet._chol_cheb import _d_symmetrize
 
-                # D-symmetrise W: raises ValueError if not symmetrizable.
+                # D-symmetrize W: raises ValueError if not symmetrizable.
                 W_sym_sp = _d_symmetrize(op._W)  # csc_matrix, symmetric
             except ValueError:
                 # Directed / non-symmetrizable W → sparsax KLU (asymmetric LU).

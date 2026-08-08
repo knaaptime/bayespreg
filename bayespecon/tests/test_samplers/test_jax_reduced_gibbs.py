@@ -53,7 +53,7 @@ def _make_problem(n: int = 25, k: int = 3, seed: int = 42):
     X = np.column_stack([np.ones(n)] + [rng.standard_normal(n) for _ in range(k - 1)])
     W = sp.random(n, n, density=0.2, format="csr", random_state=seed)
     W = W + W.T
-    # Row-standardise
+    # Row-standardize
     row_sums = np.array(W.sum(axis=1)).flatten()
     row_sums[row_sums == 0] = 1.0
     W = sp.diags(1.0 / row_sums) @ W

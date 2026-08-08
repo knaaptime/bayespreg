@@ -6,7 +6,7 @@ Orchestrates the 4-block Gibbs sweep:
   3. β | η, ρ      (conjugate normal, σ² = 1)
   4. ρ | β, ω, y   (collapsed 1-D slice, η integrated out)
 
-The structural form parameterises the latent log-odds as
+The structural form parameterizes the latent log-odds as
 ``η = ρ W η + X β + ν`` with ``ν ~ N(0, I)``, and augments the
 logistic likelihood with Pólya–Gamma auxiliary variables to obtain
 fully conjugate Gibbs updates for η and β.
@@ -133,7 +133,7 @@ class LogitGibbsCache(NamedTuple):
     # The threshold guards against a slowdown on those graphs.
     krylov_degree: int = 0
     krylov_dmax: float = 0.4
-    krylov_min_n: int = 400  # below this, CHOLMOD factorisation is too cheap to beat
+    krylov_min_n: int = 400  # below this, CHOLMOD factorization is too cheap to beat
     # JAX dense backend fields
     W_sym_dense: object | None = None  # jax.numpy.ndarray (n, n): W + W^T
     WtW_dense: object | None = None  # jax.numpy.ndarray (n, n): W^T W
@@ -415,7 +415,7 @@ def _sample_rho(
     # — used only by the JAX-dense β-conditional path below.
     WtXbeta = W.T @ Xbeta
 
-    # --- β-marginalisation precomputes (scipy-sparse path, σ² = 1) ---
+    # --- β-marginalization precomputes (scipy-sparse path, σ² = 1) ---
     beta_mu_arr = np.broadcast_to(np.asarray(priors.beta_mu, dtype=np.float64), (k,))
     beta_sigma_arr = np.broadcast_to(
         np.asarray(priors.beta_sigma, dtype=np.float64), (k,)
@@ -477,7 +477,7 @@ def _sample_rho(
     # ρ-dependent.  We seed the basis with the ρ-independent columns
     # [κ, X, WtX] so that P(ρ)⁻¹u(ρ) = P(ρ)⁻¹X − ρ·P(ρ)⁻¹WtX is recovered
     # as a linear combination of two Horner evaluations against the same
-    # single factorisation.
+    # single factorization.
     _krylov_basis: KrylovPrecisionBasis | None = None
     if (
         not use_jax
@@ -513,7 +513,7 @@ def _sample_rho(
             result = _jax_logdens_fn(jnp.float64(rho), _jax_key)
             return float(result)
 
-        # --- scipy sparse path (β-marginalised, σ² = 1) ---
+        # --- scipy sparse path (β-marginalized, σ² = 1) ---
         log_det_A = logdet_fn(rho)
 
         # u = A_ρᵀ X = X − ρ Wᵀ X   — (n, k) dense
@@ -874,7 +874,7 @@ class SEMLogitGibbsCache(NamedTuple):
     # on ring/lattices with minimal fill-in CHOLMOD is already cheap.
     krylov_degree: int = 0
     krylov_dmax: float = 0.4
-    krylov_min_n: int = 400  # below this, CHOLMOD factorisation is too cheap to beat
+    krylov_min_n: int = 400  # below this, CHOLMOD factorization is too cheap to beat
     # JAX dense backend fields
     W_sym_dense: object | None = None
     WtW_dense: object | None = None
@@ -1359,7 +1359,7 @@ def _sem_jax_log_density_core(
     # Build P = I + diag(ω) - λ*W_sym + λ²*WtW  (σ² = 1)
     P_diag = jnp.ones(n) + omega
     P = jnp.diag(P_diag) - lam * W_sym_dense + lam**2 * WtW_dense
-    P = P + 1e-6 * jnp.eye(n)  # regularisation
+    P = P + 1e-6 * jnp.eye(n)  # regularization
 
     # RHS: Xβ - λ*(W+W')Xβ + λ²*W'WXβ + κ
     rhs = Xbeta - lam * WsymXbeta + lam**2 * WtWXbeta + kappa

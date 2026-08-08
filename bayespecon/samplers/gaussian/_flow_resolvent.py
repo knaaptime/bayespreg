@@ -86,7 +86,7 @@ class FlowResolventTarget:
     Parameters
     ----------
     W : array or sparse
-        The ``n x n`` (directed, row-standardised) weights matrix.
+        The ``n x n`` (directed, row-standardized) weights matrix.
     y : ndarray (N,)
         Flow observations (``N = n²``).
     X : ndarray (N, k)

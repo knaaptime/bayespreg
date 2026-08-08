@@ -8,7 +8,7 @@ from libpysal.graph import Graph
 
 
 def _make_ring_graph(n: int) -> Graph:
-    """Build a simple ring-contiguity Graph for n units (row-standardised)."""
+    """Build a simple ring-contiguity Graph for n units (row-standardized)."""
     focal = np.concatenate([np.arange(n), np.arange(n)])
     neighbor = np.concatenate([np.roll(np.arange(n), 1), np.roll(np.arange(n), -1)])
     weight = np.ones(len(focal), dtype=float)

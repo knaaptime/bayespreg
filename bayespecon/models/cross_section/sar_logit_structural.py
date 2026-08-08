@@ -85,7 +85,7 @@ class SARLogitStructural(SpatialModel):
 
     Notes
     -----
-    The structural form parameterises the latent log-odds as
+    The structural form parameterizes the latent log-odds as
     ``eta = rho * W @ eta + X @ beta + nu`` with ``nu ~ N(0, I)``,
     and augments the logistic likelihood with Pólya–Gamma auxiliary
     variables to obtain fully conjugate Gibbs updates for η and β.
@@ -131,7 +131,7 @@ class SARLogitStructural(SpatialModel):
 
         For each ρ on a coarse grid, computes X̃ = (I − ρW)⁻¹X and
         the OLS estimate β̂ = (X̃ᵀX̃)⁻¹X̃ᵀy, then picks the (ρ, β)
-        that maximises the Gaussian log-likelihood on y (treating y as
+        that maximizes the Gaussian log-likelihood on y (treating y as
         continuous).  This places the chain near the posterior mode even
         at high ρ, where starting at ρ = 0 can leave the chain stuck in
         a wrong mode.
@@ -145,7 +145,7 @@ class SARLogitStructural(SpatialModel):
         W_csc = self._W_sparse.tocsc()
         n, k = X.shape
 
-        # --- Profile-log-likelihood initialisation ---
+        # --- Profile-log-likelihood initialization ---
         # Cached sparse solver: A = I - ρW shares its sparsity pattern across
         # the grid, so the symbolic analysis is computed once (sparsax) or
         # the pattern is pre-assembled (scipy fallback).
@@ -218,7 +218,7 @@ class SARLogitStructural(SpatialModel):
         progressbar : bool
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
-            Execution backend.  ``"numpy"`` uses the CHOLMOD factorisation
+            Execution backend.  ``"numpy"`` uses the CHOLMOD factorization
             path; ``"jax"`` uses the JAX-accelerated dense path (requires
             float64; viable for n ≲ 10 000).
         return_eta : bool

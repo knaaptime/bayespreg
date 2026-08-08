@@ -134,7 +134,7 @@ class TestKrylovPrecisionBasisEquivalence:
 class TestKrylovPrecisionBasisSpeedup:
     """Micro-benchmark: per-candidate cost with vs without the basis.
 
-    The Krylov reuse wins when CHOLMOD fill-in makes factorisation
+    The Krylov reuse wins when CHOLMOD fill-in makes factorization
     expensive relative to the triangular solves — i.e. on 2-D lattices
     with queen contiguity, not on ring lattices (near-tridiagonal,
     minimal fill-in).  The crossover is around n≈400 on a queen grid.
@@ -238,7 +238,7 @@ class TestKrylovPrecisionBasisSpeedup:
             f"slowdown={slowdown:.2f}x"
         )
         # On a ring lattice the basis build (degree+1 solves) can cost more
-        # than n_candidates cheap factorisations; allow up to 3x slowdown.
+        # than n_candidates cheap factorizations; allow up to 3x slowdown.
         assert slowdown < 3.0, f"Ring-lattice slowdown {slowdown:.2f}x exceeds 3x guard"
 
 

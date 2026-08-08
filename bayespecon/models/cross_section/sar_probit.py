@@ -69,7 +69,7 @@ class SARProbit(SharedSpatialMethods):
         :class:`scipy.sparse` matrix.  The legacy :class:`libpysal.weights.W`
         object is **not** accepted directly; pass ``w.sparse`` or convert with
         ``libpysal.graph.Graph.from_W(w)``.
-        W should be row-standardised; a :class:`UserWarning` is raised if not.
+        W should be row-standardized; a :class:`UserWarning` is raised if not.
     region_col : str, optional
         Region identifier column in ``data`` (formula mode).
     region_ids : array-like, optional
@@ -207,9 +207,9 @@ class SARProbit(SharedSpatialMethods):
             raise ValueError("W must be a square region-level matrix.")
         if not row_std:
             warnings.warn(
-                "W does not appear to be row-standardised (row sums \u2260 1). "
-                "Most spatial models assume W is row-standardised; results may be "
-                "unreliable otherwise. For a scipy sparse matrix normalise rows "
+                "W does not appear to be row-standardized (row sums \u2260 1). "
+                "Most spatial models assume W is row-standardized; results may be "
+                "unreliable otherwise. For a scipy sparse matrix normalize rows "
                 "manually (divide each row by its sum). To use a libpysal.graph.Graph "
                 "set its transformation attribute: "
                 "graph = graph.transform('r').",
@@ -438,7 +438,7 @@ class SARProbit(SharedSpatialMethods):
         indirect_samples = np.zeros_like(direct_samples)
         total_samples = direct_samples.copy()
 
-        def _summarise(samples: np.ndarray) -> dict[str, np.ndarray]:
+        def _summarize(samples: np.ndarray) -> dict[str, np.ndarray]:
             return {
                 "mean": np.mean(samples, axis=0),
                 "ci_lower": np.percentile(samples, 2.5, axis=0),
@@ -450,9 +450,9 @@ class SARProbit(SharedSpatialMethods):
                 ),
             }
 
-        d = _summarise(direct_samples)
-        i = _summarise(indirect_samples)
-        t = _summarise(total_samples)
+        d = _summarize(direct_samples)
+        i = _summarize(indirect_samples)
+        t = _summarize(total_samples)
 
         df = pd.DataFrame(
             {

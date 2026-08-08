@@ -92,7 +92,7 @@ class _KroneckerFlowVJPOp(pt.Op):
     Parameters
     ----------
     W : scipy.sparse.csr_matrix, shape (n, n)
-        Row-standardised spatial weight matrix on the *n* spatial units.
+        Row-standardized spatial weight matrix on the *n* spatial units.
         The Kronecker flow matrices :math:`W_d = I_n \otimes W` and
         :math:`W_o = W \otimes I_n` are implicit.
     n : int
@@ -200,11 +200,11 @@ class KroneckerFlowSolveOp(pt.Op):
     Complexity
     ----------
     Each gradient evaluation requires **4** :math:`n \times n` sparse
-    factorisations (2 forward + 2 adjoint) plus **2** dense
+    factorizations (2 forward + 2 adjoint) plus **2** dense
     :math:`n \times n` matrix products — all :math:`O(n^3)`.
 
     Compare to :class:`SparseFlowSolveOp` which requires **2**
-    :math:`N \times N` (:math:`N = n^2`) factorisations — :math:`O(n^6)`.
+    :math:`N \times N` (:math:`N = n^2`) factorizations — :math:`O(n^6)`.
 
     Speedup at representative sizes:
 
@@ -248,7 +248,7 @@ class KroneckerFlowSolveOp(pt.Op):
     Parameters
     ----------
     W : scipy.sparse.csr_matrix, shape (n, n)
-        Row-standardised spatial weight matrix on the *n* spatial units.
+        Row-standardized spatial weight matrix on the *n* spatial units.
         Only this :math:`n \times n` matrix is stored; the
         :math:`N \times N` Kronecker matrices are never allocated.
     n : int
@@ -258,7 +258,7 @@ class KroneckerFlowSolveOp(pt.Op):
     -----
     ``rho_w`` is **not** an input to this Op.  The caller declares
     ``rho_w = pm.Deterministic("rho_w", -rho_d * rho_o)`` for trace
-    reporting; the Op implicitly uses the factorised form.
+    reporting; the Op implicitly uses the factorized form.
     """
 
     __props__ = ("_op_id",)
@@ -336,10 +336,10 @@ class _KroneckerFlowVJPMatrixOp(pt.Op):
     Extends :class:`_KroneckerFlowVJPOp` to a matrix right-hand side
     :math:`B \in \mathbb{R}^{N \times T}` (:math:`T` time periods).
 
-    Two sparse factorisations — one for :math:`L_d` and one for :math:`L_o^\top`
+    Two sparse factorizations — one for :math:`L_d` and one for :math:`L_o^\top`
     — cover all :math:`T` columns simultaneously via batched
     :math:`(n, nT)` right-hand sides, so cost is still **4** :math:`n \times n`
-    factorisations regardless of :math:`T`.
+    factorizations regardless of :math:`T`.
 
     Algorithm
     ---------
@@ -350,10 +350,10 @@ class _KroneckerFlowVJPMatrixOp(pt.Op):
 
     1. Pack :math:`B` as :math:`(n, nT)` in column-major order so that
        columns :math:`[tn : (t+1)n]` hold :math:`H_{b,t}`.
-       Solve :math:`L_d H' = R_{(n,nT)}` — one factorisation covering all :math:`T`.
+       Solve :math:`L_d H' = R_{(n,nT)}` — one factorization covering all :math:`T`.
     2. Permute slices to build the transposed batch
        :math:`[(H'_t)^\top]_t` as an :math:`(n, nT)` matrix.
-       Solve :math:`L_o^\top Z = \mathrm{RHS2}_{(n,nT)}` — second factorisation.
+       Solve :math:`L_o^\top Z = \mathrm{RHS2}_{(n,nT)}` — second factorization.
     3. Permute and reshape to :math:`(N, T)`:  column :math:`t` is
        :math:`\operatorname{vec}(Z_t^\top) = \eta_t`.
 
@@ -377,7 +377,7 @@ class _KroneckerFlowVJPMatrixOp(pt.Op):
     Parameters
     ----------
     W : scipy.sparse.csr_matrix, shape (n, n)
-        Row-standardised spatial weight matrix.
+        Row-standardized spatial weight matrix.
     n : int
         Number of spatial units.
     """
@@ -410,7 +410,7 @@ class _KroneckerFlowVJPMatrixOp(pt.Op):
         """Two-step Kronecker solve used for both forward and adjoint passes.
 
         Both ``(Lo⊗Ld) η = B`` (forward) and ``(Lo^T⊗Ld^T) v = G`` (adjoint)
-        use one LU factorisation per Kronecker factor. The second step solves
+        use one LU factorization per Kronecker factor. The second step solves
         against ``Lo`` for the forward path (``transpose_o=False``) and against
         ``Lo^T`` for the adjoint path (``transpose_o=True``, the default for
         backward compatibility with the VJP).
@@ -422,9 +422,9 @@ class _KroneckerFlowVJPMatrixOp(pt.Op):
         Parameters
         ----------
         lu_o : scipy.sparse.linalg.SuperLU
-            LU factorisation of ``Lo``.
+            LU factorization of ``Lo``.
         lu_d : scipy.sparse.linalg.SuperLU
-            LU factorisation of ``Ld``.
+            LU factorization of ``Ld``.
         rhs : ndarray, shape (N, T)
             Right-hand-side matrix.
         transpose_d : bool, default False
@@ -515,9 +515,9 @@ class KroneckerFlowSolveMatrixOp(pt.Op):
     Extends :class:`KroneckerFlowSolveOp` to a matrix right-hand side
     :math:`B \in \mathbb{R}^{N \times T}` that arises when :math:`T` time
     periods share the same system matrix :math:`A = L_o \otimes L_d`
-    (see :class:`KroneckerFlowSolveOp` for the factorisation derivation).
+    (see :class:`KroneckerFlowSolveOp` for the factorization derivation).
 
-    Two :math:`n \times n` factorisations cover all :math:`T` columns
+    Two :math:`n \times n` factorizations cover all :math:`T` columns
     simultaneously:
 
     .. math::
@@ -529,19 +529,19 @@ class KroneckerFlowSolveMatrixOp(pt.Op):
 
     The batched solve reshapes :math:`B` to :math:`(n, nT)` so that a single
     call to :func:`scipy.sparse.linalg.spsolve` covers all :math:`T` columns
-    with one :math:`L_d` factorisation, followed by one :math:`L_o^\top`
-    factorisation for the second step.
+    with one :math:`L_d` factorization, followed by one :math:`L_o^\top`
+    factorization for the second step.
 
     Complexity
     ----------
-    **4** :math:`n \times n` sparse factorisations per gradient step, regardless
+    **4** :math:`n \times n` sparse factorizations per gradient step, regardless
     of :math:`T`.  Compare to :class:`SparseFlowSolveMatrixOp` which requires
-    **2** :math:`N \times N` factorisations (:math:`N = n^2`).
+    **2** :math:`N \times N` factorizations (:math:`N = n^2`).
 
     Parameters
     ----------
     W : scipy.sparse.csr_matrix, shape (n, n)
-        Row-standardised spatial weight matrix.  Never stored as
+        Row-standardized spatial weight matrix.  Never stored as
         :math:`N \times N` Kronecker matrices.
     n : int
         Number of spatial units.
@@ -572,7 +572,7 @@ class KroneckerFlowSolveMatrixOp(pt.Op):
 
         Applies the batched two-step Kronecker solve to
         :math:`B \in \mathbb{R}^{N \times T}` using one :math:`L_d`
-        factorisation and one :math:`L_o^\top` factorisation:
+        factorization and one :math:`L_o^\top` factorization:
 
         1. :math:`L_d H' = R_{(n,nT)}` — batch all :math:`T` slices
            side-by-side.

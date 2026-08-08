@@ -38,7 +38,7 @@ class _SparseSARVJPOp(pt.Op):
     Parameters
     ----------
     W : scipy.sparse.csr_matrix, shape (n, n)
-        Row-standardised spatial weight matrix.
+        Row-standardized spatial weight matrix.
     """
 
     __props__ = ("_op_id",)
@@ -136,7 +136,7 @@ class SparseSARSolveOp(pt.Op):
 
         A(\rho) = I_n - \rho W
 
-    where :math:`W` is a row-standardised spatial weight matrix.
+    where :math:`W` is a row-standardized spatial weight matrix.
 
     This Op is used by :class:`~bayespecon.models.sar_negbin.SARNegBin`
     to embed the SAR-in-mean reduced form on the **log-mean** of a
@@ -180,7 +180,7 @@ class SparseSARSolveOp(pt.Op):
     Parameters
     ----------
     W : scipy.sparse.csr_matrix, shape (n, n)
-        Row-standardised spatial weight matrix.
+        Row-standardized spatial weight matrix.
 
     Examples
     --------

@@ -2,12 +2,12 @@ r"""JAX-native scalar Kalman filter, FFBS backward sampler, and eigenbasis trans
 
 Replaces the Python loops in :mod:`~bayespecon.samplers.panel_flow._eigenbasis`
 with ``jax.lax.scan`` for full JIT compilation. All operations are
-vectorised over the :math:`n^2` modes.
+vectorized over the :math:`n^2` modes.
 
 The key difference from the numpy version: the forward pass uses
 ``jax.lax.scan`` instead of a Python ``for`` loop, and the backward
 pass uses ``jax.lax.scan`` with reverse ordering. This eliminates
-Python dispatch overhead and enables XLA optimisation of the entire
+Python dispatch overhead and enables XLA optimization of the entire
 FFBS pipeline.
 
 See Also
@@ -22,7 +22,7 @@ import jax
 import jax.numpy as jnp
 
 # ---------------------------------------------------------------------------
-# Diffuse initialisation threshold
+# Diffuse initialization threshold
 # ---------------------------------------------------------------------------
 
 _DIFFUSE_GAMMA_THRESH = 0.99

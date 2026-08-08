@@ -22,7 +22,7 @@ def sample_truncnorm(
     """Draw from TruncatedNormal(mu, sigma²) on (lower, upper).
 
     Uses the efficient algorithm from Robert (1995) for far-tail
-    cases, with simple rejection sampling for the bulk. Vectorised
+    cases, with simple rejection sampling for the bulk. Vectorized
     over all inputs.
 
     Parameters

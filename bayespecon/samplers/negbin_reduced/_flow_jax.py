@@ -8,7 +8,7 @@ The unrestricted origin–destination flow model has system matrix
 
 on the ``N = n^2`` flow lattice.  ``A`` is **directed** (non-symmetric,
 non-D-symmetrizable), so no Cholesky applies; and it is far too large to
-densify (``N \times N`` with ``N = n^2``).  The numpy chain factorises the
+densify (``N \times N`` with ``N = n^2``).  The numpy chain factorizes the
 sparse ``A`` on the host every time a ``\rho`` moves (see
 ``_flow._solve_A_unrestricted``).  This module provides the JAX-native
 equivalent: a single ``sparsax`` symbolic analysis reused across the whole
@@ -19,7 +19,7 @@ The crucial invariant is that **the sparsity pattern of ``A`` is constant**
 across ``\rho`` (it is the structural union of ``I, W_d, W_o, W_w``).  We
 build that shared pattern once and carry four value vectors aligned to it, so
 each solve only rescales values and calls ``sparsax.lu_solve`` — the
-symbolic factorisation (AMD ordering + elimination tree) is never redone.
+symbolic factorization (AMD ordering + elimination tree) is never redone.
 
 Keeping this alongside the numpy host path is intentional: sparsax shines on
 GPU, while host KLU remains competitive on CPU.
@@ -164,7 +164,7 @@ def _make_flow_solvers(ctx):
     ``A(ρ)⁻¹ rhs`` via ``sparsax.lu_solve`` (SuiteSparse KLU) and ``matvec``
     is a dict ``{"d","o","w"}`` of sparse (BCOO) lag matvecs.
 
-    ``sparsax.lu_solve`` is vmap-safe and reuses its numeric factorisation via
+    ``sparsax.lu_solve`` is vmap-safe and reuses its numeric factorization via
     a content-addressed cache: the m+1 solves of a Krylov basis at a fixed
     (ρ_d,ρ_o,ρ_w) pay one ``klu_factor`` and m cheap solves — per chain — even
     under ``jax.vmap`` over chains, which stays vmap-safe under ``jit(vmap(...))``;
@@ -627,7 +627,7 @@ def _build_sar_solver_jax(W_csc, n):
 
     Returns ``solve(rho, rhs)`` where ``rhs`` is ``(n,)`` or ``(n, m)``.
     The symbolic analysis is cached by sparsax keyed on the constant
-    COO pattern, so only the numeric factorisation is redone per ρ.
+    COO pattern, so only the numeric factorization is redone per ρ.
     """
     import jax.numpy as jnp
     import sparsax
@@ -987,7 +987,7 @@ def run_chains_jax_flow_separable(
     """Run the separable flow NB Gibbs sampler on the JAX backend.
 
     The separable Kronecker model (``ρ_w = -ρ_d·ρ_o``) factors the ``N×N``
-    system into two ``n×n`` solves, each using a sparsax KLU factorisation
+    system into two ``n×n`` solves, each using a sparsax KLU factorization
     on the regional weights pattern.  Each ρ_k slice uses a Krylov basis
     on the n×n system with cross-sweep reuse via ``jax.lax.cond``.
 

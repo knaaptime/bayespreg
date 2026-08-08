@@ -394,7 +394,7 @@ def _make_gibbs_step_with_data(
         post_mean = post_var * (gamma_prior_mean_jax * prior_prec + S_rz / sigma2_u_new)
 
         # Truncated normal via inverse CDF of standard normal
-        # Φ^{-1}(u · Φ(b) + (1-u) · Φ(a)) where a,b are standardised bounds
+        # Φ^{-1}(u · Φ(b) + (1-u) · Φ(a)) where a,b are standardized bounds
         from jax.scipy.special import ndtr, ndtri
 
         a_std = (-1.0 - post_mean) / jnp.sqrt(post_var)

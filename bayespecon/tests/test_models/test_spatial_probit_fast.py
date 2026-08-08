@@ -38,7 +38,7 @@ def _idata_for_model(m: SARProbit) -> az.InferenceData:
 
 def test_as_dense_region_W_warns_for_non_row_standardized_sparse():
     W = sp.csr_matrix(np.array([[0.0, 2.0], [1.0, 0.0]], dtype=float))
-    with pytest.warns(UserWarning, match="row-standardised"):
+    with pytest.warns(UserWarning, match="row-standardized"):
         dense = SARProbit._as_dense_region_W(W)
     assert dense.shape == (2, 2)
 

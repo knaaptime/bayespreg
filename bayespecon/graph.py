@@ -64,7 +64,7 @@ def flow_trace_blocks(W: sp.spmatrix) -> np.ndarray:
     Parameters
     ----------
     W : scipy.sparse.spmatrix
-        Row-standardised :math:`n \times n` weight matrix on the base graph.
+        Row-standardized :math:`n \times n` weight matrix on the base graph.
 
     Returns
     -------
@@ -107,7 +107,7 @@ def _weights_to_csr(W) -> sp.csr_matrix:
 
     Flow models take their ``n×n`` regional weights as ``W`` (mirroring the
     other spatial models); this helper accepts a :class:`libpysal.graph.Graph`
-    (row-standardised) or a scipy-sparse / dense array and never densifies a
+    (row-standardized) or a scipy-sparse / dense array and never densifies a
     sparse input.
     """
     if isinstance(W, Graph):
@@ -127,13 +127,13 @@ def destination_weights(G: Graph) -> sp.csr_matrix:
     """Build the N×N destination weight matrix :math:`W_d = I_n \\otimes W`.
 
     A non-zero entry at position :math:`(i \\cdot n + j,\\; i \\cdot n + k)`
-    indicates that destination *k* is a spatial neighbour of destination *j*
+    indicates that destination *k* is a spatial neighbor of destination *j*
     (for flows originating from *i*).
 
     Parameters
     ----------
     G :
-        Row-standardised :class:`libpysal.graph.Graph` of shape *n×n*.
+        Row-standardized :class:`libpysal.graph.Graph` of shape *n×n*.
 
     Returns
     -------
@@ -149,13 +149,13 @@ def origin_weights(G: Graph) -> sp.csr_matrix:
     """Build the N×N origin weight matrix :math:`W_o = W \\otimes I_n`.
 
     A non-zero entry at position :math:`(i \\cdot n + j,\\; k \\cdot n + j)`
-    indicates that origin *k* is a spatial neighbour of origin *i*
+    indicates that origin *k* is a spatial neighbor of origin *i*
     (for flows terminating at *j*).
 
     Parameters
     ----------
     G :
-        Row-standardised :class:`libpysal.graph.Graph` of shape *n×n*.
+        Row-standardized :class:`libpysal.graph.Graph` of shape *n×n*.
 
     Returns
     -------
@@ -170,14 +170,14 @@ def origin_weights(G: Graph) -> sp.csr_matrix:
 def network_weights(G: Graph) -> sp.csr_matrix:
     """Build the N×N network weight matrix :math:`W_w = W \\otimes W`.
 
-    Captures joint origin-destination neighbourhood structure: a non-zero
+    Captures joint origin-destination neighborhood structure: a non-zero
     entry at :math:`(i \\cdot n + j,\\; k \\cdot n + l)` indicates that
-    origin *k* neighbours *i* AND destination *l* neighbours *j*.
+    origin *k* neighbors *i* AND destination *l* neighbors *j*.
 
     Parameters
     ----------
     G :
-        Row-standardised :class:`libpysal.graph.Graph` of shape *n×n*.
+        Row-standardized :class:`libpysal.graph.Graph` of shape *n×n*.
 
     Returns
     -------
@@ -194,7 +194,7 @@ def flow_weight_matrices(G: Graph) -> dict[str, sp.csr_matrix]:
     Parameters
     ----------
     G :
-        Row-standardised :class:`libpysal.graph.Graph` of shape *n×n*.
+        Row-standardized :class:`libpysal.graph.Graph` of shape *n×n*.
 
     Returns
     -------
@@ -230,7 +230,7 @@ class FlowDesignMatrix:
     intra_indicator : np.ndarray, shape (N,)
         Binary indicator for diagonal (intra-zonal) O-D pairs.
     dist_vec : np.ndarray or None, shape (N,)
-        Vectorised distance/cost matrix ``vec(dist)`` if provided.
+        Vectorized distance/cost matrix ``vec(dist)`` if provided.
     combined : np.ndarray, shape (N, p)
         Full design matrix ready for regression.  Column order:
         intercept | intra_indicator | X_dest (k_d cols) | X_orig (k_o cols) |
@@ -329,7 +329,7 @@ def flow_design_matrix(
     >>> design.feature_names[:4]
     ['intercept', 'intra_indicator', 'dest_pop', 'dest_inc']
 
-    Optionally append a vectorised distance matrix as a final column:
+    Optionally append a vectorized distance matrix as a final column:
 
     >>> dist = np.array([[0.0, 10.0, 5.0],
     ...                  [10.0, 0.0, 8.0],

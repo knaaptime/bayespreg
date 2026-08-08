@@ -8,7 +8,7 @@ Orchestrates the 6-block Gibbs sweep:
   5. ρ | β, σ², ω, y   (collapsed 1-D slice, η integrated out)
   6. α | y, η           (1-D slice on log-likelihood)
 
-The structural form parameterises the latent log-mean as
+The structural form parameterizes the latent log-mean as
 ``η = ρ W η + X β + ν`` with ``ν ~ N(0, σ² I)``, and augments the NB
 likelihood with Pólya–Gamma auxiliary variables to obtain fully
 conjugate Gibbs updates for η, β, and σ².
@@ -24,9 +24,9 @@ where P_η = A_ρ^T A_ρ / σ² + diag(ω) and rhs = A_ρ^T Xβ / σ² + κ.
 **Backend dispatch**: The sampler supports three computational paths,
 selected via ``gibbs_method`` in :meth:`SARNegBinStructural.fit`:
 
-- ``"factorize"``: CHOLMOD/splu factorisation (exact, O(nnz^{1.5})).
+- ``"factorize"``: CHOLMOD/splu factorization (exact, O(nnz^{1.5})).
 - ``"iterative"``: CG + Lanczos + Chebyshev (approximate, avoids
-  factorisation).
+  factorization).
 - ``"jax_dense"``: JAX dense matvec + vmap (3–4× faster for single
   draws, 20–27× per-draw when batching Chebyshev draws).  Requires
   JAX with float64 enabled.  Viable for n ≤ ~10 000 on machines
@@ -173,9 +173,9 @@ class GibbsCache(NamedTuple):
 
     When ``solve_method="cg"`` or ``logdet_P_method="lanczos"``, the
     decoupled (iterative) path is used in the ρ slice sampler:
-    CG replaces the factorisation-based solve, and Lanczos-based
-    stochastic estimation replaces the factorisation-based log|P_η|.
-    This avoids the O(nnz^{1.5}) factorisation cost for large n.
+    CG replaces the factorization-based solve, and Lanczos-based
+    stochastic estimation replaces the factorization-based log|P_η|.
+    This avoids the O(nnz^{1.5}) factorization cost for large n.
 
     When ``solve_method="jax_dense"``, the JAX-accelerated path is
     used: dense matvec + vmap over Lanczos probes and Chebyshev
@@ -607,9 +607,9 @@ def _sample_rho(
 
     Each ρ evaluation requires computing log|P_η| and solving
     P_η m = rhs.  By default, both are done via CHOLMOD/splu
-    factorisation (O(nnz^{1.5})).  When ``cache.solve_method="cg"``
+    factorization (O(nnz^{1.5})).  When ``cache.solve_method="cg"``
     and/or ``cache.logdet_P_method="lanczos"``, the decoupled
-    (iterative) path is used instead, avoiding the factorisation
+    (iterative) path is used instead, avoiding the factorization
     cost entirely for large n with high fill-in.
 
     Parameters
@@ -628,7 +628,7 @@ def _sample_rho(
         Random state.
     log_density_current : float, optional
         Cached log-density at current ρ. If provided, avoids one
-        logdet + factorisation evaluation.
+        logdet + factorization evaluation.
 
     Returns
     -------
@@ -957,7 +957,7 @@ def _sample_alpha(
         # NB log-likelihood: sum_i log NB(y_i | mu_i, alpha)
         # where mu_i = exp(eta_i)
         mu = np.exp(eta)
-        # scipy.stats.nbinom.logpmf uses (n, p) parameterisation
+        # scipy.stats.nbinom.logpmf uses (n, p) parameterization
         # NB(y | mu, alpha) = Gamma-Poisson mixture
         # log p(y | mu, alpha) = log Gamma(y + alpha) - log Gamma(alpha)
         #   + y * log(mu / (mu + alpha)) + alpha * log(alpha / (mu + alpha))
@@ -1061,7 +1061,7 @@ def run_chain(
     X : ndarray of shape (n, k)
         Design matrix (including intercept column if desired).
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     priors : GibbsPriors
         Prior hyperparameters.
     cache : GibbsCache

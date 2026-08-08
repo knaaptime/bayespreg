@@ -77,7 +77,7 @@ class JointLogDensity:
     Attributes
     ----------
     logdensity_fn : callable
-        ``theta (d,) -> scalar`` unnormalised joint log-density on the
+        ``theta (d,) -> scalar`` unnormalized joint log-density on the
         unconstrained parameters.  Pure ``jax.numpy``; differentiable and
         JIT-compatible.
     to_constrained : callable

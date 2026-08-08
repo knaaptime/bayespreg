@@ -5,7 +5,7 @@ draws of model parameters into posterior distributions of direct,
 indirect, and total impacts.  The actual *computation* of the impact
 matrices :math:`(I-\\rho W)^{-1}(\\beta_{1k} I + \\beta_{2k} W)` lives
 in the model classes (e.g. ``SAR._compute_spatial_effects_posterior``,
-``SDM._compute_spatial_effects_posterior``); this module summarises
+``SDM._compute_spatial_effects_posterior``); this module summarizes
 those draws with means, credible intervals, and Bayesian p-values.
 This is the fully Bayesian analog of the simulation-based approach in
 :cite:t:`lesage2009IntroductionSpatial` and the asymptotic variance
@@ -39,11 +39,11 @@ def _chunked_eig_means(
 ) -> np.ndarray:
     """Compute ``mean_j(weights_j / (1 - rho_g * eigs_j))`` per draw, chunked.
 
-    The naive vectorised form ``1 / (1 - rho[:, None] * eigs[None, :])`` is
+    The naive vectorized form ``1 / (1 - rho[:, None] * eigs[None, :])`` is
     correct but allocates a ``(G, n)`` intermediate, which dominates memory
     for large panels (e.g., ``G=8000``, ``n=14000`` ≈ 900 MB).  Chunking
     over draws keeps peak memory at ``O(chunk * n)`` while preserving the
-    same vectorised inner kernel.
+    same vectorized inner kernel.
 
     Parameters
     ----------

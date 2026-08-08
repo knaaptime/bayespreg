@@ -7,7 +7,7 @@ independent scalar filters in the eigenbasis of the spatial precision
 matrix :math:`Q_{\text{space}}`.
 
 Each mode is a scalar AR(1) process with its own innovation variance
-:math:`q_m`. The forward pass and backward sampler are fully vectorised
+:math:`q_m`. The forward pass and backward sampler are fully vectorized
 over modes, giving :math:`O(n^2 T)` cost.
 
 References
@@ -28,11 +28,11 @@ import numpy as np
 from ._state import KFOutput
 
 # ---------------------------------------------------------------------------
-# Diffuse initialisation threshold
+# Diffuse initialization threshold
 # ---------------------------------------------------------------------------
 
 _DIFFUSE_GAMMA_THRESH = 0.99
-"""When |γ| exceeds this, use diffuse initialisation p_{0|0} = 1e6."""
+"""When |γ| exceeds this, use diffuse initialization p_{0|0} = 1e6."""
 
 _DIFFUSE_VAR = 1e6
 """Diffuse initial variance for near-unit-root modes."""
@@ -66,7 +66,7 @@ def kf_forward_pass(
         \quad \tilde\varepsilon_{m,t} \sim N(0, \sigma^2_y)
 
     All :math:`n^2` modes are filtered independently and simultaneously
-    via vectorised operations.
+    via vectorized operations.
 
     Parameters
     ----------

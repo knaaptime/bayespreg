@@ -1290,7 +1290,7 @@ class TestSpatialDiagnosticsMethod:
 
 @pytest.fixture(scope="module")
 def _flow_ring_graph():
-    """Ring graph on n=6 nodes, row-standardised."""
+    """Ring graph on n=6 nodes, row-standardized."""
     from libpysal.graph import Graph
 
     n = 6

@@ -161,7 +161,7 @@ def make_logdet_numpy_fn(
         from ._aaa import aaa_logdet_eval, chol_aaa_logdet_precompute
 
         # Cholesky-based AAA: same rational approximant as "aaa" but exact
-        # values come from sparse Cholesky of the D-symmetrised system,
+        # values come from sparse Cholesky of the D-symmetrized system,
         # which is ~2× cheaper than KLU for symmetrizable W.
         pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
 
@@ -291,7 +291,7 @@ def make_logdet_grad_numpy_vec_fn(
     rho_max: float = 1.0,
     T: int = 1,
 ):
-    """Vectorised ``(rho_arr) -> np.ndarray`` **logdet-gradient** evaluator.
+    """Vectorized ``(rho_arr) -> np.ndarray`` **logdet-gradient** evaluator.
 
     Batched form of :func:`make_logdet_grad_numpy_fn`: returns ``g(ρ)`` for a
     whole array of ρ draws at once.  Used by the spatial-impacts path, where the
@@ -325,7 +325,7 @@ def make_logdet_grad_numpy_vec_fn(
         return _vec_eig_grad
 
     # Chebyshev-family (chebyshev / cheb_cholesky / cheb_stochastic / slq) share
-    # the Clenshaw-derivative, which vectorises naturally over ρ arrays.
+    # the Clenshaw-derivative, which vectorizes naturally over ρ arrays.
     if method in ("chebyshev", "cheb_stochastic", "cheb_cholesky", "lu_cheb", "slq"):
         if method == "chebyshev":
             out = chebyshev(W_sparse, order=20, rmin=rho_min, rmax=rho_max, eigs=eigs)
@@ -608,7 +608,7 @@ def make_logdet_fn(
         # eigenvalue path: materialize dense
         W = np.asarray(W_sparse.toarray(), dtype=np.float64)
     else:
-        # A 1-D eigenvalue array keeps its dtype: row-standardised directed W
+        # A 1-D eigenvalue array keeps its dtype: row-standardized directed W
         # has a complex spectrum, and both downstream consumers
         # (``logdet_eigenvalue``, ``chebyshev``) need the imaginary parts.
         # Narrowing to float64 here silently drops them and biases log|I-rhoW|.

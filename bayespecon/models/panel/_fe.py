@@ -174,7 +174,7 @@ class SARPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         Spatial weights of shape ``(N, N)`` (preferred) or
         ``(N*T, N*T)``. Accepts a :class:`libpysal.graph.Graph` or any
         :class:`scipy.sparse` matrix; legacy ``libpysal.weights.W`` is
-        not accepted (use ``w.sparse``). Should be row-standardised.
+        not accepted (use ``w.sparse``). Should be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.
@@ -315,7 +315,7 @@ class SEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)`` or ``(N*T, N*T)``. Should
-        be row-standardised.
+        be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.
@@ -447,7 +447,7 @@ class SDMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)`` or ``(N*T, N*T)``. Should
-        be row-standardised.
+        be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.
@@ -610,7 +610,7 @@ class SDEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)`` or ``(N*T, N*T)``. Should
-        be row-standardised.
+        be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.
@@ -760,7 +760,7 @@ class SLXPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         Stacked design matrix. Required in matrix mode.
     W : libpysal.graph.Graph or scipy.sparse matrix
         Spatial weights of shape ``(N, N)`` or ``(N*T, N*T)``. Used
-        to construct the ``WX`` block. Should be row-standardised.
+        to construct the ``WX`` block. Should be row-standardized.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode.

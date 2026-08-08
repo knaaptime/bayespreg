@@ -4,7 +4,7 @@ The log-odds / log-mean / count-equation direct-effect trace
 ``(1/n) tr((I − ρW)⁻¹)`` is the logdet gradient in disguise, so the
 SAR-GLMs (logit, neg-bin, structural neg-bin, ZINB) share the same
 resolvent route as the Gaussian SAR and must never trigger the O(n³)
-eigendecomposition on a row-standardised, surrogate-logdet model.
+eigendecomposition on a row-standardized, surrogate-logdet model.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ def test_zinb_selection_direct_effect_distinct_W(_design):
     "model_cls, y_kind", [(SARLogit, "binary"), (SARNegBin, "count")]
 )
 def test_linear_scale_impacts_use_no_eigendecomposition(model_cls, y_kind, _design):
-    """A row-standardised chol-cheb SAR-GLM computes impacts without any eig call."""
+    """A row-standardized chol-cheb SAR-GLM computes impacts without any eig call."""
     W, n, X, rng = _design
     y = (
         (rng.uniform(size=n) < 0.5).astype(float)

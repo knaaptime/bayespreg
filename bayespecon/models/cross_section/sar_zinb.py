@@ -15,7 +15,7 @@ reduced-form SAR-NB count equation via a zero-allocation block:
 
 Both equations are reduced-form: the spatial lag enters each linear
 predictor as a deterministic mean-propagator (no latent noise field), so
-the ``|I − λW|`` / ``|I − ρW|`` Jacobians cancel under marginalisation.
+the ``|I − λW|`` / ``|I − ρW|`` Jacobians cancel under marginalization.
 The logit link fixes σ² = 1 in the selection equation.  The Pólya–Gamma
 augmentation yields fully conjugate Gibbs updates for all blocks except
 ρ, λ, and α, which use 1-D adaptive slice sampling.  The NumPy and JAX
@@ -199,7 +199,7 @@ class SARZINB(SpatialModel):
 
     @cached_property
     def _sel_logdet_grad_numpy_vec_fn(self):
-        """Vectorised ``(λ_arr) -> g(λ)`` logdet-gradient evaluator for W_sel.
+        """Vectorized ``(λ_arr) -> g(λ)`` logdet-gradient evaluator for W_sel.
 
         Mirrors :attr:`SpatialModel._logdet_grad_numpy_vec_fn` on the
         selection-equation weights; ``method=None`` auto-resolves to the fast
@@ -252,8 +252,8 @@ class SARZINB(SpatialModel):
     def _initialize_from_ols(self, rng):
         """Warm-start the ZINB Gibbs sampler.
 
-        Uses profile-log-likelihood initialisation for both equations:
-        the selection equation is initialised from a spatial logit
+        Uses profile-log-likelihood initialization for both equations:
+        the selection equation is initialized from a spatial logit
         profile, and the count equation from a spatial NB profile on
         log(y+0.5).
         """
@@ -267,7 +267,7 @@ class SARZINB(SpatialModel):
         k = X.shape[1]
         p = Z.shape[1]
 
-        # --- Selection equation initialisation ---
+        # --- Selection equation initialization ---
         # Profile log-likelihood on d (binary) using linear probability model.
         # Cached sparse solver: A = I - λW shares its pattern across the grid.
         from ...samplers._utils._sparsax_utils import (
@@ -298,10 +298,10 @@ class SARZINB(SpatialModel):
 
         omega_sel_init = sample_polyagamma(np.ones(n), eta_sel_init, rng=rng)
 
-        # --- Count equation initialisation ---
+        # --- Count equation initialization ---
         # Profile log-likelihood on log(y+0.5) using ONLY positive
         # observations.  Structural zeros (d=0) should not influence
-        # the count equation initialisation.  The cached sparse solver
+        # the count equation initialization.  The cached sparse solver
         # reuses the (I - ρW) pattern across the grid.
         pos_mask = y > 0
         n_pos = int(np.sum(pos_mask))
@@ -361,7 +361,7 @@ class SARZINB(SpatialModel):
         # ω^cnt: start at 0.25 (uninformative)
         omega_cnt_init = 0.25 * np.ones(n, dtype=np.float64)
 
-        # z: initialise from data (z=1 for y>0, draw for y=0)
+        # z: initialize from data (z=1 for y>0, draw for y=0)
         z_init = np.ones(n, dtype=np.int8)
         zero_mask = y == 0
         if np.any(zero_mask):
@@ -530,7 +530,7 @@ class SARZINB(SpatialModel):
         # Same ReducedGibbsCache shape as the count; the λ slice uses the
         # direct-CG path (basis=None), so krylov_degree is unused here.  For
         # W_sel eigen bounds reuse the count's when the weights match, else use
-        # the row-standardised default [−1, 1] (safe for the CG SPD check).
+        # the row-standardized default [−1, 1] (safe for the CG SPD check).
         W_sel_csr = self._W_sel_sparse.tocsr()
         W_sel_csc = self._W_sel_sparse.tocsc()
         W_sel_sym, W_sel_tW, sel_pattern = _make_cholmod_pattern(W_sel_csc, n)
@@ -700,7 +700,7 @@ class SARZINB(SpatialModel):
             if self._is_sel_row_std:
                 mean_row_sum = 1.0 / (1.0 - lam_draws)
             else:
-                # The non-row-standardised total effect is a column-weighted
+                # The non-row-standardized total effect is a column-weighted
                 # bilinear form (1'S1), not a trace, so it keeps the
                 # eigenvector decomposition of W_sel.
                 from ...diagnostics.spatial_effects import _chunked_eig_means

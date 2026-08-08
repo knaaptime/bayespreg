@@ -44,7 +44,7 @@ The power traces need at most two sparse-sparse products (``tr(W³) = ⟨W², W�
 ``tr(W⁴) = ‖W²‖_F²``, ``tr(W⁵) = ⟨W², W³ᵀ⟩``, ``tr(W⁶) = ‖W³‖_F²``), so ``d ≤ 2``
 is free, ``d ≤ 4`` costs one product and ``d ≤ 6`` two.  Fill-in makes those
 products expensive on high-degree graphs, so :func:`_resolve_exact_depth`
-degrades ``d`` to 2 above ``max_degree`` mean neighbours.
+degrades ``d`` to 2 above ``max_degree`` mean neighbors.
 
 **Control variates only reduce variance**, so they are wasted — and near
 ``ρ = 1`` actively harmful — when Chebyshev *truncation* is the binding error
@@ -58,7 +58,7 @@ pinned ``order`` is too low for the requested interval.
 **Deflation** (optional): When ``n_deflate > 0`` *and* ``W`` is symmetrizable
 (undirected graph), the top-``n_deflate`` **eigenpairs** (by magnitude) of the
 D-symmetrized, rescaled operator ``W̃_sym = D^{1/2} W̃ D^{-1/2}`` are captured
-exactly via ``eigsh`` (applied matrix-free, never materialised) and removed
+exactly via ``eigsh`` (applied matrix-free, never materialized) and removed
 from the residual; stochastic Chebyshev then runs only on the deflated
 residual, whose Frobenius norm — and hence Hutchinson variance — is smaller.
 Because Chebyshev traces are similarity-invariant, ``tr(T_j(W̃_sym)) =
@@ -144,7 +144,7 @@ def _estimate_spectral_bounds(
 ) -> tuple[float, float]:
     """Estimate [λ_min, λ_max] of W.
 
-    For row-standardised W, λ_max = 1 (Perron) and |λ| ≤ ‖W‖_∞ = 1
+    For row-standardized W, λ_max = 1 (Perron) and |λ| ≤ ‖W‖_∞ = 1
     (Gershgorin), so the conservative bracket [-1, 1] is always valid.
     We use power iteration to tighten λ_max, and Gershgorin for λ_min.
 
@@ -175,10 +175,10 @@ def _estimate_spectral_bounds(
         v /= norm
     lam_max = float(np.real(v @ (W @ v)))
 
-    # For row-standardised W, λ_max = 1 (Perron).  Be slightly conservative.
+    # For row-standardized W, λ_max = 1 (Perron).  Be slightly conservative.
     lam_max = max(lam_max, 1.0)
 
-    # Gershgorin bound: |λ| ≤ ‖W‖_∞ = max row sum = 1 for row-standardised
+    # Gershgorin bound: |λ| ≤ ‖W‖_∞ = max row sum = 1 for row-standardized
     # Conservative: lam_min = -lam_max
     lam_min = -lam_max
 
@@ -444,7 +444,7 @@ def _deflated_moments(
     Captures the top-``r`` eigenpairs (by magnitude) of the D-symmetrized,
     rescaled operator ``W̃_sym`` exactly and estimates the remaining moments
     on the deflated residual.  Both operators are applied matrix-free — the
-    ``n × n`` low-rank correction is never materialised.
+    ``n × n`` low-rank correction is never materialized.
 
     Combination (deflated directions sit at eigenvalue 0 in the residual)::
 
@@ -604,7 +604,7 @@ def cheb_stochastic_logdet_precompute(
         Number of leading moments to replace with exact, probe-free values
         (Hutchinson control variates).  ``-1`` auto-selects
         :data:`DEFAULT_N_EXACT`; ``0``/``1`` reproduce the historical
-        behaviour.  Depths above 2 need sparse-sparse products and are
+        behavior.  Depths above 2 need sparse-sparse products and are
         degraded to 2 on graphs denser than ``max_degree``.  A depth above 1
         is also degraded to 1 when ``order`` is explicitly pinned too low for
         ``[rho_min, rho_max]``, since control variates cannot help when

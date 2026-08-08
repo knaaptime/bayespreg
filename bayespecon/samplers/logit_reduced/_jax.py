@@ -25,11 +25,11 @@ def _rho_log_density_logit(
     intercept_col,
     krylov_dmax,
 ):
-    """β-marginalised log-density of ρ for the reduced-form logit (Krylov-only).
+    """β-marginalized log-density of ρ for the reduced-form logit (Krylov-only).
 
     Identical Gaussian core to the reduced-NB density, with the Bernoulli
     working response s = κ/ω (κ = y − ½) — no ``log α`` offset — and no
-    ``log|I−ρW|`` term (it cancels when β is marginalised out).  Candidates
+    ``log|I−ρW|`` term (it cancels when β is marginalized out).  Candidates
     outside the Krylov radius are rejected (−inf); the bounded ρ step is offset
     by a wide ``krylov_dmax`` (see the count model for the rationale).
     """
@@ -103,7 +103,7 @@ def _make_reduced_logit_gibbs_step(
     )
 
     # On-device Pólya-Gamma (no host round-trip) when pgjax is installed — it
-    # removes the per-sweep callback tax and lets pmap parallelise the ω-update.
+    # removes the per-sweep callback tax and lets pmap parallelize the ω-update.
     # h = 1 (Bernoulli) is exact via pgjax's Devroye sampler.  Falls back to the
     # exact host callback otherwise.
     try:

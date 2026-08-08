@@ -19,7 +19,7 @@ The sampler uses:
   (Var[PG] ∝ h, not h²) — plus a closed-form tail-mean correction that
   makes the sample mean exact (see :func:`_pg_gamma_series_draw`).
   Fully JIT-compatible.
-- **η and β draws**: Dense Cholesky factorisation via ``jnp.linalg.cholesky``
+- **η and β draws**: Dense Cholesky factorization via ``jnp.linalg.cholesky``
   and ``jnp.linalg.solve``.  O(n³) but fast for n ≤ ~2000.
 - **σ² draw**: Conjugate inverse-Gamma (direct, no solve needed).
 - **ρ draw**: Neal's stepping-out slice sampler with Lanczos-based
@@ -173,7 +173,7 @@ def _make_gibbs_step_with_data(
     X_jax : jax.numpy.ndarray of shape (n, k)
         Design matrix (JAX array).
     W_bcoo : jax.experimental.sparse.BCOO of shape (n, n)
-        Row-standardised W as a sparse BCOO matrix (for ``W @ x``).
+        Row-standardized W as a sparse BCOO matrix (for ``W @ x``).
     Wt_bcoo : jax.experimental.sparse.BCOO of shape (n, n)
         Transpose ``Wᵀ`` as a sparse BCOO matrix (for ``Wᵀ @ x``).
     n : int
@@ -225,7 +225,7 @@ def _make_gibbs_step_with_data(
     use_sparsax = sparsax_pattern is not None
 
     # Sparse W matvecs — never densify W: W @ x and Wᵀ @ x go through BCOO
-    # (O(nnz), O(nnz) memory) instead of a dense n×n materialisation.
+    # (O(nnz), O(nnz) memory) instead of a dense n×n materialization.
     def W_matvec(x):
         return W_bcoo @ x
 
@@ -317,7 +317,7 @@ def _make_gibbs_step_with_data(
         else:
             P_diag = jnp.ones(n) * inv_s2 + omega_new
             P = jnp.diag(P_diag) - rho * W_sym * inv_s2 + rho**2 * WtW * inv_s2
-            P = P + 1e-6 * jnp.eye(n)  # regularisation for numerical stability
+            P = P + 1e-6 * jnp.eye(n)  # regularization for numerical stability
 
             L = jnp.linalg.cholesky(P)
             P_inv_rhs = cho_solve((L, True), rhs)
@@ -965,7 +965,7 @@ def run_chain_jax(
 
 
 # ---------------------------------------------------------------------------
-# Vectorised multi-chain runner: jax.vmap over chains so all chains share
+# Vectorized multi-chain runner: jax.vmap over chains so all chains share
 # one JIT-compiled Gibbs program and execute together as a single XLA
 # kernel.  Mirrors the SAR-logit implementation in
 # ``bayespecon/samplers/logit/_jax.py``.
@@ -992,7 +992,7 @@ def _run_chain_nb_warmup(gibbs_step, init_state, key, n_iters):
     """Run ``n_iters`` Gibbs steps and return only the final state + key.
 
     Uses :func:`jax.lax.fori_loop` so no per-iteration traces are
-    materialised — memory cost is independent of ``n_iters``.
+    materialized — memory cost is independent of ``n_iters``.
     The final PRNG key is returned so chunked runs can resume from a
     deterministic point without breaking the chain.
     """

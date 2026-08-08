@@ -299,7 +299,7 @@ def _sample_beta_conjugate(
     Xtr = X.T @ r
     rhs = Xtr / sigma2 + prior_prec @ prior_mean
 
-    # Cholesky factorisation: post_prec = L Lᵀ (SPD, lower-triangular L)
+    # Cholesky factorization: post_prec = L Lᵀ (SPD, lower-triangular L)
     # Must request lower=True so that solve_triangular(L, z, trans='T')
     # produces L⁻ᵀ z with Cov = (L Lᵀ)⁻¹ = post_prec⁻¹.  (See
     # _gaussian_gibbs._sample_beta_conjugate for the full explanation.)
@@ -494,7 +494,7 @@ def _sample_alpha_re(
     BtB = _sem_re_BtB(lam, M1, M2, T, N)  # N × N
     # Precision matrix
     prec_alpha = (1.0 / sigma2) * BtB + (1.0 / sigma_alpha2) * np.eye(N)
-    # Cholesky factorisation: prec_alpha = L Lᵀ (SPD, lower-triangular L)
+    # Cholesky factorization: prec_alpha = L Lᵀ (SPD, lower-triangular L)
     # Must request lower=True so that solve_triangular(L, z, trans='T')
     # produces L⁻ᵀ z with Cov = (L Lᵀ)⁻¹ = prec_alpha⁻¹.  (See
     # _gaussian_gibbs._sample_beta_conjugate for the full explanation.)

@@ -56,7 +56,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
         object is **not** accepted directly; pass ``w.sparse`` to use the
         underlying sparse matrix, or convert with
         ``libpysal.graph.Graph.from_W(w)``.
-        W should be row-standardised; a :class:`UserWarning` is raised if not.
+        W should be row-standardized; a :class:`UserWarning` is raised if not.
     priors : dict, optional
         Override default priors. Keys depend on the model subclass; see
         each model's docstring for supported keys.
@@ -72,7 +72,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
         - ``"aaa"`` for non-symmetric ``W`` (directed graph: KNN, travel
           time, flows) with ``n <= 20000``: exact; sparse LU on an adaptive
           coarse grid with AAA rational interpolation, ~5 us per rho.
-        - ``"cheb_stochastic"`` for larger ``n``, where factorisation
+        - ``"cheb_stochastic"`` for larger ``n``, where factorization
           fill-in gets expensive: stochastic Chebyshev expansion (Han et
           al. 2015), with probe information computed once and reused.
 
@@ -177,7 +177,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
             # Resolve the logdet method and rho/lambda bounds exactly once.
             # Eigenvalues stay lazy (see the ``_logdet_eigs`` cached property)
             # so init never pays the O(n³) eigendecomposition for methods that
-            # do not need it.  For row-standardised W the spectral stability
+            # do not need it.  For row-standardized W the spectral stability
             # interval is approximately (-1, 1), so no eigenvalues are needed
             # to resolve the bounds either.
             self._logdet_bounds = resolve_logdet_bounds(
@@ -229,7 +229,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
 
     @cached_property
     def _W_dense(self) -> np.ndarray:
-        """Dense weight matrix, materialised lazily on first access."""
+        """Dense weight matrix, materialized lazily on first access."""
         return np.asarray(self._W_sparse.toarray(), dtype=np.float64)
 
     @cached_property
@@ -237,7 +237,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
         """PyTensor sparse variable wrapping :attr:`_W_sparse`.
 
         Cached so repeated PyMC model builds reuse the same symbolic sparse
-        operator and avoid the ``O(n²)`` dense materialisation that
+        operator and avoid the ``O(n²)`` dense materialization that
         ``pt.as_tensor_variable(self._W_dense)`` performs each time.
 
         Use with :func:`pytensor.sparse.structured_dot` (vector inputs must
@@ -615,7 +615,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
             # for warmup and replaces it partway through.  Forcing these lazy
             # properties here would build a full-accuracy interpolant on the
             # prior interval that nothing ever evaluates — on the full stability
-            # region that is 117 sparse Cholesky factorisations discarded.
+            # region that is 117 sparse Cholesky factorizations discarded.
             logdet_fn=None if refit_active else self._logdet_numpy_fn,
             logdet_vec_fn=None if refit_active else self._logdet_numpy_vec_fn,
             feature_names=feature_names,

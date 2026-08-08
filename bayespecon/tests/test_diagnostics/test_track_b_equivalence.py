@@ -1,6 +1,6 @@
-"""Equivalence pins for the Phase 3 Track B diagnostics vectorisations.
+"""Equivalence pins for the Phase 3 Track B diagnostics vectorizations.
 
-Each optimisation here is a behaviour-preserving rewrite: the vectorised /
+Each optimization here is a behavior-preserving rewrite: the vectorized /
 FFT / trace-identity form must reproduce the naive reference it replaces to
 floating-point precision, so the estimators (bridge-sampling log-ML, robust
 LM statistics) are provably unchanged.
@@ -33,7 +33,7 @@ from bayespecon.diagnostics.lmtests.cross_sectional import _sar_null_lambda_info
 def _reference_iterative_scheme(
     q11, q12, q21, q22, r0, tol, maxiter, criterion, neff, use_neff
 ):
-    """Pre-vectorisation reference: per-sample ``_logsumexp`` loops."""
+    """Pre-vectorization reference: per-sample ``_logsumexp`` loops."""
     N1 = len(q11)
     N2 = len(q21)
     l1 = q11 - q12
@@ -92,7 +92,7 @@ def _make_bridge_inputs(seed=0, n=4000):
     return q11, q12, q21, q22
 
 
-class TestIterativeSchemeVectorisation:
+class TestIterativeSchemeVectorization:
     @pytest.mark.parametrize("use_neff,neff", [(False, None), (True, 3123.4)])
     def test_matches_logsumexp_reference(self, use_neff, neff):
         q11, q12, q21, q22 = _make_bridge_inputs()
@@ -157,7 +157,7 @@ class TestSarNullTraceIdentity:
         rng = np.random.default_rng(3)
         # n > 512 so the chunked column-solve path crosses a chunk boundary.
         n, k = 600, 3
-        # Row-standardised ring lattice -> asymmetric weighted W.
+        # Row-standardized ring lattice -> asymmetric weighted W.
         row = np.concatenate([np.arange(n), np.arange(n)])
         col = np.concatenate([(np.arange(n) - 1) % n, (np.arange(n) + 1) % n])
         W = sp.csr_matrix((rng.uniform(0.5, 1.5, 2 * n), (row, col)), shape=(n, n))

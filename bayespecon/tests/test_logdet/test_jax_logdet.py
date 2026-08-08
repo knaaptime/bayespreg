@@ -60,7 +60,7 @@ def _exact_logdet_eigenvalue(rho: float, eigs: np.ndarray) -> float:
 
 
 def _rook_row_standardized(side: int) -> np.ndarray:
-    """Row-standardised rook-contiguity W on a ``side × side`` grid.
+    """Row-standardized rook-contiguity W on a ``side × side`` grid.
 
     Symmetric sparsity pattern (undirected graph) → SLQ takes the Lanczos path.
     """
@@ -77,7 +77,7 @@ def _rook_row_standardized(side: int) -> np.ndarray:
 
 
 def _knn_row_standardized(n: int, k: int) -> np.ndarray:
-    """Row-standardised k-nearest-neighbour W on random 2-D points.
+    """Row-standardized k-nearest-neighbor W on random 2-D points.
 
     Asymmetric sparsity pattern (directed graph) → SLQ falls back to Arnoldi.
     """
@@ -438,7 +438,7 @@ class TestMakeLogdetJaxFn:
         """
         from bayespecon._logdet import slq_logdet_eval, slq_logdet_precompute
 
-        # Undirected (symmetric sparsity) row-standardised W → Lanczos path.
+        # Undirected (symmetric sparsity) row-standardized W → Lanczos path.
         W = _rook_row_standardized(6)
         W_sp = sp.csr_matrix(W)
 

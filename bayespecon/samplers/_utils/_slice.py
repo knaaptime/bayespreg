@@ -207,7 +207,7 @@ def slice_sample_1d_adaptive(
        that the interval rarely needs more than ``target_steps``
        expansions per side.
     2. **Persistent interval** — stores the final bracket ``[L, R]``
-       from draw :math:`t` and reuses it to initialise the interval for
+       from draw :math:`t` and reuses it to initialize the interval for
        draw :math:`t+1`.  When the posterior changes slowly (typical
        post-burn-in), this eliminates almost all stepping-out.
 

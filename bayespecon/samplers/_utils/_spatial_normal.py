@@ -1,7 +1,7 @@
 """Sample from a multivariate normal with sparse spatial precision.
 
 Draws x ~ N(m, Σ) where Σ⁻¹ = P (sparse SPD) via sparse Cholesky
-factorisation, conjugate gradient (CG) iterative solve, or Chebyshev
+factorization, conjugate gradient (CG) iterative solve, or Chebyshev
 polynomial approximation.
 
 **Factorisation path** (default for moderate n):
@@ -20,7 +20,7 @@ polynomial approximation.
 **Iterative path** (for large n with high fill-in):
     Uses preconditioned CG for the mean solve and Lanczos-based
     stochastic log-determinant estimation.  Avoids the O(nnz^{1.5})
-    factorisation cost entirely.
+    factorization cost entirely.
 
 **JAX dense path** (for n ≤ ~5000 with JAX installed):
     Uses JAX dense matvec + vmap over Lanczos probes and Chebyshev
@@ -38,16 +38,16 @@ import scipy.sparse.linalg as spla
 from sksparse.cholmod import cho_factor as _cholmod_cho_factor
 
 # ---------------------------------------------------------------------------
-# CHOLMOD factorisation wrapper
+# CHOLMOD factorization wrapper
 # ---------------------------------------------------------------------------
 
 
 class CholmodFactor:
-    """Wrapper around a CHOLMOD factorisation for a fixed sparsity pattern.
+    """Wrapper around a CHOLMOD factorization for a fixed sparsity pattern.
 
     Stores the symbolic analysis so that ``factorize`` only does the
-    numeric factorisation when the matrix values change but the
-    sparsity pattern stays the same.  This is the key optimisation
+    numeric factorization when the matrix values change but the
+    sparsity pattern stays the same.  This is the key optimization
     for the ρ block in the Gibbs sampler, where P_η changes with each
     candidate ρ but always has the same non-zero structure.
 
@@ -145,7 +145,7 @@ class SpatialNormalDraw(NamedTuple):
     x : ndarray of shape (n,)
         The drawn sample.
     factor : CholmodFactor
-        The factorisation of the precision matrix.  Can be reused
+        The factorization of the precision matrix.  Can be reused
         for subsequent solves when the precision matrix has not changed.
     """
 
@@ -181,15 +181,15 @@ def sample_spatial_normal(
     rng : numpy.random.Generator, optional
         Random state. If None, a fresh generator is created.
     cached_factor : CholmodFactor, optional
-        Pre-computed factorisation of precision. If None, computed
-        fresh. Passing a cached factorisation saves the factorisation
+        Pre-computed factorization of precision. If None, computed
+        fresh. Passing a cached factorization saves the factorization
         cost when P has not changed between calls.
 
     Returns
     -------
     SpatialNormalDraw
         Named tuple with fields ``x`` (the draw) and ``factor``
-        (the factorisation, for potential reuse).
+        (the factorization, for potential reuse).
 
     Notes
     -----
@@ -262,7 +262,7 @@ def lanczos_logdet(
     The cost is O(n_probes * lanczos_deg * nnz) where nnz is the
     number of non-zeros in P.  For typical spatial precision matrices
     with n > 5000, this can be significantly faster than CHOLMOD
-    factorisation when fill-in is high.
+    factorization when fill-in is high.
 
     The estimator is unbiased in the limit of infinite probes and
     Lanczos depth.  With n_probes=10 and lanczos_deg=30, the
@@ -335,7 +335,7 @@ def lanczos_logdet(
             Q[:, i] = q_new
             r = P_op @ q_new
             alpha_vals[i] = float(q_new @ r)
-            # Full reorthogonalisation (one pass)
+            # Full reorthogonalization (one pass)
             r = r - alpha_vals[i] * q_new - beta_vals[i - 1] * Q[:, i - 1]
             # Modified Gram-Schmidt against all previous vectors
             for k in range(i):
@@ -488,7 +488,7 @@ class KrylovPrecisionBasis(NamedTuple):
     candidate evaluate ``P(\\rho)^{-1} \\mathrm{rhs}`` via a cheap Horner
     sum.
 
-    The same factorisation gives ``log|P(ρ)|``: the first-order
+    The same factorization gives ``log|P(ρ)|``: the first-order
     correction ``log|P(ρ)| ≈ log|P_c| − Δρ tr(P_c⁻¹ G)`` is estimated
     with a small Hutchinson probe reusing the factored solver held on
     the basis.
@@ -555,7 +555,7 @@ def build_precision_krylov_basis(
         When provided, ``P_c`` is factored via CHOLMOD (fast for
         moderate n) and ``logdet_Pc`` comes from CHOLMOD.  When
         ``None``, a Lanczos run estimates ``log|P_c|`` and CG is used
-        for the solves (no factorisation).
+        for the solves (no factorization).
     n_probes, lanczos_deg : int
         Lanczos settings for the ``log|P_c|`` estimate (CG path only).
     rng : numpy.random.Generator, optional
@@ -596,7 +596,7 @@ def build_precision_krylov_basis(
             Gv = G_csr @ V_stack[j]
             V_stack[j + 1] = _solve_at_c(Gv)
     else:
-        # CG path: no factorisation.  Use Lanczos once for log|P_c|.
+        # CG path: no factorization.  Use Lanczos once for log|P_c|.
         def _solve_at_c(r):
             return iterative_solve(P_c, r, lambda_min=1e-3, lambda_max=1e6)
 
@@ -652,11 +652,11 @@ def eval_precision_logdet_from_basis(
         \\mathrm{tr}(P_c^{-1} G),
 
     where ``G = ∂P/∂ρ|_{ρ_c}``.  ``tr(P_c⁻¹ G)`` is estimated with a
-    small Hutchinson probe using the *same* factorisation already held
+    small Hutchinson probe using the *same* factorization already held
     by the basis — one ``(degree+1)``-matvec chain, far cheaper than a
     fresh Lanczos run.  The correction is accurate for the small
     ``|Δρ|`` within the Krylov radius; for candidates outside the radius
-    the caller should use a direct factorisation instead.
+    the caller should use a direct factorization instead.
 
     Parameters
     ----------
@@ -715,7 +715,7 @@ def iterative_solve(
     For single-RHS ``(n,)``, calls :func:`scipy.sparse.linalg.cg`
     directly.  For multi-RHS ``(n, k)``, loops over columns — each
     column is an independent CG solve.  This avoids the O(nnz^{1.5})
-    factorisation cost entirely.
+    factorization cost entirely.
 
     Convergence rate (per column):
 
@@ -762,7 +762,7 @@ def iterative_solve(
     semi-iteration because it discovers eigenvalue information
     adaptively.
 
-    For :math:`A_\rho = I - \rho W` with row-standardised :math:`W`:
+    For :math:`A_\rho = I - \rho W` with row-standardized :math:`W`:
 
     .. math::
 
@@ -947,7 +947,7 @@ def chebyshev_sample(
 ) -> SpatialNormalDraw:
     """Draw from N(m, P⁻¹) via Chebyshev polynomial approximation of P⁻¹ᐟ².
 
-    Avoids the O(nnz^{1.5}) sparse factorisation cost by:
+    Avoids the O(nnz^{1.5}) sparse factorization cost by:
     1. Computing the conditional mean m = P⁻¹ rhs via CG.
     2. Approximating P⁻¹ᐟ² z (z ~ N(0, I)) via a Chebyshev polynomial
        of P, evaluated via Clenshaw's recurrence.
@@ -983,7 +983,7 @@ def chebyshev_sample(
     -------
     SpatialNormalDraw
         Named tuple with fields ``x`` (the draw) and ``factor``
-        (None — no factorisation is available for reuse).
+        (None — no factorization is available for reuse).
 
     Notes
     -----
@@ -1128,7 +1128,7 @@ def _jax_lanczos_probe(P_dense, z_raw, lanczos_deg):
 
     Notes
     -----
-    Reorthogonalisation uses the full Q matrix (n × lanczos_deg)
+    Reorthogonalization uses the full Q matrix (n × lanczos_deg)
     rather than a dynamic slice Q[:, :i], because JAX's lax.scan
     requires static slice sizes.  Columns beyond the current iteration
     are zero, so projecting them out has no effect.
@@ -1162,7 +1162,7 @@ def _jax_lanczos_probe(P_dense, z_raw, lanczos_deg):
         alpha = jnp.dot(q_new, r)
         # Three-term recurrence
         r = r - alpha * q_new - beta * Q[:, i - 1]
-        # Full reorthogonalisation against all Q columns.
+        # Full reorthogonalization against all Q columns.
         # Columns beyond i are zero, so this is equivalent to
         # projecting out Q[:, :i+1] but with a static slice size.
         r = r - Q @ (Q.T @ r)
@@ -1224,7 +1224,7 @@ def jax_lanczos_logdet(
 
     The vmap over probes batches all ``n_probes`` Lanczos iterations
     into a single XLA kernel, eliminating Python-loop overhead and
-    enabling XLA fusion across the matvec + orthogonalisation steps.
+    enabling XLA fusion across the matvec + orthogonalization steps.
 
     """
     _check_jax_available()
@@ -1355,7 +1355,7 @@ def jax_chebyshev_sample(
     -------
     SpatialNormalDraw
         Named tuple with ``x`` (the first draw, shape (n,)) and
-        ``factor=None`` (no factorisation available for reuse).
+        ``factor=None`` (no factorization available for reuse).
 
     Notes
     -----

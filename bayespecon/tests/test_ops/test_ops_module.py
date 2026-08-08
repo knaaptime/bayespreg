@@ -24,12 +24,12 @@ from pytensor.gradient import verify_grad
 
 
 def _ring_W(n: int) -> sp.csr_matrix:
-    """Row-standardised ring-contiguity weight matrix (n × n)."""
+    """Row-standardized ring-contiguity weight matrix (n × n)."""
     row = np.concatenate([np.arange(n), np.arange(n)])
     col = np.concatenate([(np.arange(n) - 1) % n, (np.arange(n) + 1) % n])
     data = np.ones(2 * n, dtype=np.float64)
     W = sp.csr_matrix((data, (row, col)), shape=(n, n))
-    # row-standardise
+    # row-standardize
     d = np.array(W.sum(axis=1)).ravel()
     W = sp.diags(1.0 / d) @ W
     return W.tocsr()
@@ -583,7 +583,7 @@ class TestOptionalSparseBackends:
         got = f(0.15, 0.1, -0.05, B)
         ref = _unrestricted_ref_matrix(0.15, 0.1, -0.05, W, B)
 
-        # sksparse KLU factorises once and batch-solves the T columns.
+        # sksparse KLU factorizes once and batch-solves the T columns.
         assert called["klu"] >= 1
         np.testing.assert_allclose(got, ref, atol=1e-10)
 
@@ -766,7 +766,7 @@ class TestFlowSparseLUCache:
         v1 = op._vjp_op._solve_adjoint_matrix(0.15, 0.1, -0.05, B)
         v2 = op._vjp_op._solve_adjoint_matrix(0.15, 0.1, -0.05, B)
 
-        # One factorisation each for the forward and the adjoint system,
+        # One factorization each for the forward and the adjoint system,
         # reused across the repeat call at the same rhos.
         assert called["klu"] == 2
         np.testing.assert_allclose(got1, got2, atol=1e-12)

@@ -91,7 +91,7 @@ class _SparseFlowVJPOp(pt.Op):
 
         # KLU: reuse the cached factor of A^T when backend and rho
         # are unchanged, otherwise build and cache a fresh one.  (The factor
-        # has no ``trans`` support, so A^T is factorised directly.)
+        # has no ``trans`` support, so A^T is factorized directly.)
         if (
             self._cached_backend == backend
             and self._cached_rhos == rhos
@@ -294,7 +294,7 @@ class SparseFlowSolveOp(pt.Op):
     def perform(self, node, inputs, outputs):
         """Compute :math:`\\eta = A(\\rho)^{-1} b` via a sparse direct solver.
 
-        Uses a single SuperLU factorisation via :func:`scipy.sparse.linalg.splu`.
+        Uses a single SuperLU factorization via :func:`scipy.sparse.linalg.splu`.
         """
         rd, ro, rw, b = inputs
         outputs[0][0] = self._solve_forward(
@@ -342,7 +342,7 @@ class _SparseFlowVJPMatrixOp(pt.Op):
 
     Same adjoint-method derivation as :class:`_SparseFlowVJPOp`, extended to
     a matrix right-hand side :math:`B` of shape :math:`(N, T)`.  One
-    LU factorisation covers all :math:`T` columns.
+    LU factorization covers all :math:`T` columns.
 
     Algorithm
     ---------
@@ -395,7 +395,7 @@ class _SparseFlowVJPMatrixOp(pt.Op):
                 self._cached_solver.solve(G64, trans="T"), dtype=np.float64
             )
 
-        # KLU: reuse the cached factor of A^T (one factorisation
+        # KLU: reuse the cached factor of A^T (one factorization
         # covers all T columns) when backend and rho are unchanged.
         if (
             self._cached_backend == backend
@@ -455,7 +455,7 @@ class SparseFlowSolveMatrixOp(pt.Op):
     models where :math:`T` time periods share the same system matrix
     :math:`A(\rho_d, \rho_o, \rho_w)`.
 
-    One LU factorisation of :math:`A` covers all :math:`T` columns, so the
+    One LU factorization of :math:`A` covers all :math:`T` columns, so the
     cost per gradient evaluation is **2 sparse direct solves** (vs. :math:`2T`
     for a per-period loop).
 
@@ -500,7 +500,7 @@ class SparseFlowSolveMatrixOp(pt.Op):
                 self._cached_rhos = rhos
             return np.asarray(self._cached_solver.solve(B64), dtype=np.float64)
 
-        # KLU: reuse the cached factor (one factorisation covers all
+        # KLU: reuse the cached factor (one factorization covers all
         # T columns) when backend and rho are unchanged.
         if (
             self._cached_backend == backend

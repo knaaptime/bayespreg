@@ -1,6 +1,6 @@
 """Regression tests: complex eigenvalues must survive the logdet factories.
 
-Row-standardised directed weights (KNN, travel time, migration flows) have a
+Row-standardized directed weights (KNN, travel time, migration flows) have a
 complex spectrum.  ``make_logdet_fn`` used to narrow a 1-D eigenvalue array to
 ``float64``, silently discarding the imaginary parts and biasing
 ``log|I - rho W|`` — while ``make_logdet_numpy_fn`` kept them, so the PyTensor
@@ -19,7 +19,7 @@ from bayespecon._logdet import make_logdet_fn, make_logdet_numpy_fn
 
 
 def _directed_ring(n: int) -> sp.csr_matrix:
-    """Row-standardised directed ring: a permutation matrix, spectrum on |z|=1."""
+    """Row-standardized directed ring: a permutation matrix, spectrum on |z|=1."""
     W = sp.lil_matrix((n, n))
     for i in range(n):
         W[i, (i + 1) % n] = 1.0
@@ -27,7 +27,7 @@ def _directed_ring(n: int) -> sp.csr_matrix:
 
 
 def _knn_like(n: int, k: int, seed: int = 3) -> sp.csr_matrix:
-    """Row-standardised k-nearest-neighbour graph — non-symmetric, complex spectrum."""
+    """Row-standardized k-nearest-neighbor graph — non-symmetric, complex spectrum."""
     from scipy.spatial import cKDTree
 
     rng = np.random.default_rng(seed)

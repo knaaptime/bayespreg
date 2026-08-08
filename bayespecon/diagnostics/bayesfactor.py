@@ -450,11 +450,11 @@ def _run_iterative_scheme(
         l2_shifted = l2 - lstar
         l1_shifted = l1 - lstar
 
-        # Optimal bridge function, vectorised.  ``_logsumexp`` over a
+        # Optimal bridge function, vectorized.  ``_logsumexp`` over a
         # two-element array is exactly ``np.logaddexp``; broadcasting the
         # scalar ``log_s2_r`` collapses the per-sample Python loops (run
         # every one of up to ``maxiter`` iterations) into a single
-        # vectorised call each — identical values, O(N) numpy instead of
+        # vectorized call each — identical values, O(N) numpy instead of
         # O(N) Python-level ``_logsumexp`` allocations.
         log_num = l2_shifted - np.logaddexp(log_s1 + l2_shifted, log_s2_r)
         log_den = l1_shifted - np.logaddexp(log_s1 + l1_shifted, log_s2_r)
@@ -808,7 +808,7 @@ def _bic_logml(idata, return_diagnostics=False, model=None):
     :math:`k \\log(n)/2` terms cancel when computing BF ratios.
 
     .. note::
-       The maximised log-likelihood :math:`\\hat{\\ell}_{\\max}` is
+       The maximized log-likelihood :math:`\\hat{\\ell}_{\\max}` is
        approximated by the maximum of the posterior log-likelihoods
        (``np.max``), not the posterior mean.  Using the mean would
        underestimate the log-likelihood and distort model rankings
@@ -845,7 +845,7 @@ def _bic_logml(idata, return_diagnostics=False, model=None):
     if log_like_total.ndim > 1:
         log_like_total = log_like_total.reshape(-1)
     # ML log-likelihood: maximum of posterior log-likelihoods.
-    # This approximates the MLE (the true BIC uses the maximised
+    # This approximates the MLE (the true BIC uses the maximized
     # log-likelihood, not the posterior mean).  Using the mean
     # underestimates the log-likelihood and distorts model rankings
     # because the gap between mean and max varies across models.

@@ -22,18 +22,18 @@ def _check_rho_stability(rho: float, W: np.ndarray, name: str = "rho") -> None:
     The DGP map :math:`y = (I - \\rho W)^{-1} u` is well-defined iff
     :math:`(I - \\rho W)` is invertible, which requires
     :math:`|\\rho| < 1 / \\max_i |\\omega_i|` where :math:`\\omega_i`
-    are the (real-part) eigenvalues of :math:`W`.  For row-standardised
+    are the (real-part) eigenvalues of :math:`W`.  For row-standardized
     W this bound is ``1``.  We emit a UserWarning rather than raising
     so that callers running deliberate boundary tests can proceed.
 
-    The DGP always uses row-standardised W, so the spectral radius is
+    The DGP always uses row-standardized W, so the spectral radius is
     exactly 1.0 and we simply check ``|rho| < 1`` — no O(N³)
     eigenvalue computation needed.
     """
     if abs(rho) >= 1.0:
         warnings.warn(
             f"{name}={rho:g} is outside the stability domain "
-            f"|{name}| < 1 (row-standardised W); the simulated draw "
+            f"|{name}| < 1 (row-standardized W); the simulated draw "
             "may be numerically singular or unbounded.",
             stacklevel=3,
         )
@@ -340,7 +340,7 @@ def simulate_sar_negbin(
     X = make_design_matrix(rng, nobs, k=max(len(beta) - 1, 0), add_intercept=True)
     _check_rho_stability(rho, Wd, name="rho")
 
-    # Use sparse solve to avoid O(N²) dense factorisation for large grids.
+    # Use sparse solve to avoid O(N²) dense factorization for large grids.
     import scipy.sparse as sp
     import scipy.sparse.linalg as sla
 

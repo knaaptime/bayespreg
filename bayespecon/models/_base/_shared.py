@@ -54,7 +54,7 @@ def gelman_default_beta_prior(
         Column labels aligned with ``design``.  Used to detect
         intercept-like columns named ``"intercept"``.
     scale : float, default 2.5
-        Multiplier on the standardised prior scale.
+        Multiplier on the standardized prior scale.
 
     Returns
     -------
@@ -100,7 +100,7 @@ def resolve_W(
     n: int,
     T: int = 1,
 ) -> tuple[sp.csr_matrix, bool]:
-    """Validate and normalise a spatial weights argument to CSR.
+    """Validate and normalize a spatial weights argument to CSR.
 
     Unified W parser for cross-section (T=1) and panel (T>1) models.
     Accepts a :class:`libpysal.graph.Graph` or any :class:`scipy.sparse`
@@ -123,7 +123,7 @@ def resolve_W(
     W_csr : scipy.sparse.csr_matrix
         Row-compressed version of W.
     row_std : bool
-        Whether W appears to be row-standardised.
+        Whether W appears to be row-standardized.
 
     Raises
     ------
@@ -135,7 +135,7 @@ def resolve_W(
     Warns
     -----
     UserWarning
-        If *W* does not appear to be row-standardised.
+        If *W* does not appear to be row-standardized.
     """
     if isinstance(W, Graph):
         W_csr = W.sparse.tocsr().astype(np.float64)
@@ -180,9 +180,9 @@ def resolve_W(
 
     if not row_std:
         warnings.warn(
-            "W does not appear to be row-standardised (row sums \u2260 1). "
-            "Most spatial models assume W is row-standardised; results may be "
-            "unreliable otherwise. For a scipy sparse matrix normalise rows "
+            "W does not appear to be row-standardized (row sums \u2260 1). "
+            "Most spatial models assume W is row-standardized; results may be "
+            "unreliable otherwise. For a scipy sparse matrix normalize rows "
             "manually (divide each row by its sum). To use a libpysal.graph.Graph "
             "set its transformation attribute: "
             "graph = graph.transform('r').",
@@ -686,7 +686,7 @@ class SharedSpatialMethods:
     ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, np.ndarray]]:
         r"""Compute Bayesian inference for direct, indirect, and total impacts.
 
-        Computes impact measures for each posterior draw, then summarises
+        Computes impact measures for each posterior draw, then summarizes
         the posterior distribution with means, 95% credible intervals, and
         Bayesian p-values.  This is the fully Bayesian analog of the
         simulation-based approach in :cite:t:`lesage2009IntroductionSpatial`
@@ -696,7 +696,7 @@ class SharedSpatialMethods:
         Models without a spatial lag on y do not exhibit global
         feedback propagation through :math:`(I-\\rho W)^{-1}`. However,
         models with spatially lagged covariates (SLX, SDEM) can still
-        have non-zero neighbour spillovers captured in the indirect term.
+        have non-zero neighbor spillovers captured in the indirect term.
 
         Parameters
         ----------
@@ -847,7 +847,7 @@ class SharedSpatialMethods:
 
     @cached_property
     def _logdet_numpy_vec_fn(self):
-        """Vectorised pure-numpy logdet evaluator (lazy)."""
+        """Vectorized pure-numpy logdet evaluator (lazy)."""
         self._require_W()
         return make_logdet_numpy_vec_fn(
             self._W_sparse,
@@ -860,7 +860,7 @@ class SharedSpatialMethods:
 
     @cached_property
     def _logdet_grad_numpy_vec_fn(self):
-        """Vectorised ``(rho_arr) -> g(ρ)`` gradient of the **N×N** logdet (lazy).
+        """Vectorized ``(rho_arr) -> g(ρ)`` gradient of the **N×N** logdet (lazy).
 
         Built with ``T=1`` even for panels — the direct-effect trace is a
         per-period property of the N×N spatial multiplier, independent of
@@ -906,7 +906,7 @@ class SharedSpatialMethods:
         spatial weights matrix was supplied.
 
         Eigenvalues are sorted by real part (descending) for numerical
-        stability.  Row-standardised W is generally non-symmetric, so V
+        stability.  Row-standardized W is generally non-symmetric, so V
         and Vinv are complex; taking ``.real`` prematurely drops imaginary
         parts and produces wrong results for spatial effects.
 
@@ -982,8 +982,8 @@ class SharedSpatialMethods:
         (N·T)×(N·T) Kronecker product), because spatial effects are defined
         in terms of the cross-sectional spatial multiplier.
 
-        For row-standardised W this is the scalar ``1/(1 - rho)``.
-        For non-row-standardised W the eigenvalue decomposition is used:
+        For row-standardized W this is the scalar ``1/(1 - rho)``.
+        For non-row-standardized W the eigenvalue decomposition is used:
         ``mean_row_sum = (1/n) * ones' V diag(1/(1-rho*omega)) V^{-1} ones``,
         where the vector ``c = V^{-1} ones`` is pre-computed once.
 
@@ -1022,11 +1022,11 @@ class SharedSpatialMethods:
         (N·T)×(N·T) Kronecker product), because spatial effects are defined
         in terms of the cross-sectional spatial multiplier.
 
-        For row-standardised W this equals ``1/(1 - rho)`` (same as
+        For row-standardized W this equals ``1/(1 - rho)`` (same as
         ``_batch_mean_row_sum``) because row sums of M@W = row sums of M
-        when W is row-standardised.
+        when W is row-standardized.
 
-        For non-row-standardised W the eigenvalue decomposition is used:
+        For non-row-standardized W the eigenvalue decomposition is used:
         ``mean_row_sum_MW = (1/n) * ones' V diag(omega/(1-rho*omega)) V^{-1} ones``.
 
         Parameters

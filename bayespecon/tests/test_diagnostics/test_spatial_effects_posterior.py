@@ -27,14 +27,14 @@ from bayespecon.models import SAR, SDEM, SDM, SEM, SLX
 
 
 def _make_W(n: int = 5) -> np.ndarray:
-    """Create a simple row-standardised rook weights matrix."""
+    """Create a simple row-standardized rook weights matrix."""
     W = np.zeros((n, n))
     for i in range(n):
         if i > 0:
             W[i, i - 1] = 1
         if i < n - 1:
             W[i, i + 1] = 1
-    # Row-standardise
+    # Row-standardize
     row_sums = W.sum(axis=1, keepdims=True)
     row_sums[row_sums == 0] = 1
     W = W / row_sums
@@ -309,7 +309,7 @@ class TestSDMSpatialEffectsPosterior:
 
 
 def _rook_grid_W(side: int) -> np.ndarray:
-    """Row-standardised rook-contiguity W on a side×side lattice."""
+    """Row-standardized rook-contiguity W on a side×side lattice."""
     n = side * side
     A = np.zeros((n, n))
     for r in range(side):
@@ -363,7 +363,7 @@ class TestResolventDirectEffects:
         )
 
     def test_spatial_effects_uses_no_eigendecomposition(self):
-        """A row-standardised chol-cheb SAR computes impacts without any eig call."""
+        """A row-standardized chol-cheb SAR computes impacts without any eig call."""
         W = _rook_grid_W(8)
         n = W.shape[0]
         X = np.column_stack([np.ones(n), np.linspace(-1, 1, n)])

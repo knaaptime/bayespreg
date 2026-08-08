@@ -19,7 +19,7 @@ from bayespecon._logdet._slq import _arnoldi_iteration, _batched_lanczos
 
 
 def _toy_w(n: int = 50, seed: int = 0) -> sp.csr_matrix:
-    """Small row-standardised sparse W for testing."""
+    """Small row-standardized sparse W for testing."""
     rng = np.random.default_rng(seed)
     coords = rng.uniform(size=(n, 2))
     d = np.linalg.norm(coords[:, None, :] - coords[None, :, :], axis=-1)
@@ -32,7 +32,7 @@ def _toy_w(n: int = 50, seed: int = 0) -> sp.csr_matrix:
 
 
 def _rook_W(side: int) -> sp.csr_matrix:
-    """Row-standardised rook-contiguity lattice (undirected, symmetrizable)."""
+    """Row-standardized rook-contiguity lattice (undirected, symmetrizable)."""
     n = side * side
     A = sp.lil_matrix((n, n))
     for r in range(side):
@@ -254,7 +254,7 @@ class TestSLQExactMoments:
     the exact traces removes their sampling error at no extra matrix-vector
     products.  These tests pin the three properties that make that safe: the
     correction is off when asked to be, it is applied identically by the scalar
-    and vectorised evaluators, and it reduces error rather than merely changing
+    and vectorized evaluators, and it reduces error rather than merely changing
     it.
     """
 

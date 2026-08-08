@@ -96,7 +96,7 @@ class FlowPanelModel(SpatialPanelModel):
         if self.effects not in (0, 1, 2, 3):
             raise ValueError("effects must be one of {0,1,2,3}.")
 
-        self._is_row_std = True  # Graph is assumed row-standardised
+        self._is_row_std = True  # Graph is assumed row-standardized
         self._idata: Optional[az.InferenceData] = None
         self._pymc_model: Optional[pm.Model] = None
 
@@ -590,7 +590,7 @@ class FlowPanelModel(SpatialPanelModel):
         ci: float = 0.95,
         mode: str = "auto",
     ) -> "pd.DataFrame | tuple[pd.DataFrame, dict[str, np.ndarray]]":
-        """Summarise posterior origin/destination/intra/network/total effects.
+        """Summarize posterior origin/destination/intra/network/total effects.
 
         See :meth:`bayespecon.models.flow.FlowModel.spatial_effects` for the
         ``mode`` semantics (auto / combined / separate destination-origin
@@ -693,7 +693,7 @@ class FlowPanelModel(SpatialPanelModel):
         """Draw a single posterior-predictive replicate for the full panel.
 
         Default Gaussian implementation: :math:`y_{rep,t} = A^{-1}(X_t \\beta + \\sigma\\varepsilon_t)`
-        for each period ``t``, with a single sparse :math:`LU` factorisation
+        for each period ``t``, with a single sparse :math:`LU` factorization
         of :math:`A` reused across periods.  Subclasses (NB variants)
         override this method.
         """
@@ -785,7 +785,7 @@ class FlowPanelModel(SpatialPanelModel):
         Effects are computed using one-period :math:`n^2 \\times n^2` system
         matrices, which are time-invariant under static panel parameters.  See
         :func:`~bayespecon.models.flow._compute_flow_effects_lesage` for the
-        decomposition.  One sparse :math:`LU` factorisation per draw covers all
+        decomposition.  One sparse :math:`LU` factorization per draw covers all
         :math:`n` shock columns and all :math:`k` predictors.
         """
         n = self._n
@@ -863,7 +863,7 @@ class FlowPanelModel(SpatialPanelModel):
     ) -> dict[str, np.ndarray]:
         """Compute LeSage flow effects via Kronecker-factored solve.
 
-        Replaces the :math:`N\\times N` sparse factorisation in
+        Replaces the :math:`N\\times N` sparse factorization in
         :meth:`_compute_flow_effects_from_draws` with two :math:`n\\times n`
         solves via :func:`~bayespecon._ops.kron_solve_matrix`, exploiting
         :math:`A = L_o \\otimes L_d`.
@@ -1033,7 +1033,7 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int
@@ -1187,7 +1187,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int
@@ -1338,7 +1338,7 @@ class OLSFlowPanel(FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units. Required for API
+        Row-standardized graph on ``n`` units. Required for API
         symmetry but not used in estimation.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
@@ -2168,7 +2168,7 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int
@@ -2283,7 +2283,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
 
     Panel analogue of :class:`~bayespecon.models.flow.SEMFlowSeparable` and
     spatial-error counterpart of :class:`SARFlowSeparablePanel`. Uses the
-    eigenvalue / Chebyshev factorisation of :math:`\\log|B|` with the panel
+    eigenvalue / Chebyshev factorization of :math:`\\log|B|` with the panel
     Jacobian scaling :math:`T \\cdot \\log|B|`.
 
     Parameters
@@ -2292,7 +2292,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int

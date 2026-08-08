@@ -26,7 +26,7 @@ def _batched_sar_mean(W_sp, rho_f, rhs, n):
 
     Host-side reconstruction (one solve per posterior draw) used by the Tobit
     log-likelihood rebuilders.  Prefers sparsax's cached KLU — the fixed
-    ``(I - rho W)`` sparsity pattern is analysed once and reused across draws
+    ``(I - rho W)`` sparsity pattern is analyzed once and reused across draws
     (only the values rescale with ``rho``) — and falls back to a per-draw scipy
     sparse solve when sparsax is unavailable.
 

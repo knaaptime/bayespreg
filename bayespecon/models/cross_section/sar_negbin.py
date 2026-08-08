@@ -135,7 +135,7 @@ class SARNegBin(SpatialModel):
 
             # Jacobian: log|I - ρW| — required for the reduced form
             # (unlike the structural form where it cancels with the MVN
-            # normalisation constant).
+            # normalization constant).
             pm.Potential("jacobian", self._logdet_pytensor_fn(rho))
 
         return model
@@ -181,7 +181,7 @@ class SARNegBin(SpatialModel):
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
             Execution backend.  ``"numpy"`` uses the CHOLMOD/SPLU
-            factorisation path with adaptive slice sampling for ρ (the
+            factorization path with adaptive slice sampling for ρ (the
             default); ``"jax"`` uses the JAX-accelerated dense path with
             slice+Krylov sampling (requires float64; viable for n ≲ 10 000).
         init_jitter : float, default 0.1
@@ -385,10 +385,10 @@ class SARNegBin(SpatialModel):
         # chain at (ρ ≈ 0, β ≈ 0) places it in a completely wrong
         # mode that the Gibbs sampler cannot escape.
         #
-        # We use a profile-log-likelihood initialisation on log(y+0.5):
+        # We use a profile-log-likelihood initialization on log(y+0.5):
         #   1. For each ρ on a coarse grid, compute
         #      X̃ = (I − ρW)⁻¹ X and OLS β̂ = (X̃ᵀX̃)⁻¹ X̃ᵀ log(y)
-        #   2. Pick the (ρ, β) that maximises the Gaussian log-lik
+        #   2. Pick the (ρ, β) that maximizes the Gaussian log-lik
         #   3. Estimate α from method-of-moments on Pearson residuals
         _log_y = np.log(self._y + 0.5)
         from ...samplers._utils._sparsax_utils import (
@@ -584,7 +584,7 @@ class SARNegBin(SpatialModel):
 
         For n ≤ ``_COUNT_EFFECTS_EIGEN_MAX_N`` (default 2000), this uses
         the shared eigendecomposition cache (:attr:`_W_eigendecomposition`)
-        to avoid per-draw sparse LU factorisation, reducing complexity from
+        to avoid per-draw sparse LU factorization, reducing complexity from
         :math:`O(\text{nnz}^{1.5})` per draw to :math:`O(n^2)` per draw.
 
         For n > ``_COUNT_EFFECTS_EIGEN_MAX_N``, this uses sparse solves
@@ -627,7 +627,7 @@ class SARNegBin(SpatialModel):
         total_samples = np.empty((n_draws, n_effects), dtype=np.float64)
 
         # Use shared eigendecomposition cache (complex128 throughout).
-        # Row-standardised W is generally non-symmetric, so V and Vinv
+        # Row-standardized W is generally non-symmetric, so V and Vinv
         # are complex.  Taking .real prematurely drops imaginary parts and
         # produces wrong results for eta, diag, and row sums.
         decomp = self._W_eigendecomposition
@@ -738,7 +738,7 @@ class SARNegBin(SpatialModel):
 
         For large W where eigendecomposition is infeasible, this method uses:
 
-        - A single sparse LU factorisation of :math:`A = I - \rho W` per draw
+        - A single sparse LU factorization of :math:`A = I - \rho W` per draw
           (KLU when available, SuperLU otherwise), reused for the
           :math:`\eta` solve, the Hutchinson probes, and the row-sum solve.
         - **Batched** matrix solve: the right-hand sides for :math:`\eta`,
@@ -747,7 +747,7 @@ class SARNegBin(SpatialModel):
           stacked into a single ``(n, 22)`` RHS and resolved with one
           ``solver.solve`` call per draw.
         - Hutchinson diagonal estimator for :math:`\operatorname{diag}(A^{-1})`.
-        - Closed-form :math:`1/(1-\rho)` row sums for row-standardised :math:`W`,
+        - Closed-form :math:`1/(1-\rho)` row sums for row-standardized :math:`W`,
           one extra sparse solve otherwise.
 
         Complexity is one LU factor plus a single batched triangular solve
@@ -777,7 +777,7 @@ class SARNegBin(SpatialModel):
         n_probes = 20
 
         # Pre-sample all Hutchinson probes up front so the per-draw RHS
-        # assembly is purely vectorised.
+        # assembly is purely vectorized.
         Z = rng.choice(
             np.array([-1.0, 1.0], dtype=np.float64),
             size=(n, n_probes),
@@ -792,7 +792,7 @@ class SARNegBin(SpatialModel):
             rho_f = float(rho)
             A = (I_n - rho_f * W).tocsc()
 
-            # Factorise A once and reuse for all per-draw RHSes.
+            # Factorize A once and reuse for all per-draw RHSes.
             solver = _make_cached_sparse_solver(A)
             if solver is None:
                 solver = sp.linalg.splu(A)
@@ -855,7 +855,7 @@ class SARNegBin(SpatialModel):
             it requires the diagonal of the spatial multiplier for each
             posterior draw.
         method : {"auto", "eigen", "sparse"}, default "auto"
-            Only used when ``scale="count"``. ``"eigen"`` materialises the
+            Only used when ``scale="count"``. ``"eigen"`` materializes the
             eigendecomposition of :math:`W` (fast for small :math:`n` but
             O(n³) memory/time); ``"sparse"`` uses one sparse LU per draw
             plus a Hutchinson diagonal estimator; ``"auto"`` picks sparse

@@ -95,7 +95,7 @@ class TestReusableLULogdet:
 
         Exercises the second-and-later calls (numeric refactor reusing the
         symbolic analysis), which is where the KLU path diverges from a
-        fresh factorisation.
+        fresh factorization.
         """
         from bayespecon._logdet._aaa import _make_reusable_lu_logdet
 
@@ -311,12 +311,12 @@ class TestFactory:
 
 
 # ---------------------------------------------------------------------------
-# Coarse-grid size = LU factorisation count
+# Coarse-grid size = LU factorization count
 # ---------------------------------------------------------------------------
 
 
 def _knn_W(n: int, k: int = 6, seed: int = 0) -> sp.csr_matrix:
-    """Row-standardised directed KNN graph (non-symmetric → AAA path)."""
+    """Row-standardized directed KNN graph (non-symmetric → AAA path)."""
     rng = np.random.default_rng(seed)
     pts = rng.uniform(size=(n, 2))
     d = np.linalg.norm(pts[:, None, :] - pts[None, :, :], axis=-1)
@@ -329,11 +329,11 @@ def _knn_W(n: int, k: int = 6, seed: int = 0) -> sp.csr_matrix:
 
 
 class TestAdaptiveNCoarse:
-    """The coarse-grid size (= number of exact LU factorisations) is adaptive.
+    """The coarse-grid size (= number of exact LU factorizations) is adaptive.
 
-    The old docstring advertised "~6-15 LU factorisations" — that was the AAA
-    *support* count; the code actually factorised at every one of the 30
-    coarse-grid nodes.  These tests pin the corrected, adaptive behaviour.
+    The old docstring advertised "~6-15 LU factorizations" — that was the AAA
+    *support* count; the code actually factorized at every one of the 30
+    coarse-grid nodes.  These tests pin the corrected, adaptive behavior.
     """
 
     def test_adaptive_narrow_interval_is_16(self):
@@ -355,7 +355,7 @@ class TestAdaptiveNCoarse:
         # cap binds here and nowhere narrower.
         assert _adaptive_n_coarse(-0.99, 0.99) == 96
 
-    def test_n_coarse_equals_lu_factorisation_count(self):
+    def test_n_coarse_equals_lu_factorization_count(self):
         """`_aaa_algorithm_lazy` evaluates exactly n_coarse times (one LU each)."""
         calls = {"n": 0}
 
@@ -392,7 +392,7 @@ class TestAdaptiveNCoarse:
         assert counter["n"] == 12
 
     def test_default_precompute_uses_adaptive(self, monkeypatch):
-        """With n_coarse unset, the default interval factorises 16 times."""
+        """With n_coarse unset, the default interval factorizes 16 times."""
         import bayespecon._logdet._aaa as aaa_mod
 
         W = _knn_W(200, k=6)

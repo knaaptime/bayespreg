@@ -47,7 +47,7 @@ class SLX(GaussianLikelihoodMixin, SpatialModel):
         ``WX`` block. Accepts a :class:`libpysal.graph.Graph` or any
         :class:`scipy.sparse` matrix; legacy ``libpysal.weights.W`` is
         not accepted (use ``w.sparse`` or
-        ``libpysal.graph.Graph.from_W(w)``). Should be row-standardised.
+        ``libpysal.graph.Graph.from_W(w)``). Should be row-standardized.
     priors : dict, optional
         Override default priors. Supported keys:
 

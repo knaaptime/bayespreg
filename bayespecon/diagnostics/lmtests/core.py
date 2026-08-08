@@ -5,7 +5,7 @@ LM test families (cross-sectional, panel, flow):
 
 - Posterior draw extraction
 - Residual computation
-- Scalar / vector LM finalisation
+- Scalar / vector LM finalization
 - Matrix algebra utilities (_mx_quadratic, _mx_cross)
 """
 
@@ -25,7 +25,7 @@ from ..._lazy_deps import az
 #: Ridge added to the diagonal before inversion in :func:`_safe_inv` / :func:`_safe_solve`.
 _INV_RIDGE = 1e-12
 
-#: Condition-number threshold above which the regularised inverse falls back to ``pinv``.
+#: Condition-number threshold above which the regularized inverse falls back to ``pinv``.
 _INV_COND_THRESHOLD = 1e12
 
 # ---------------------------------------------------------------------------
@@ -159,7 +159,7 @@ def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
     """Robust matrix inverse for LM-test information / cross-product matrices.
 
     Adds a tiny ridge (``_INV_RIDGE * I``) to prevent exact singularity, checks
-    the condition number of the regularised matrix, and emits a
+    the condition number of the regularized matrix, and emits a
     ``RuntimeWarning`` plus falls back to ``np.linalg.pinv`` when
     ``cond > _INV_COND_THRESHOLD``.
 
@@ -195,7 +195,7 @@ def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
 def _safe_solve(
     M: np.ndarray, b: np.ndarray, label: str = "information matrix"
 ) -> np.ndarray:
-    """Solve ``M x = b`` with ridge regularisation and ``pinv`` fallback.
+    """Solve ``M x = b`` with ridge regularization and ``pinv`` fallback.
 
     Companion to :func:`_safe_inv` for code paths that only need ``M⁻¹ @ b``
     (avoiding the explicit inverse).  Same ridge magnitude and condition-number
@@ -507,7 +507,7 @@ def _panel_spatial_lag(W_sparse, v: np.ndarray, N: int, T: int) -> np.ndarray:
     input to ``(T, N)`` (1-D) or ``(draws*T, N)`` (2-D) and applying the
     N×N weight matrix once, then reshaping back.  This avoids the O(T)
     Python-loop overhead of the naive per-period approach and matches the
-    Phase-3 ``_batch_sparse_lag`` optimisation in the model layer.
+    Phase-3 ``_batch_sparse_lag`` optimization in the model layer.
 
     Parameters
     ----------

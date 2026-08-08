@@ -5,10 +5,10 @@ cross-section and panel models — the spatial lag and the non-eigenvalue ``W``
 operand handed to the log-determinant factory — behind one small interface so
 the two model base classes (:class:`SpatialModel`, :class:`SpatialPanelModel`)
 can share a single implementation of the surrounding methods and, eventually,
-collapse into one class parameterised by its structure.
+collapse into one class parameterized by its structure.
 
 Only the concerns that are genuinely structure-dependent live here; everything
-behaviour-identical across structures stays in
+behavior-identical across structures stays in
 :class:`bayespecon.models._base._shared.SharedSpatialMethods`.
 """
 
@@ -44,7 +44,7 @@ class CrossSectionStructure(SpatialStructure):
     """Cross-section: a single ``N×N`` weights matrix ``W``.
 
     The lag is the plain ``W @ x`` product and the logdet factory receives the
-    dense ``W`` (mirrors the historical cross-section behaviour).
+    dense ``W`` (mirrors the historical cross-section behavior).
     """
 
     def __init__(self, W_sparse):

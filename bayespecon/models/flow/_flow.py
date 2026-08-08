@@ -2,7 +2,7 @@
 
 Implements fully Bayesian SAR-type flow models following
 :cite:t:`lesage2008SpatialEconometric`.  The observed variable is an
-:math:`n \\times n` flow matrix (or its vectorised form), and the weight
+:math:`n \\times n` flow matrix (or its vectorized form), and the weight
 structure uses three Kronecker-product matrices:
 
 .. math::
@@ -132,7 +132,7 @@ def _compute_flow_effects_lesage(
         defaults to ``k_d`` (symmetric case).
     beta_intra : np.ndarray, optional, shape (k_d,)
         Coefficients on the ``intra_*`` design block.  If ``None``, treated as
-        zero (legacy behaviour).
+        zero (legacy behavior).
 
     Returns
     -------
@@ -214,7 +214,7 @@ class FlowModel(SpatialModel):
     """Abstract base class for Bayesian spatial flow regression models.
 
     Unlike :class:`~bayespecon.models.base.SpatialModel`, this class works
-    with an :math:`N = n^2` vectorised response and three Kronecker-product
+    with an :math:`N = n^2` vectorized response and three Kronecker-product
     weight matrices constructed from a single n×n graph.  The API mirrors
     :class:`~bayespecon.models.base.SpatialModel` (``fit``, ``summary``,
     ``inference_data``) but the internals are tailored to the flow structure.
@@ -229,7 +229,7 @@ class FlowModel(SpatialModel):
         Observed O-D flow matrix (or its vec-form).  Must be a square
         matrix or a flat vector of length :math:`N = n^2`.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised regional weights on *n* units (Graph or matrix).  Validated by
+        Row-standardized regional weights on *n* units (Graph or matrix).  Validated by
         :func:`~bayespecon.graph._graph_to_csr`.
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
@@ -256,7 +256,7 @@ class FlowModel(SpatialModel):
         classes use the resolvent-gradient sampler (``"resolvent"``), the
         separable classes accept any single-``W`` method (``"eigenvalue"``,
         ``"chebyshev"``, ``"cheb_cholesky"``, ``"aaa"``,
-        ``"cheb_stochastic"``) via the exact Kronecker factorisation, and
+        ``"cheb_stochastic"``) via the exact Kronecker factorization, and
         aspatial classes skip the log-determinant entirely.
     restrict_positive : bool, default True
         If True, use a ``pm.Dirichlet`` prior that restricts :math:`\\rho_d,
@@ -270,7 +270,7 @@ class FlowModel(SpatialModel):
         the heuristic — for example, when using
         :func:`~bayespecon.graph.flow_design_matrix_with_orig` with distinct
         attributes for the origin and destination sides.  Controls the default
-        behaviour of :meth:`spatial_effects` when ``mode="auto"``.
+        behavior of :meth:`spatial_effects` when ``mode="auto"``.
     """
 
     def __init__(
@@ -289,7 +289,7 @@ class FlowModel(SpatialModel):
         self.logdet_method = logdet_method
         self.restrict_positive = restrict_positive
         self.robust = False
-        self._is_row_std = True  # W is assumed row-standardised
+        self._is_row_std = True  # W is assumed row-standardized
         self._idata: Optional[az.InferenceData] = None
         self._pymc_model: Optional[pm.Model] = None
 
@@ -809,7 +809,7 @@ class FlowModel(SpatialModel):
         ci: float = 0.95,
         mode: str = "auto",
     ) -> "pd.DataFrame | tuple[pd.DataFrame, dict[str, np.ndarray]]":
-        """Summarise posterior origin/destination/intra/network/total effects.
+        """Summarize posterior origin/destination/intra/network/total effects.
 
         Wraps :meth:`_compute_spatial_effects_posterior` to produce a tidy
         DataFrame indexed by predictor with posterior means, credible-interval
@@ -1027,7 +1027,7 @@ class SARFlow(FlowModel):
         Observed origin-destination flow matrix or its vec-form. Must be
         a square matrix or a flat vector of length :math:`N = n^2`.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised regional weights on *n* units (Graph or matrix).
+        Row-standardized regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         Typically produced by :func:`~bayespecon.graph.flow_design_matrix`
@@ -1144,7 +1144,7 @@ class SARFlow(FlowModel):
         ``j``, :math:`\\beta_o^{(p)}` at flows with origin ``j``, and
         :math:`\\beta_d^{(p)} + \\beta_o^{(p)}` at the intra flow ``(j, j)``.
         The system :math:`A\\,T = \\text{shock}` is solved with one sparse
-        :math:`LU` factorisation per draw (re-used for all ``n`` columns and all
+        :math:`LU` factorization per draw (re-used for all ``n`` columns and all
         ``k`` predictors), and scalar effects are obtained by averaging
         :math:`T` over the appropriate masks.  Mirrors LeSage's
         ``calc_effects.m`` reference implementation.
@@ -1212,7 +1212,7 @@ class SARFlow(FlowModel):
             )
 
             # Use the cached symbolic-analysis solver: same (Ai, Aj) pattern
-            # every draw, so only the numeric factorisation is redone.  When
+            # every draw, so only the numeric factorization is redone.  When
             # sparsax is installed the analysis is computed once and reused;
             # the scipy ``splu`` fallback still benefits from the cached
             # pattern assembly.
@@ -1267,7 +1267,7 @@ class SARFlowSeparable(FlowModel):
         Observed origin-destination flow matrix or its vec-form. Must be
         a square matrix or a flat vector of length :math:`N = n^2`.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised regional weights on *n* units (Graph or matrix).
+        Row-standardized regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         Typically produced by :func:`~bayespecon.graph.flow_design_matrix`
@@ -1282,7 +1282,7 @@ class SARFlowSeparable(FlowModel):
         standard LeSage layout is used.
     logdet_method : {"eigenvalue", "chebyshev", "cheb_cholesky", "aaa", "cheb_stochastic"} or None, default None
         Method for the :math:`n \\times n` log-determinant used via the exact
-        Kronecker factorisation.  ``None`` (default) auto-selects
+        Kronecker factorization.  ``None`` (default) auto-selects
         (``"aaa"`` for directed/non-symmetric ``W``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
@@ -1347,7 +1347,7 @@ class SARFlowSeparable(FlowModel):
             pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)
 
             # Jacobian: n*log|I_n - rho_d*W| + n*log|I_n - rho_o*W|
-            # factorisation holds exactly for the separable constraint.
+            # factorization holds exactly for the separable constraint.
             pm.Potential(
                 "jacobian",
                 self._separable_logdet_fn(rho_d, rho_o),
@@ -1374,7 +1374,7 @@ class SARFlowSeparable(FlowModel):
         Implements the LeSage (2008) effects decomposition (see
         :meth:`SARFlow._compute_spatial_effects_posterior`) but exploits
         :math:`A = L_o \\otimes L_d` to replace the
-        :math:`N\\times N` sparse factorisation with two :math:`n\\times n`
+        :math:`N\\times N` sparse factorization with two :math:`n\\times n`
         sparse solves per predictor via
         :func:`~bayespecon._ops.kron_solve_matrix`.
 
@@ -1488,7 +1488,7 @@ class OLSFlow(FlowModel):
         Observed O-D flow matrix (or its vec-form). Must be a square
         matrix or a flat vector of length :math:`N = n^2`.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised regional weights on *n* units (Graph or matrix). Required for API
+        Row-standardized regional weights on *n* units (Graph or matrix). Required for API
         symmetry with the spatial flow models, but the graph weights
         are not used in estimation.
     X : np.ndarray or pandas.DataFrame, shape (N, p)
@@ -2326,7 +2326,7 @@ class SEMFlow(FlowModel):
     y : array-like, shape (n, n) or (N,)
         Observed origin-destination flow matrix or its vec-form.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised regional weights on *n* units (Graph or matrix).
+        Row-standardized regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         DataFrame columns are preserved as feature names.
@@ -2552,7 +2552,7 @@ class SEMFlowSeparable(SEMFlow):
     y : array-like, shape (n, n) or (N,)
         Observed origin-destination flow matrix or its vec-form.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised regional weights on *n* units (Graph or matrix).
+        Row-standardized regional weights on *n* units (Graph or matrix).
     X : np.ndarray or pandas.DataFrame, shape (N, p)
         Full origin-destination design matrix with :math:`N = n^2` rows.
         DataFrame columns are preserved as feature names.

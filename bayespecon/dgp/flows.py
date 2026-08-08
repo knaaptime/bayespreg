@@ -68,7 +68,7 @@ def _spsolve_flow(A, rhs, letter: str = "A", prefix: str = "rho") -> np.ndarray:
 
 
 def _factorized_flow(A, letter: str = "A", prefix: str = "rho"):
-    """Factorise ``A`` once (panel reuse) with the standard error message."""
+    """Factorize ``A`` once (panel reuse) with the standard error message."""
     try:
         return sp.linalg.factorized(A.tocsc())
     except RuntimeError as exc:
@@ -80,7 +80,7 @@ def _warn_flow_stability(
 ) -> None:
     """Warn when the sufficient stability bound ``|r_d|+|r_o|+|r_w| < 1`` fails.
 
-    For row-standardised W_d/W_o/W_w each has spectral radius 1, so the bound
+    For row-standardized W_d/W_o/W_w each has spectral radius 1, so the bound
     is sufficient (and necessary for guaranteed invertibility across all valid
     weight inputs); a tighter eigenvalue check would require an O(N^3) solve
     on N = n^2.
@@ -197,7 +197,7 @@ def generate_flow_data(
 
     so that :math:`y > 0` and :math:`\\mathbb{E}[y] = \\exp(\\eta + \\sigma^2/2)`,
     or :math:`y = \\eta` when ``distribution=\"normal\"`` (legacy
-    Gaussian-on-y behaviour).
+    Gaussian-on-y behavior).
 
     To recover the SAR parameters with the existing
     :class:`~bayespecon.models.flow.SARFlow` /
@@ -209,7 +209,7 @@ def generate_flow_data(
     n : int
         Number of spatial units.  Must match the size of *G*.
     G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+        Row-standardized spatial graph on *n* units.
     rho_d : float
         Destination spatial autoregressive parameter.
     rho_o : float
@@ -259,14 +259,14 @@ def generate_flow_data(
         :math:`x_i`, :math:`x_j` are the destination and origin attribute
         vectors for that cell.
     knn_k : int, default 4
-        Number of nearest neighbours used when synthesising a default
+        Number of nearest neighbors used when synthesising a default
         graph from a synthetic point grid (see
         :func:`~bayespecon.dgp.utils._resolve_flow_geometry`).
     distribution : {\"lognormal\", \"normal\"}, default \"lognormal\"
         Observation-scale family.  ``\"lognormal\"`` returns
         ``y = exp(eta)`` (strictly positive flows, the default).
         ``\"normal\"`` returns ``y = eta`` (legacy Gaussian-on-y
-        behaviour).  In both cases ``\"eta_vec\"``/``\"eta_mat\"`` is
+        behavior).  In both cases ``\"eta_vec\"``/``\"eta_mat\"`` is
         also exposed in the return dict.
 
     Returns
@@ -274,7 +274,7 @@ def generate_flow_data(
     dict
         Dictionary with keys:
 
-        - ``\"y_vec\"`` (N,): vectorised flows on the observation scale.
+        - ``\"y_vec\"`` (N,): vectorized flows on the observation scale.
         - ``\"y_mat\"`` (n, n): flow matrix form.
         - ``\"eta_vec\"`` (N,): latent SAR-filtered linear predictor
           (equals ``log(y_vec)`` when ``distribution=\"lognormal\"``).
@@ -450,7 +450,7 @@ def generate_negbin_flow_data(
         A = I_N - \rho_d (I_n \otimes W) - \rho_o (W \otimes I_n)
               - \rho_w (W \otimes W), \quad N = n^2
 
-    and :math:`W` is the row-standardised spatial weight matrix.
+    and :math:`W` is the row-standardized spatial weight matrix.
 
     Parameters
     ----------
@@ -491,7 +491,7 @@ def generate_negbin_flow_data(
     seed : int, default 42
         Seed for :class:`numpy.random.default_rng`.
     G : libpysal.graph.Graph or None, default None
-        Row-standardised spatial graph on *n* units.  If ``None``, a
+        Row-standardized spatial graph on *n* units.  If ``None``, a
         rook-contiguity graph on a regular grid is constructed automatically
         via :func:`~bayespecon.dgp.utils.resolve_weights`.
     err_hetero : bool, default False
@@ -520,7 +520,7 @@ def generate_negbin_flow_data(
         ``design`` : FlowDesignMatrix
             Full O-D design matrix (for downstream inspection).
         ``W`` : np.ndarray, shape (n, n)
-            Dense row-standardised weight matrix.
+            Dense row-standardized weight matrix.
         ``G`` : libpysal.graph.Graph
             Spatial graph.
         ``rho_d``, ``rho_o``, ``rho_w``
@@ -659,7 +659,7 @@ def generate_panel_flow_data(
     The observed flows are :math:`y_t = \exp(\eta_t)` under the default
     ``distribution="lognormal"`` (strictly positive flows), or
     :math:`y_t = \eta_t` under ``distribution="normal"`` (legacy
-    Gaussian-on-y behaviour).
+    Gaussian-on-y behavior).
 
     Observations are stacked in **time-first** order so that the
     observation at index :math:`t \cdot n^2 + k` is O-D pair :math:`k`
@@ -677,7 +677,7 @@ def generate_panel_flow_data(
     T : int
         Number of time periods.
     G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+        Row-standardized spatial graph on *n* units.
     rho_d : float
         Destination spatial autoregressive parameter.
     rho_o : float
@@ -706,7 +706,7 @@ def generate_panel_flow_data(
         Accepted for API parity with other DGP functions; not used
         (pass *G* directly instead).
     knn_k : int, default 4
-        Number of nearest neighbours used when synthesising a default
+        Number of nearest neighbors used when synthesising a default
         graph from a synthetic point grid.
     distribution : {"lognormal", "normal"}, default "lognormal"
         Observation-scale family.  ``"lognormal"`` returns
@@ -882,7 +882,7 @@ def generate_panel_negbin_flow_data(
     T : int, default 5
         Number of time periods.
     G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+        Row-standardized spatial graph on *n* units.
     rho_d : float, default 0.3
         Destination autocorrelation parameter.
     rho_o : float, default 0.2
@@ -1037,7 +1037,7 @@ def generate_flow_data_separable(
     n : int
         Number of spatial units.
     G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+        Row-standardized spatial graph on *n* units.
     rho_d : float
         Destination spatial autoregressive parameter.
     rho_o : float
@@ -1093,7 +1093,7 @@ def generate_panel_flow_data_separable(
     T : int
         Number of time periods.
     G : libpysal.graph.Graph
-        Row-standardised spatial graph on *n* units.
+        Row-standardized spatial graph on *n* units.
     rho_d : float
         Destination spatial autoregressive parameter.
     rho_o : float

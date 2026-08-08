@@ -90,7 +90,7 @@ class SEMLogit(SpatialModel):
 
     Notes
     -----
-    The structural form parameterises the latent log-odds as
+    The structural form parameterizes the latent log-odds as
     ``eta = X @ beta + u`` with ``u = lam * W @ u + nu``,
     ``nu ~ N(0, I)``, and augments the logistic likelihood with
     Pólya–Gamma auxiliary variables to obtain fully conjugate Gibbs
@@ -208,7 +208,7 @@ class SEMLogit(SpatialModel):
         progressbar : bool
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
-            Execution backend.  ``"numpy"`` uses the CHOLMOD factorisation
+            Execution backend.  ``"numpy"`` uses the CHOLMOD factorization
             path (the default); ``"jax"`` uses the JAX-accelerated dense path
             (requires float64; viable for n ≲ 10 000).
         return_eta : bool
@@ -367,7 +367,7 @@ class SEMLogit(SpatialModel):
                     chain_id=progress_chain_id,
                 )
 
-            # Non-JAX paths parallelise across chains when the user
+            # Non-JAX paths parallelize across chains when the user
             # requests multiple workers.
             parallel = n_jobs != 1
             chain_results = run_chains(

@@ -8,7 +8,7 @@ Binary analogue of the reduced-form SAR Negative-Binomial sampler
     \eta = (I - \rho W)^{-1} X\beta, \qquad y_i \sim \mathrm{Bernoulli}(\sigma(\eta_i)),
 
 so — exactly as in the reduced-form count model — the :math:`|I - \rho W|`
-Jacobian cancels when :math:`\beta` is marginalised out and the ρ conditional is
+Jacobian cancels when :math:`\beta` is marginalized out and the ρ conditional is
 Krylov-accelerable.  This module reuses the reduced-NB machinery almost verbatim
 (the shift-invert Krylov basis, the CHOLMOD normal-equations solver, and the
 adaptive slice sampler), differing only in the Pólya–Gamma augmentation:
@@ -97,12 +97,12 @@ def _rho_log_density_marginal(
     W_eig_min: float = -1.0,
     intercept_col: int = 0,
 ) -> float:
-    r"""β-marginalised conditional log-density of ρ for the reduced logit.
+    r"""β-marginalized conditional log-density of ρ for the reduced logit.
 
     Identical Gaussian core to :func:`..negbin_reduced._core._rho_log_density_marginal`,
     with the Bernoulli working response :math:`s = \kappa/\omega`
     (:math:`\kappa = y - \tfrac12`) and no ``log α`` offset.  The
-    ``log|I − ρW|`` Jacobian cancels under β-marginalisation, so the density is
+    ``log|I − ρW|`` Jacobian cancels under β-marginalization, so the density is
     a plain Gaussian normalising constant.  Candidates outside the Krylov radius
     fall back to a Chebyshev iterative solve.
     """
@@ -133,7 +133,7 @@ def _rho_log_density_marginal(
         except (RuntimeError, ValueError):
             return -np.inf
 
-    # --- Intercept reparameterisation: δ₀ = β₀/(1−ρ) ---
+    # --- Intercept reparameterization: δ₀ = β₀/(1−ρ) ---
     reparam = intercept_col >= 0 and abs(rho) > 1e-8
     if reparam:
         scale = 1.0 - rho
@@ -252,7 +252,7 @@ def _sample_rho(
     basis: Optional[ReducedKrylovBasis] = None,
     intercept_col: int = 0,
 ) -> tuple[float, float]:
-    """Block 3: 1-D adaptive slice on ρ with β marginalised."""
+    """Block 3: 1-D adaptive slice on ρ with β marginalized."""
     n, k = X.shape
     rho_lower = cache.rho_lower
     rho_upper = cache.rho_upper
@@ -348,7 +348,7 @@ def run_chain(
     use_krylov = cache.krylov_degree > 0
     krylov_degree = cache.krylov_degree
 
-    # Detect intercept column for the δ₀ = β₀/(1−ρ) reparameterisation.
+    # Detect intercept column for the δ₀ = β₀/(1−ρ) reparameterization.
     intercept_col = -1
     for _j in range(k):
         if np.all(X[:, _j] == 1.0):
@@ -378,7 +378,7 @@ def run_chain(
     _prev_rho = None
 
     for i in range(total_iters):
-        # --- Build Krylov basis at current ρ (or factorise for legacy) ---
+        # --- Build Krylov basis at current ρ (or factorize for legacy) ---
         if use_krylov:
             if (
                 cache.krylov_reuse
