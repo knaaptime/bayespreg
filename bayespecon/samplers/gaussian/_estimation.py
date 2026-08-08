@@ -193,7 +193,7 @@ class GibbsEstimation:
         _log.info(f"Gibbs sampling ({chains} chains, 3-block: β, σ², {spatial_param})")
         t_start = time.time()
 
-        # Derive per-chain seeds (full 128-bit SeedSequence children)
+        # Derive per-chain seeds
         from .._utils._seeds import spawn_chain_seeds
 
         # extra=1 for the scouting phase (index 0), chains at indices 1..n
@@ -399,7 +399,7 @@ class GibbsEstimation:
 
         # ── Vectorized path: jax.vmap ──
         if chain_method == "vectorized":
-            # Derive per-chain seeds (full 128-bit SeedSequence children)
+            # Derive per-chain seeds
             from .._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
 
             child_seeds = spawn_chain_seeds(random_seed, chains)
@@ -476,7 +476,7 @@ class GibbsEstimation:
         if logdet_jax is None:
             logdet_jax = self._build_logdet_jax()
 
-        # Derive per-chain seeds (full 128-bit SeedSequence children)
+        # Derive per-chain seeds
         from .._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
 
         child_seeds = spawn_chain_seeds(random_seed, chains)

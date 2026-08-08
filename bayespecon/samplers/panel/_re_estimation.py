@@ -147,7 +147,7 @@ class REGibbsEstimation:
         )
         t_start = time.time()
 
-        # Derive per-chain seeds (full 128-bit SeedSequence children)
+        # Derive per-chain seeds
         from .._utils._seeds import spawn_chain_seeds
 
         seeds = spawn_chain_seeds(random_seed, chains)

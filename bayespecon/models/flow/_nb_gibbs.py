@@ -149,7 +149,6 @@ def run_negbin_flow_gibbs(
         from ...samplers._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
 
         child_seeds = spawn_chain_seeds(random_seed, chains)
-        # JAX PRNGKey needs an int; use the 128-bit .entropy for full entropy.
         seeds = [seed_sequence_to_int(s) for s in child_seeds]
         # One init per chain (same closure the NumPy path uses).
         inits = [_make_init(np.random.default_rng(s)) for s in seeds]

@@ -450,7 +450,7 @@ def run_flow_resolvent_gibbs(
         eps = np.exp(log_eps)
         # Save cached logdet so we can restore it if the MALA proposal is
         # rejected (logpost_and_grad overwrites _cached_ld_val with the
-        # *proposed* ρ's logdet, which is wrong for the retained ρ).
+        # proposed ρ's logdet).
         _saved_ld_val = target._cached_ld_val
         _saved_ld_grad = target._cached_ld_grad
         _saved_cached_rho = target._cached_rho
@@ -468,8 +468,7 @@ def run_flow_resolvent_gibbs(
                 rho, logp, grad = prop, logp_p, grad_p
                 accepted_this = True
             else:
-                # Proposal rejected: restore the cache to the current ρ's logdet
-                # so logpost_cached below uses the correct value.
+                # Proposal rejected: restore the cache to the current ρ's logdet.
                 target._cached_ld_val = _saved_ld_val
                 target._cached_ld_grad = _saved_ld_grad
                 target._cached_rho = _saved_cached_rho

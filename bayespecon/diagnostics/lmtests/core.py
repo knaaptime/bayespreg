@@ -158,11 +158,10 @@ def _finalize_lm(
 def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
     """Robust matrix inverse for LM-test information / cross-product matrices.
 
-    Adds a tiny ridge (``1e-12 * I``) to prevent exact singularity, checks the
-    condition number of the regularised matrix, and emits a ``RuntimeWarning``
-    plus falls back to ``np.linalg.pinv`` when ``cond > 1e12``. This replaces
-    the previous silent ``np.linalg.inv(M + 1e-12 * np.eye(...))`` pattern,
-    which masked rank-deficient information matrices without notice.
+    Adds a tiny ridge (``_INV_RIDGE * I``) to prevent exact singularity, checks
+    the condition number of the regularised matrix, and emits a
+    ``RuntimeWarning`` plus falls back to ``np.linalg.pinv`` when
+    ``cond > _INV_COND_THRESHOLD``.
 
     Parameters
     ----------

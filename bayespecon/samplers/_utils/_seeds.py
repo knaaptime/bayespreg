@@ -1,18 +1,10 @@
 """Seed derivation helpers for Gibbs samplers.
 
-Centralises the pattern of spawning per-chain ``SeedSequence`` children from a
-user-supplied ``random_seed`` (or fresh OS entropy when ``None``).
-
-Historically each call site did::
-
-    child_seeds = parent_ss.spawn(chains)
-    seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
-
-which collapses a 128-bit ``SeedSequence`` into a 32-bit ``int`` (via
-``generate_state(1)``), discarding most of the entropy.  The helpers here
-return the ``SeedSequence`` children directly so that ``np.random.default_rng``
-receives the full 128-bit seed.  For JAX paths that require an integer key,
-:func:`seed_sequence_to_int` extracts 63 bits (to fit ``np.int64``).
+Spawn per-chain ``SeedSequence`` children from a user-supplied ``random_seed``
+(or fresh OS entropy when ``None``).  Returns ``SeedSequence`` objects so that
+``np.random.default_rng`` receives full 128-bit entropy.  For JAX paths that
+require an integer key, :func:`seed_sequence_to_int` extracts 63 bits (to fit
+``np.int64``).
 """
 
 from __future__ import annotations
@@ -57,9 +49,8 @@ def seed_sequence_to_int(seed: np.random.SeedSequence) -> int:
     """Convert a ``SeedSequence`` to a Python ``int`` for JAX ``PRNGKey``.
 
     Uses ``generate_state(2)`` to produce a 64-bit value (two uint32 words),
-    preserving more entropy than the previous ``int(s.generate_state(1)[0])``
-    (32-bit) pattern.  The result is masked to signed-64-bit range so JAX's
-    ``PRNGKey`` (which calls ``np.int64(seed)``) does not overflow.
+    then masks to 63 bits so JAX's ``PRNGKey`` (which calls ``np.int64(seed)``)
+    does not overflow.
     """
     val = int(seed.generate_state(2).view(np.uint64)[0])
     # Mask to 63 bits so it fits in np.int64 (JAX requirement).
