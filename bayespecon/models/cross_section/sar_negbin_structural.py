@@ -179,6 +179,8 @@ class SARNegBinStructural(SpatialModel):
         pg_n_terms: int = 25,
         n_probes: int = 5,
         lanczos_deg: int = 15,
+        krylov_degree: int = 0,
+        krylov_dmax: float = 0.4,
     ) -> az.InferenceData:
         """Sample posterior via Pólya–Gamma block Gibbs.
 
@@ -315,6 +317,8 @@ class SARNegBinStructural(SpatialModel):
             solve_method=solve_method,
             logdet_P_method=logdet_P_method,
             sample_method=sample_method,
+            krylov_degree=krylov_degree,
+            krylov_dmax=krylov_dmax,
             W_sym_dense=W_sym_dense,
             WtW_dense=WtW_dense,
             W_eigs=None,  # JAX path uses logdet_jax instead
@@ -370,6 +374,8 @@ class SARNegBinStructural(SpatialModel):
                 lanczos_deg=lanczos_deg,
                 progressbar=progressbar,
                 sparsax_pattern=sparsax_pattern,
+                krylov_degree=krylov_degree,
+                krylov_dmax=krylov_dmax,
             )
         else:
 

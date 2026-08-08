@@ -39,8 +39,6 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.special import logsumexp
 
-from .._ops._backend import _solve_sparse_vector as _backend_spsolve
-
 __all__ = ["SpatialCVResult", "spatial_kfold"]
 
 
@@ -227,12 +225,24 @@ def _fold_elpd(
     eye_n = sp.eye(n, format="csr")
     log_p = np.empty(G, dtype=np.float64)
 
+    # Cached symbolic analysis: A = I - θ W shares one sparsity pattern
+    # across all G draws (only θ rescales the values).  When sparsax is
+    # available the fill-reducing analysis is computed once and reused; the
+    # scipy ``splu`` fallback still benefits from the precomputed pattern
+    # assembly (one numeric factorisation per draw, no symbolic work).
+    from ..samplers._utils._sparsax_utils import CachedSparseSolver
+
+    cached_solver = CachedSparseSolver([W_full], n) if kind == "lag" else None
+
     for g in range(G):
         theta = float(spatial[g])
         s2 = float(sigma[g]) ** 2
-        A = eye_n - theta * W_full  # I - rho*W or I - lambda*W
         Xb = design_full @ beta[g]
-        mu = _backend_spsolve(A, Xb) if kind == "lag" else Xb
+        if kind == "lag":
+            mu = cached_solver.solve([-theta], Xb)
+        else:
+            mu = Xb
+        A = eye_n - theta * W_full  # I - rho*W or I - lambda*W
         Lam = (A.T @ A).tocsc() / s2  # full precision
         r = y_full - mu
         z = Lam @ r

@@ -268,24 +268,14 @@ class SARZINB(SpatialModel):
         p = Z.shape[1]
 
         # --- Selection equation initialisation ---
-        # Profile log-likelihood on d (binary) using linear probability model
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_lam, _best_gamma, _best_ll_sel = 0.0, np.zeros(p), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_sel_csc
-                _Ztilde_g = sp.linalg.spsolve(_A_g, Z)
-                _gamma_g = np.linalg.lstsq(_Ztilde_g, d, rcond=None)[0]
-                _eta_g = _Ztilde_g @ _gamma_g
-                _sig2_g = float(np.mean((d - _eta_g) ** 2))
-                if _sig2_g > 1e-10:
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll_sel:
-                        _best_ll_sel = _ll_g
-                        _best_lam = _rho_g
-                        _best_gamma = _gamma_g.copy()
-            except Exception:
-                pass
+        # Profile log-likelihood on d (binary) using linear probability model.
+        # Cached sparse solver: A = I - λW shares its pattern across the grid.
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_lam, _best_gamma, _best_ll_sel = profile_loglik_rho_grid(d, Z, W_sel_csc)
 
         lam_init = float(
             np.clip(
@@ -298,8 +288,8 @@ class SARZINB(SpatialModel):
 
         # η^sel from the selection profile
         try:
-            _A_sel = sp.eye(n, format="csc") - lam_init * W_sel_csc
-            eta_sel_init = sp.linalg.spsolve(_A_sel, Z @ gamma_init)
+            _sel_solver = CachedSparseSolver([W_sel_csc], n)
+            eta_sel_init = _sel_solver.solve([-lam_init], Z @ gamma_init)
         except Exception:
             eta_sel_init = Z @ gamma_init
 
@@ -311,7 +301,8 @@ class SARZINB(SpatialModel):
         # --- Count equation initialisation ---
         # Profile log-likelihood on log(y+0.5) using ONLY positive
         # observations.  Structural zeros (d=0) should not influence
-        # the count equation initialisation.
+        # the count equation initialisation.  The cached sparse solver
+        # reuses the (I - ρW) pattern across the grid.
         pos_mask = y > 0
         n_pos = int(np.sum(pos_mask))
         if n_pos > k:
@@ -323,11 +314,11 @@ class SARZINB(SpatialModel):
             _X_pos = X
             pos_mask = np.ones(n, dtype=bool)
             n_pos = n
+        _cnt_grid_solver = CachedSparseSolver([W_cnt_csc], n)
         _best_rho, _best_beta, _best_ll_cnt = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
+        for _rho_g in np.arange(0.05, 0.96, 0.05):
             try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_cnt_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, _X_pos)
+                _Xtilde_g = _cnt_grid_solver.solve([-float(_rho_g)], _X_pos)
                 _beta_g = np.linalg.lstsq(_Xtilde_g, _log_y, rcond=None)[0]
                 _eta_g = _Xtilde_g @ _beta_g
                 _sig2_g = float(np.mean((_log_y - _eta_g) ** 2))
@@ -351,8 +342,7 @@ class SARZINB(SpatialModel):
 
         # Estimate α from Pearson residuals on positive observations
         try:
-            _A_cnt = sp.eye(n, format="csc") - rho_init * W_cnt_csc
-            _Xtilde_init = sp.linalg.spsolve(_A_cnt, X)
+            _Xtilde_init = _cnt_grid_solver.solve([-rho_init], X)
             _eta_init = _Xtilde_init[pos_mask] @ beta_init
             _resid2 = float(np.mean((_log_y - _eta_init) ** 2))
             alpha_init = float(np.clip(1.0 / max(_resid2, 0.01), 0.5, 50.0))

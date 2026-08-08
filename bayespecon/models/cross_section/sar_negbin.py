@@ -250,29 +250,19 @@ class SARNegBin(SpatialModel):
 
             # Smart initialization (same as NumPy path)
             _log_y = np.log(self._y + 0.5)
-            _rho_grid = np.arange(0.05, 0.96, 0.05)
-            _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-            for _rho_g in _rho_grid:
-                try:
-                    _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                    _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                    _beta_g = np.linalg.lstsq(_Xtilde_g, _log_y, rcond=None)[0]
-                    _eta_g = _Xtilde_g @ _beta_g
-                    _sig2_g = float(np.mean((_log_y - _eta_g) ** 2))
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll:
-                        _best_ll = _ll_g
-                        _best_rho = _rho_g
-                        _best_beta = _beta_g.copy()
-                except Exception:
-                    pass
+            from ...samplers._utils._sparsax_utils import (
+                CachedSparseSolver,
+                profile_loglik_rho_grid,
+            )
+
+            _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(_log_y, X, W_csc)
             _rho_init_mle = float(
                 np.clip(_best_rho, rho_lower + 0.05, rho_upper - 0.05)
             )
             _beta_init_mle = _best_beta
             try:
-                _A_init = sp.eye(n, format="csc") - _rho_init_mle * W_csc
-                _Xtilde_init = sp.linalg.spsolve(_A_init, X)
+                _init_solver = CachedSparseSolver([W_csc], n)
+                _Xtilde_init = _init_solver.solve([-_rho_init_mle], X)
                 _eta_init = _Xtilde_init @ _beta_init_mle
                 _resid2 = float(np.mean((_log_y - _eta_init) ** 2))
                 _alpha_init_mle = float(np.clip(1.0 / max(_resid2, 0.01), 0.5, 50.0))
@@ -371,7 +361,7 @@ class SARNegBin(SpatialModel):
         # Precompute CHOLMOD pattern for the normal-equations matrix
         # A^T A = I − ρ(W+W^T) + ρ² W^T W  (SPD for any valid ρ).
         # When CHOLMOD is available, the sampler uses this instead of
-        # ``splu`` (UMFPACK) to avoid Apple Accelerate BLAS deadlocks
+        # ``splu`` (scipy SuperLU) to avoid Apple Accelerate BLAS deadlocks
         # on macOS under concurrent process access.
         #
         # IMPORTANT: We pass the *pattern matrix* (a sparse CSC matrix)
@@ -401,22 +391,12 @@ class SARNegBin(SpatialModel):
         #   2. Pick the (ρ, β) that maximises the Gaussian log-lik
         #   3. Estimate α from method-of-moments on Pearson residuals
         _log_y = np.log(self._y + 0.5)
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                _beta_g = np.linalg.lstsq(_Xtilde_g, _log_y, rcond=None)[0]
-                _eta_g = _Xtilde_g @ _beta_g
-                _sig2_g = float(np.mean((_log_y - _eta_g) ** 2))
-                _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                if _ll_g > _best_ll:
-                    _best_ll = _ll_g
-                    _best_rho = _rho_g
-                    _best_beta = _beta_g.copy()
-            except Exception:
-                pass
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(_log_y, X, W_csc)
         _rho_init_mle = float(np.clip(_best_rho, rho_lower + 0.05, rho_upper - 0.05))
         _beta_init_mle = _best_beta
         # Estimate α from the Pearson dispersion of the Gaussian fit
@@ -425,8 +405,8 @@ class SARNegBin(SpatialModel):
         # For NB data: Var(log y) ≈ 1/α + 1/(2μ) (delta method), so
         # α ≈ 1/σ² when μ is large.  Cap at a reasonable range.
         try:
-            _A_init = sp.eye(n, format="csc") - _rho_init_mle * W_csc
-            _Xtilde_init = sp.linalg.spsolve(_A_init, X)
+            _init_solver = CachedSparseSolver([W_csc], n)
+            _Xtilde_init = _init_solver.solve([-_rho_init_mle], X)
             _eta_init = _Xtilde_init @ _beta_init_mle
             _resid2 = float(np.mean((_log_y - _eta_init) ** 2))
             _alpha_init_mle = float(np.clip(1.0 / max(_resid2, 0.01), 0.5, 50.0))
@@ -759,7 +739,7 @@ class SARNegBin(SpatialModel):
         For large W where eigendecomposition is infeasible, this method uses:
 
         - A single sparse LU factorisation of :math:`A = I - \rho W` per draw
-          (UMFPACK when available, SuperLU otherwise), reused for the
+          (KLU when available, SuperLU otherwise), reused for the
           :math:`\eta` solve, the Hutchinson probes, and the row-sum solve.
         - **Batched** matrix solve: the right-hand sides for :math:`\eta`,
           the optional row-sum vector :math:`\mathbf{1}`, and the

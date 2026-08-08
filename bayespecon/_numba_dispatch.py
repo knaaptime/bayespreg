@@ -287,7 +287,7 @@ def register_numba_dispatch() -> bool:
     # General sparse NB-flow Ops (3 rho parameters)
     # ------------------------------------------------------------------
     #
-    # The forward solve uses scipy.sparse.linalg.splu / UMFPACK on the full
+    # The forward solve uses scipy.sparse.linalg.splu on the full
     # N x N (N = n^2) system matrix, which Numba cannot lower.  We deliberately
     # do **not** register these Ops: PyTensor's default per-Op object-mode
     # fallback works correctly downstream, whereas explicit objmode wrappers

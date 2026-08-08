@@ -216,7 +216,7 @@ def _solve_A_unrestricted(
 
     ``A`` is the per-period ``Nf × Nf`` system matrix; ``X`` is the
     time-first stacked ``(Nf·T, k)`` RHS.  One factorisation covers all
-    periods.  Uses KLU/UMFPACK (scikit-sparse) when available, falling
+    periods.  Uses KLU (scikit-sparse) when available, falling
     back to scipy SuperLU.
     """
     from ..._ops._backend import _solve_sparse_matrix
@@ -362,7 +362,7 @@ def _compute_eta_unrestricted(
 ) -> np.ndarray:
     """Compute η = A⁻¹ Xβ (per period) for the unrestricted model.
 
-    Uses KLU/UMFPACK (scikit-sparse) when available, falling back to
+    Uses KLU (scikit-sparse) when available, falling back to
     scipy SuperLU.
     """
     from ..._ops._backend import _solve_sparse_vector

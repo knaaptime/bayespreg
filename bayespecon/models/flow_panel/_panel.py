@@ -550,6 +550,28 @@ class FlowPanelModel(SpatialPanelModel):
         eye_n = sp.eye(self._N_flow, format="csr", dtype=np.float64)
         return eye_n - rho_d * self._Wd - rho_o * self._Wo - rho_w * self._Ww
 
+    @property
+    def _A_solver(self):
+        """Lazily-built :class:`CachedSparseSolver` over ``[Wd, Wo, Ww]``.
+
+        ``A = I - ρ_d W_d - ρ_o W_o - ρ_w W_w`` has a fixed sparsity pattern
+        across draws — only the three ρ values rescale.  sparsax (when
+        installed) caches the fill-reducing symbolic analysis keyed on the
+        merged COO pattern, so repeated solves across posterior draws /
+        posterior-predictive / LeSage effects pay the symbolic cost once.
+        """
+        cached = getattr(self, "_cached_A_solver", None)
+        if cached is None:
+            from ...samplers._utils._sparsax_utils import CachedSparseSolver
+
+            cached = CachedSparseSolver([self._Wd, self._Wo, self._Ww], self._N_flow)
+            self._cached_A_solver = cached
+        return cached
+
+    def _solve_A(self, rho_d, rho_o, rho_w, rhs):
+        """Solve ``A(ρ_d, ρ_o, ρ_w) x = rhs`` using the cached symbolic analysis."""
+        return self._A_solver.solve([-rho_d, -rho_o, -rho_w], rhs)
+
     def _sparse_flow_panel_lag(
         self, v: np.ndarray, W_flow: sp.csr_matrix
     ) -> np.ndarray:
@@ -677,8 +699,6 @@ class FlowPanelModel(SpatialPanelModel):
         """
         N = self._N_flow
         T = self._T
-        A = self._assemble_A(rho_d, rho_o, rho_w).tocsc()
-        lu = sp.linalg.splu(A)
         Xb = self._X @ beta  # (N*T,)
         Xb_mat = Xb.reshape(T, N).T  # (N, T)
         if sigma is not None:
@@ -686,7 +706,10 @@ class FlowPanelModel(SpatialPanelModel):
             rhs = Xb_mat + noise
         else:
             rhs = Xb_mat
-        out = lu.solve(rhs)  # (N, T)
+        # Cached symbolic analysis: A = I - ρ_d W_d - ρ_o W_o - ρ_w W_w
+        # shares its sparsity pattern across draws, so sparsax reuses one
+        # fill-reducing analysis; scipy fallback still avoids re-symbolic work.
+        out = self._solve_A(rho_d, rho_o, rho_w, rhs)  # (N, T)
         return out.T.reshape(-1)  # back to time-first stacked vector
 
     def posterior_predictive(
@@ -807,11 +830,12 @@ class FlowPanelModel(SpatialPanelModel):
                 beta_draws[idx, intra_start : intra_start + k_d] if has_intra else None
             )
 
-            A = self._assemble_A(rd, ro, rw).tocsc()
-            lu = sp.linalg.splu(A)
+            solver = self._A_solver
 
-            def _solve(rhs: np.ndarray, _lu=lu) -> np.ndarray:
-                return _lu.solve(rhs)
+            def _solve(
+                rhs: np.ndarray, _s=solver, _rd=rd, _ro=ro, _rw=rw
+            ) -> np.ndarray:
+                return _s.solve([-_rd, -_ro, -_rw], rhs)
 
             res = _compute_flow_effects_lesage(
                 _solve,
@@ -1641,11 +1665,9 @@ class SARNegBinFlowPanel(SARFlowPanel):
         """NB2 posterior-predictive replicate for the full panel stack."""
         N = self._N_flow
         T = self._T
-        A = self._assemble_A(rho_d, rho_o, rho_w).tocsc()
-        lu = sp.linalg.splu(A)
         Xb = self._X @ beta
         Xb_mat = Xb.reshape(T, N).T
-        eta_mat = lu.solve(Xb_mat)
+        eta_mat = self._solve_A(rho_d, rho_o, rho_w, Xb_mat)
         eta = eta_mat.T.reshape(-1)
         lam = np.exp(np.clip(eta, -50.0, 50.0))
         if alpha is None:

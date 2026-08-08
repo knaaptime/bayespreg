@@ -99,7 +99,7 @@ from ..negbin._core import _nb_loglik_pointwise, _sample_alpha
 
 # When CHOLMOD is available we solve (I − ρW) x = b via the normal
 # equations  A^T A x = A^T b  where  A^T A = I − ρ(W+W^T) + ρ² W^T W
-# is SPD.  This avoids UMFPACK (``splu``), which can deadlock on macOS
+# is SPD.  This avoids scipy SuperLU (``splu``), which can deadlock on macOS
 # when Apple Accelerate BLAS is called concurrently from multiple
 # processes.  CHOLMOD is also faster because it reuses the symbolic
 # analysis across all ρ values.
@@ -173,14 +173,14 @@ def _factor_A(rho: float, W_csc: sp.csc_matrix, n: int):
     """Factorise :math:`A_\\rho = I - \\rho W` via the backend sparse solver.
 
     Returns a factor object whose ``.solve(rhs)`` method handles single
-    and multiple right-hand sides.  Uses KLU/UMFPACK via
+    and multiple right-hand sides.  Uses KLU via
     :func:`bayespecon._ops._backend._sparse_factor` when available,
     falling back to scipy SuperLU.
 
     .. deprecated::
         Used only as a fallback when CHOLMOD is not available.
         The CHOLMOD normal-equations path (``_CholmodNormalEqSolver``)
-        is preferred to avoid UMFPACK deadlocks on macOS.
+        is preferred to avoid scipy SuperLU deadlocks on macOS.
     """
     from bayespecon._ops._backend import _select_sparse_backend, _sparse_factor
 
@@ -235,7 +235,7 @@ def _make_solver(
 
     When ``cholmod_solver`` is provided (CHOLMOD available), factorises
     the normal-equation matrix ``A^T A`` and returns the solver.
-    Otherwise falls back to ``splu`` (UMFPACK).
+    Otherwise falls back to ``splu`` (scipy SuperLU).
 
     Both return types expose a ``.solve(rhs)`` method.
     """
@@ -1025,7 +1025,7 @@ def run_chain(
             break
 
     # Build the CHOLMOD normal-equations solver once per chain.
-    # When CHOLMOD is available, this replaces all ``splu`` (UMFPACK)
+    # When CHOLMOD is available, this replaces all ``splu`` (scipy SuperLU)
     # calls with CHOLMOD on the SPD matrix A^T A, avoiding Apple
     # Accelerate BLAS deadlocks on macOS under concurrent access.
     # The CholmodFactor is created from the pattern matrix **here in

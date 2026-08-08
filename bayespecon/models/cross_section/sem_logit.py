@@ -190,6 +190,8 @@ class SEMLogit(SpatialModel):
         pg_n_terms: int = 25,
         n_probes: int = 5,
         lanczos_deg: int = 15,
+        krylov_degree: int = 0,
+        krylov_dmax: float = 0.4,
     ) -> az.InferenceData:
         """Sample posterior via Pólya–Gamma block Gibbs.
 
@@ -222,6 +224,11 @@ class SEMLogit(SpatialModel):
         lanczos_deg : int, default 15
             Lanczos iteration depth for log|P| estimation.  Only used
             on the JAX path.
+        krylov_degree : int, default 12
+            Krylov basis degree for the λ-slice factor-reuse path
+            (JAX + sparsax, or NumPy + CHOLMOD).  Set 0 to disable.
+        krylov_dmax : float, default 0.4
+            Maximum |Δλ| for the Krylov basis reuse radius.
 
         Returns
         -------
@@ -287,6 +294,8 @@ class SEMLogit(SpatialModel):
             solve_method=solve_method,
             logdet_P_method=logdet_P_method,
             sample_method=sample_method,
+            krylov_degree=krylov_degree,
+            krylov_dmax=krylov_dmax,
             W_sym_dense=W_sym_dense,
             WtW_dense=WtW_dense,
             logdet_jax=logdet_jax,
@@ -335,6 +344,8 @@ class SEMLogit(SpatialModel):
                 lanczos_deg=lanczos_deg,
                 progressbar=progressbar,
                 sparsax_pattern=sparsax_pattern,
+                krylov_degree=krylov_degree,
+                krylov_dmax=krylov_dmax,
             )
         else:
 

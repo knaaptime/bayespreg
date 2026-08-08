@@ -560,6 +560,27 @@ def make_logdet_fn(
                 return val if T == 1 else T * val
 
             return _aaa_sparse
+        if method == "chol_aaa":
+            from ._aaa import chol_aaa_logdet_precompute
+
+            # Cholesky-based AAA: same barycentric evaluation as "aaa"
+            # but support values come from sparse Cholesky (~2× cheaper
+            # than KLU for symmetrizable W).
+            pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+            sp_z = pre.support_points.astype(np.float64)
+            sp_f = pre.support_values.astype(np.float64)
+            w = pre.weights.astype(np.float64)
+
+            def _chol_aaa_sparse(rho):
+                import pytensor.tensor as pt
+
+                diff = rho - sp_z
+                n_val = pt.sum(w * sp_f / diff)
+                d_val = pt.sum(w / diff)
+                val = n_val / d_val
+                return val if T == 1 else T * val
+
+            return _chol_aaa_sparse
         if method == "slq":
             # SLQ precompute → Chebyshev coefficients → differentiable Clenshaw
             pre = slq_logdet_precompute(W_sparse)
@@ -660,6 +681,26 @@ def make_logdet_fn(
             return val if T == 1 else T * val
 
         return _aaa_dense
+    if method == "chol_aaa":
+        from ._aaa import chol_aaa_logdet_precompute
+
+        pre = chol_aaa_logdet_precompute(
+            sp.csc_matrix(W_dense), rho_min=rho_min, rho_max=rho_max
+        )
+        sp_z = pre.support_points.astype(np.float64)
+        sp_f = pre.support_values.astype(np.float64)
+        w = pre.weights.astype(np.float64)
+
+        def _chol_aaa_dense(rho):
+            import pytensor.tensor as pt
+
+            diff = rho - sp_z
+            n_val = pt.sum(w * sp_f / diff)
+            d_val = pt.sum(w / diff)
+            val = n_val / d_val
+            return val if T == 1 else T * val
+
+        return _chol_aaa_dense
     if method == "slq":
         # SLQ precompute → Chebyshev coefficients → differentiable Clenshaw
         pre = slq_logdet_precompute(W_dense)

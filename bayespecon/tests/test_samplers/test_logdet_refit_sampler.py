@@ -14,13 +14,16 @@ retrace the step and cost far more than the refit saves.
 
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 import pytest
 import scipy.sparse as sp
 
 from bayespecon.models.cross_section import SAR, SEM
 
-BACKENDS = ["numpy", "jax"]
+# jaxlib is not available on Windows, so only run the NumPy backend there.
+BACKENDS = ["numpy"] if sys.platform.startswith("win") else ["numpy", "jax"]
 
 
 def _rook(side: int) -> sp.csr_matrix:

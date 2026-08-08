@@ -275,7 +275,7 @@ class LUChebContext(_ChebContextBase):
 
     KLU's symbolic analysis is computed once and reused for every later numeric
     factorisation, exactly as CHOLMOD's is in :class:`CholChebContext`, since all
-    ``I - ρW`` share one sparsity pattern.  It falls back to UMFPACK/SuperLU when
+    ``I - ρW`` share one sparsity pattern.  It falls back to scipy SuperLU when
     ``sksparse.klu`` is unavailable.
 
     Expect it to be slower than :class:`CholChebContext` on weights that *are*

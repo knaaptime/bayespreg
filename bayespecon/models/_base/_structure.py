@@ -55,7 +55,7 @@ class CrossSectionStructure(SpatialStructure):
         return np.asarray(self._W_sparse @ x, dtype=np.float64)
 
     def logdet_W_operand(self):
-        return self._W_sparse.toarray().astype(np.float64)
+        return self._W_sparse
 
     def W_pt_sparse(self):
         if self._W_pt_cache is None:

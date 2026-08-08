@@ -146,23 +146,15 @@ class SARLogitStructural(SpatialModel):
         n, k = X.shape
 
         # --- Profile-log-likelihood initialisation ---
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                _beta_g = np.linalg.lstsq(_Xtilde_g, y, rcond=None)[0]
-                _eta_g = _Xtilde_g @ _beta_g
-                _sig2_g = float(np.mean((y - _eta_g) ** 2))
-                if _sig2_g > 1e-10:
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll:
-                        _best_ll = _ll_g
-                        _best_rho = _rho_g
-                        _best_beta = _beta_g.copy()
-            except Exception:
-                pass
+        # Cached sparse solver: A = I - ρW shares its sparsity pattern across
+        # the grid, so the symbolic analysis is computed once (sparsax) or
+        # the pattern is pre-assembled (scipy fallback).
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(y, X, W_csc)
 
         _rho_jitter = 0.02
         beta_init = _best_beta + 0.1 * rng.standard_normal(k)
@@ -176,8 +168,8 @@ class SARLogitStructural(SpatialModel):
 
         # η₀: (I − ρ₀W)⁻¹Xβ₀ — spatially structured starting values
         try:
-            _A_init = sp.eye(n, format="csc") - rho_init * W_csc
-            eta_init = sp.linalg.spsolve(_A_init, X @ beta_init)
+            _init_solver = CachedSparseSolver([W_csc], n)
+            eta_init = _init_solver.solve([-rho_init], X @ beta_init)
         except Exception:
             eta_init = X @ beta_init
 
@@ -208,6 +200,8 @@ class SARLogitStructural(SpatialModel):
         pg_n_terms: int = 25,
         n_probes: int = 5,
         lanczos_deg: int = 15,
+        krylov_degree: int = 0,
+        krylov_dmax: float = 0.4,
     ) -> az.InferenceData:
         """Sample posterior via Pólya–Gamma block Gibbs.
 
@@ -239,6 +233,11 @@ class SARLogitStructural(SpatialModel):
         lanczos_deg : int, default 15
             Lanczos iteration depth for log|P| estimation.  Only used
             on the JAX path.
+        krylov_degree : int, default 12
+            Krylov basis degree for the ρ-slice factor-reuse path
+            (JAX + sparsax, or NumPy + CHOLMOD).  Set 0 to disable.
+        krylov_dmax : float, default 0.4
+            Maximum |Δρ| for the Krylov basis reuse radius.
 
         Returns
         -------
@@ -305,6 +304,8 @@ class SARLogitStructural(SpatialModel):
             solve_method=solve_method,
             logdet_P_method=logdet_P_method,
             sample_method=sample_method,
+            krylov_degree=krylov_degree,
+            krylov_dmax=krylov_dmax,
             W_sym_dense=W_sym_dense,
             WtW_dense=WtW_dense,
             logdet_jax=logdet_jax,
@@ -351,6 +352,8 @@ class SARLogitStructural(SpatialModel):
                 lanczos_deg=lanczos_deg,
                 progressbar=progressbar,
                 sparsax_pattern=sparsax_pattern,
+                krylov_degree=krylov_degree,
+                krylov_dmax=krylov_dmax,
             )
         else:
 

@@ -54,6 +54,12 @@ import numpy as np
 
 from bayespecon._jax_dispatch import ensure_x64
 
+from .._utils._spatial_normal import (
+    _sparsax_factor_ops_available,
+    build_precision_krylov_basis_jax,
+    eval_precision_logdet_from_basis_jax,
+    eval_precision_solve_from_basis_jax,
+)
 from ._core import JAXGibbsState
 
 
@@ -151,6 +157,8 @@ def _make_gibbs_step_with_data(
     n_probes,
     lanczos_deg,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ):
     """Build a JIT-compiled Gibbs step with data bound into the closure.
 
@@ -349,6 +357,37 @@ def _make_gibbs_step_with_data(
         kappa_r = (y_jax - alpha) / 2.0
         Wt_Xbeta_r = Wt_matvec(Xbeta_r)
 
+        # ── Krylov basis (sparsax factor-reuse path) ──
+        # When krylov_degree > 0 and the sparsax factor-reuse primitives
+        # are available, factor P(ρ_c) ONCE and reuse for all candidates
+        # within krylov_dmax via Horner.  The negbin RHS is
+        # Xβ/σ² − ρ·WtXβ/σ² + κ, so seed with the ρ-independent columns
+        # [κ, Xβ/σ², WtXβ/σ²].
+        _use_krylov = (
+            use_sparsax and krylov_degree > 0 and _sparsax_factor_ops_available()
+        )
+        if _use_krylov:
+            _Ax_c_nb = _assemble_Ax(omega_new, rho, inv_s2_r)
+            # G = ∂P/∂ρ|_{ρ_c} = G1/σ² − 2ρ_c G2/σ² (COO values)
+            _G_vals_c_nb = (_W_sym_vals - 2.0 * rho * _WtW_vals) * inv_s2_r
+            _rhs_seed_nb = jnp.column_stack(
+                [
+                    kappa_r,
+                    Xbeta_r * inv_s2_r,
+                    Wt_Xbeta_r * inv_s2_r,
+                ]
+            )  # (n, 3)
+            _kry_key_nb = jax.random.fold_in(key_rho, 7)
+            _token_nb, _V_stack_nb, _logdet_Pc_nb = build_precision_krylov_basis_jax(
+                _Ai,
+                _Aj,
+                _Ax_c_nb,
+                _G_vals_c_nb,
+                _rhs_seed_nb,
+                n=_n_static,
+                degree=krylov_degree,
+            )
+
         def log_density_rho(rho_val):
             """Collapsed log-density of ρ (η integrated out).
 
@@ -359,10 +398,39 @@ def _make_gibbs_step_with_data(
             rhs_r = Xbeta_r * inv_s2_r - rho_val * Wt_Xbeta_r * inv_s2_r + kappa_r
 
             if use_sparsax:
-                Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
-                # Solve + logdet from one factorization (factor_solve on 0.4).
-                m, log_det_P = _solve_logdet(Ax_r, rhs_r)
-                quad_r = rhs_r @ m
+                if _use_krylov:
+                    drho = rho_val - rho
+                    within = jnp.abs(drho) <= krylov_dmax
+                    # Horner in pure JAX against the basis built at ρ_c
+                    sol_all = eval_precision_solve_from_basis_jax(_V_stack_nb, drho)
+                    # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹Xβ/σ², P(ρ)⁻¹WtXβ/σ²]
+                    Pkappa = sol_all[:, 0]
+                    PXbeta = sol_all[:, 1:2]
+                    PWtXbeta = sol_all[:, 2:]
+                    # rhs = Xβ/σ² − ρ·WtXβ/σ² + κ
+                    m_kry = (PXbeta - rho_val * PWtXbeta).ravel() + Pkappa
+                    log_det_P_kry = eval_precision_logdet_from_basis_jax(
+                        _token_nb,
+                        _G_vals_c_nb,
+                        _Ai,
+                        _Aj,
+                        _n_static,
+                        drho,
+                        rng_key=_kry_key_nb,
+                    )
+                    quad_kry = rhs_r @ m_kry
+                    # Fallback outside radius: direct factor_solve
+                    Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
+                    m_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_r)
+                    quad_dir = rhs_r @ m_dir
+                    m = jnp.where(within, m_kry, m_dir)
+                    log_det_P = jnp.where(within, log_det_P_kry, log_det_P_dir)
+                    quad_r = jnp.where(within, quad_kry, quad_dir)
+                else:
+                    Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
+                    # Solve + logdet from one factorization (factor_solve on 0.4).
+                    m, log_det_P = _solve_logdet(Ax_r, rhs_r)
+                    quad_r = rhs_r @ m
             else:
                 P_diag_r = jnp.ones(n) * inv_s2_r + omega_new
                 P_r = (
@@ -1007,6 +1075,8 @@ def run_chains_jax_vectorized(
     lanczos_deg: int = 15,
     progressbar: bool = True,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ) -> list[dict]:
     """Run multiple SAR-NB Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1057,6 +1127,8 @@ def run_chains_jax_vectorized(
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
         sparsax_pattern=sparsax_pattern,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     init_states = _stack_nb_inits(inits)

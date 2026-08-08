@@ -10,7 +10,7 @@ This module implements the **AAA rational approximation** strategy:
 
 1. Evaluate ``log|det(I - ρW)|`` exactly at ``n_coarse`` Chebyshev-spaced
    points via sparse LU, reusing one symbolic factorisation across all of
-   them (KLU, falling back to UMFPACK then scipy SuperLU).
+   them (KLU, falling back to scipy SuperLU).
 2. Fit a rational function in barycentric form via the AAA algorithm
    [@nakatsukasa2018], which selects ``m`` support points from the coarse
    grid.
@@ -33,8 +33,8 @@ narrow default interval, up to 96 for wide/near-singular intervals) and
 ``m ≤ n_coarse // 2`` is the number of AAA support points actually selected.
 All ``I - ρW`` share one sparsity pattern, so KLU's symbolic analysis is
 computed once and reused for every subsequent numeric factorisation (measured
-1.6-3.4× faster than a fresh UMFPACK factorisation per node over the coarse
-grid).
+1.6-3.4× faster than a fresh scipy SuperLU factorisation per node over the
+coarse grid).
 """
 
 from __future__ import annotations
@@ -93,24 +93,16 @@ def _klu_logdet_from_factor(factor) -> float:
 def _lu_logdet(A: sp.csc_matrix) -> float:
     """Compute ``log|det(A)|`` via sparse LU factorisation (single shot).
 
-    Prefers KLU (``sksparse.klu``), then UMFPACK (``sksparse.umfpack``,
-    which exposes ``slogdet`` directly), then scipy SuperLU.  For repeated
-    factorisations of matrices sharing a sparsity pattern (the AAA coarse
-    grid), use :func:`_make_reusable_lu_logdet`, which reuses KLU's symbolic
-    analysis.
+    Prefers KLU (``sksparse.klu``), then falls back to scipy SuperLU.  For
+    repeated factorisations of matrices sharing a sparsity pattern (the AAA
+    coarse grid), use :func:`_make_reusable_lu_logdet`, which reuses KLU's
+    symbolic analysis.
     """
     A = A.tocsc()
     try:
         from sksparse.klu import klu_factor
 
         return _klu_logdet_from_factor(klu_factor(A))
-    except Exception:
-        pass
-    try:
-        from sksparse.umfpack import umf_factor
-
-        _sign, logabsdet = umf_factor(A).slogdet()
-        return float(logabsdet)
     except Exception:
         from scipy.sparse.linalg import splu as scipy_splu
 
@@ -128,9 +120,9 @@ def _make_reusable_lu_logdet():
     subsequent calls it refactorises numerically only (``KLUFactor.factorize``),
     valid because every ``I - ρW`` shares one sparsity pattern.  This mirrors
     the CHOLMOD symbolic reuse in :func:`chol_cheb_logdet_precompute` and is
-    measured 1.6-3.4× faster than a fresh UMFPACK factorisation per node.
+    measured 1.6-3.4× faster than a fresh scipy SuperLU factorisation per node.
 
-    Falls back to the single-shot :func:`_lu_logdet` (UMFPACK / scipy) when
+    Falls back to the single-shot :func:`_lu_logdet` (scipy SuperLU) when
     ``sksparse.klu`` is unavailable or its first factorisation fails.
     """
     state = {"factor": None, "use_klu": True}

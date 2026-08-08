@@ -1034,25 +1034,48 @@ def run_chains_jax_reduced(
         [jax.random.fold_in(jax.random.PRNGKey(int(s)), 1) for s in jax_seeds]
     )
 
-    def _warm_one(s, key):
+    def _warm_chunk(s, key, n_iters):
         def body(_, carry):
             st, kk = carry
             kk, sk = jax.random.split(kk)
             st, _ = gibbs_step(st, sk, slice_width_jax)
             return (st, kk)
 
-        st, _ = jax.lax.fori_loop(0, tune, body, (s, key))
+        st, _ = jax.lax.fori_loop(0, n_iters, body, (s, key))
         return st
 
-    def _draw_one(s, key):
+    def _draw_chunk(s, key, n_iters):
         def body(carry, _):
             st, kk = carry
             kk, sk = jax.random.split(kk)
             st, eta = gibbs_step(st, sk, slice_width_jax)
             return (st, kk), (st["rho"], st["beta"], st["alpha"], eta)
 
-        _, traces = jax.lax.scan(body, (s, key), None, length=draws)
-        return traces  # (rho, beta, alpha, eta), each leaf (draws, ...)
+        (s_final, k_final), traces = jax.lax.scan(body, (s, key), None, length=n_iters)
+        # traces: tuple of (n_iters, ...) arrays
+        return s_final, k_final, traces
+
+    # Chunked warmup: update the progress bar between chunks so it
+    # advances during the (potentially long) JIT-compiled warmup phase
+    # rather than sitting at 0 until the end.
+    adapt_window = max(50, tune // 10) if tune > 0 else 50
+    _fn_cache: dict[tuple, object] = {}
+
+    # One chain per CPU device (pmap) when enough host devices exist,
+    # otherwise jit(vmap).  Mirrors the logit runner's _pv.
+    _use_pmap = chains > 1 and jax.local_device_count() >= chains
+
+    def _pv(f):
+        return jax.pmap(f) if _use_pmap else jax.jit(jax.vmap(f))
+
+    def _get_fn(kind: str, n_iters: int):
+        key = (kind, n_iters)
+        if key not in _fn_cache:
+            if kind == "warm":
+                _fn_cache[key] = _pv(lambda s_, k_: _warm_chunk(s_, k_, n_iters))
+            else:
+                _fn_cache[key] = _pv(lambda s_, k_: _draw_chunk(s_, k_, n_iters))
+        return _fn_cache[key]
 
     with GibbsProgressBarManager(
         chains=chains,
@@ -1064,16 +1087,42 @@ def run_chains_jax_reduced(
         if pm is not None:
             for c in range(chains):
                 pm.start_chain(c)
-        rho_all, beta_all, alpha_all, eta_all = _run_chains_device_parallel(
-            _warm_one, _draw_one, state0, warm_keys, draw_keys, chains, tune
-        )
-        rho_all = np.asarray(rho_all)  # (chains, draws)
-        beta_all = np.asarray(beta_all)  # (chains, draws, k)
-        alpha_all = np.asarray(alpha_all)  # (chains, draws)
-        eta_all = np.asarray(eta_all)  # (chains, draws, n)
-        if pm is not None:
-            for c in range(chains):
-                pm.update(c, tune + draws, tuning=False, accept=None)
+
+        # ── Phase 1: warmup — chunked fori_loop ──
+        state = state0
+        keys = warm_keys
+        iter_done = 0
+        while iter_done < tune:
+            step = min(adapt_window, tune - iter_done)
+            fn = _get_fn("warm", step)
+            state = fn(state, keys)
+            jax.block_until_ready(state["rho"])
+            iter_done += step
+            if pm is not None:
+                for c in range(chains):
+                    pm.update(c, iter_done - 1, tuning=True, accept=None)
+
+        # ── Phase 2: post-warmup draws — chunked scan ──
+        draw_window = max(50, draws // 10) if draws > 0 else 50
+        keys = draw_keys
+        iter_done = 0
+        trace_parts = []  # list of (rho, beta, alpha, eta) per chunk
+        while iter_done < draws:
+            step = min(draw_window, draws - iter_done)
+            fn = _get_fn("draw", step)
+            state, keys, traces = fn(state, keys)
+            jax.block_until_ready(traces[0])
+            trace_parts.append(traces)
+            iter_done += step
+            if pm is not None:
+                for c in range(chains):
+                    pm.update(c, tune + iter_done - 1, tuning=False, accept=None)
+
+        # Concatenate chunk traces
+        rho_all = np.concatenate([np.asarray(t[0]) for t in trace_parts], axis=1)
+        beta_all = np.concatenate([np.asarray(t[1]) for t in trace_parts], axis=1)
+        alpha_all = np.concatenate([np.asarray(t[2]) for t in trace_parts], axis=1)
+        eta_all = np.concatenate([np.asarray(t[3]) for t in trace_parts], axis=1)
 
     # Pointwise NB log-likelihood from the fitted η collected during sampling —
     # no post-hoc solves (matching how the NumPy path reuses its sweep η).

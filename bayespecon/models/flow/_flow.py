@@ -775,6 +775,29 @@ class FlowModel(SpatialModel):
         I_N = sp.eye(self._N, format="csr", dtype=np.float64)
         return I_N - rho_d * self._Wd - rho_o * self._Wo - rho_w * self._Ww
 
+    @property
+    def _A_solver(self):
+        """Lazily-built :class:`CachedSparseSolver` over ``[Wd, Wo, Ww]``.
+
+        ``A = I - ρ_d W_d - ρ_o W_o - ρ_w W_w`` has a fixed sparsity pattern
+        — only the three ρ values rescale per draw.  sparsax (when installed)
+        caches the fill-reducing symbolic analysis keyed on the merged COO
+        pattern, so repeated solves across posterior draws / posterior
+        predictive / LeSage effects pay the symbolic cost once.  Built once
+        per model instance and reused across methods.
+        """
+        cached = getattr(self, "_cached_A_solver", None)
+        if cached is None:
+            from ...samplers._utils._sparsax_utils import CachedSparseSolver
+
+            cached = CachedSparseSolver([self._Wd, self._Wo, self._Ww], self._N)
+            self._cached_A_solver = cached
+        return cached
+
+    def _solve_A(self, rho_d, rho_o, rho_w, rhs):
+        """Solve ``A(ρ_d, ρ_o, ρ_w) x = rhs`` using the cached symbolic analysis."""
+        return self._A_solver.solve([-rho_d, -rho_o, -rho_w], rhs)
+
     # ------------------------------------------------------------------
     # Public diagnostics
     # ------------------------------------------------------------------
@@ -916,11 +939,10 @@ class FlowModel(SpatialModel):
         ``y_rep = A^{-1} (X β + σ ε)`` with ``ε ~ N(0, I_N)``.
         Subclasses (SARNegBinFlow, SARNegBinFlowSeparable) override this.
         """
-        A = self._assemble_A(rho_d, rho_o, rho_w)
         Xb = self._X @ beta
         eps = rng.normal(scale=float(sigma), size=self._N) if sigma is not None else 0.0
         rhs = Xb + eps
-        return sp.linalg.spsolve(A, rhs)
+        return self._solve_A(rho_d, rho_o, rho_w, rhs)
 
     def posterior_predictive(
         self,
@@ -1189,11 +1211,17 @@ class SARFlow(FlowModel):
                 beta_draws[idx, intra_start : intra_start + k_d] if has_intra else None
             )
 
-            A = self._assemble_A(rd, ro, rw).tocsc()
-            lu = sp.linalg.splu(A)
+            # Use the cached symbolic-analysis solver: same (Ai, Aj) pattern
+            # every draw, so only the numeric factorisation is redone.  When
+            # sparsax is installed the analysis is computed once and reused;
+            # the scipy ``splu`` fallback still benefits from the cached
+            # pattern assembly.
+            solver = self._A_solver
 
-            def _solve(rhs: np.ndarray, _lu=lu) -> np.ndarray:
-                return _lu.solve(rhs)
+            def _solve(
+                rhs: np.ndarray, _s=solver, _rd=rd, _ro=ro, _rw=rw
+            ) -> np.ndarray:
+                return _s.solve([-_rd, -_ro, -_rw], rhs)
 
             res = _compute_flow_effects_lesage(
                 _solve,
@@ -1855,8 +1883,9 @@ class SARNegBinFlow(_NegBinFlowMixin, SARFlow):
         rng = np.random.default_rng(random_seed)
         out = np.empty((total, self._N), dtype=np.float64)
         for g in range(total):
-            A = self._assemble_A(rho_d_draws[g], rho_o_draws[g], rho_w_draws[g])
-            eta = sp.linalg.spsolve(A, self._X @ beta_draws[g])
+            eta = self._solve_A(
+                rho_d_draws[g], rho_o_draws[g], rho_w_draws[g], self._X @ beta_draws[g]
+            )
             lam = np.exp(np.clip(eta, -50.0, 50.0))
             alpha = float(alpha_draws[g])
             p = alpha / (alpha + lam)
@@ -2422,9 +2451,8 @@ class SEMFlow(FlowModel):
         Xb = self._X @ beta
         if sigma is None:
             return Xb
-        B = self._assemble_A(lam_d, lam_o, lam_w)
         eps = rng.normal(scale=float(sigma), size=self._N)
-        u = sp.linalg.spsolve(B, eps)
+        u = self._solve_A(lam_d, lam_o, lam_w, eps)
         return Xb + u
 
     def _compute_spatial_effects_posterior(

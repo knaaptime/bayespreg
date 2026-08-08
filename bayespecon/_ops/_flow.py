@@ -89,7 +89,7 @@ class _SparseFlowVJPOp(pt.Op):
                 self._cached_solver.solve(g64, trans="T"), dtype=np.float64
             )
 
-        # KLU/UMFPACK: reuse the cached factor of A^T when backend and rho
+        # KLU: reuse the cached factor of A^T when backend and rho
         # are unchanged, otherwise build and cache a fresh one.  (The factor
         # has no ``trans`` support, so A^T is factorised directly.)
         if (
@@ -265,7 +265,7 @@ class SparseFlowSolveOp(pt.Op):
                 self._cached_rhos = rhos
             return np.asarray(self._cached_solver.solve(b64), dtype=np.float64)
 
-        # KLU/UMFPACK: reuse the cached factor when backend and rho are
+        # KLU: reuse the cached factor when backend and rho are
         # unchanged, otherwise build and cache a fresh one.
         if (
             self._cached_backend == backend
@@ -395,7 +395,7 @@ class _SparseFlowVJPMatrixOp(pt.Op):
                 self._cached_solver.solve(G64, trans="T"), dtype=np.float64
             )
 
-        # KLU/UMFPACK: reuse the cached factor of A^T (one factorisation
+        # KLU: reuse the cached factor of A^T (one factorisation
         # covers all T columns) when backend and rho are unchanged.
         if (
             self._cached_backend == backend
@@ -500,7 +500,7 @@ class SparseFlowSolveMatrixOp(pt.Op):
                 self._cached_rhos = rhos
             return np.asarray(self._cached_solver.solve(B64), dtype=np.float64)
 
-        # KLU/UMFPACK: reuse the cached factor (one factorisation covers all
+        # KLU: reuse the cached factor (one factorisation covers all
         # T columns) when backend and rho are unchanged.
         if (
             self._cached_backend == backend

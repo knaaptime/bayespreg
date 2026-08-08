@@ -22,7 +22,7 @@ each solve only rescales values and calls ``sparsax.lu_solve`` — the
 symbolic factorisation (AMD ordering + elimination tree) is never redone.
 
 Keeping this alongside the numpy host path is intentional: sparsax shines on
-GPU, while host KLU/UMFPACK remains competitive on CPU.
+GPU, while host KLU remains competitive on CPU.
 """
 
 from __future__ import annotations

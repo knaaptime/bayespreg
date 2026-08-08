@@ -1567,7 +1567,7 @@ def _sar_null_lambda_info(
     All five traces :math:`\mathrm{tr}(G)`, :math:`\mathrm{tr}(G^2)`,
     :math:`\mathrm{tr}(G^\top G)`, :math:`\mathrm{tr}(WG)` and
     :math:`\mathrm{tr}(W^\top G)` are **exact** and eigenvalue-free: a
-    single sparse factorisation of :math:`\bar A` (KLU/UMFPACK when
+    single sparse factorisation of :math:`\bar A` (KLU when
     available, SuperLU otherwise) is reused for chunked column solves
     :math:`G_{:,J} = \bar A^{-1} W_{:,J}`, which yield
     :math:`\mathrm{tr}(G)`, :math:`\|G\|_F^2 = \mathrm{tr}(G^\top G)`,
@@ -1582,14 +1582,40 @@ def _sar_null_lambda_info(
     A_csc = _sp.eye(n, format="csc") - rho_mean * W_sparse
     W_csc = W_sparse.tocsc()
 
-    # One sparse factorisation, reused for every solve below.
-    backend = _select_sparse_backend()
-    if backend in ("klu", "umfpack"):
-        factor = _sparse_factor(A_csc, backend)
-        solve = factor.solve
+    # One sparse factorisation, reused for every solve below.  Prefer
+    # sparsax's KLU (faster than scipy SuperLU for these structured systems)
+    # when available, falling back to the configured scikit-sparse / scipy
+    # backend.  sparsax's ``lu_factor`` + ``lu_solve_factor`` pair lets the
+    # numeric factor be reused across all chunked column solves; the
+    # scikit-sparse / scipy backends do the same via ``factor.solve``.
+    from bayespecon._jax_dispatch import _sparsax_available
+
+    if _sparsax_available():
+        import jax.numpy as jnp
+        import sparsax
+
+        from bayespecon._jax_dispatch import ensure_x64
+
+        ensure_x64()
+        _A_coo = A_csc.tocoo()
+        _Ai = jnp.asarray(_A_coo.row, dtype=jnp.int32)
+        _Aj = jnp.asarray(_A_coo.col, dtype=jnp.int32)
+        _Ax = jnp.asarray(_A_coo.data, dtype=jnp.float64)
+        _factor = sparsax.lu_factor(_Ai, _Aj, _Ax, n)
+
+        def solve(rhs):
+            return np.asarray(
+                sparsax.lu_solve_factor(_factor, np.asarray(rhs, dtype=np.float64)),
+                dtype=np.float64,
+            )
     else:
-        lu = _sp.linalg.splu(A_csc)
-        solve = lu.solve
+        backend = _select_sparse_backend()
+        if backend == "klu":
+            factor = _sparse_factor(A_csc, backend)
+            solve = factor.solve
+        else:
+            lu = _sp.linalg.splu(A_csc)
+            solve = lu.solve
 
     # G @ X_design = A⁻¹ (W @ X_design)
     WX_design = np.asarray(W_sparse @ X_design, dtype=np.float64)

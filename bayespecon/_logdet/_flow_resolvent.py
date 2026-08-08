@@ -279,7 +279,7 @@ def flow_logdet_grad(
     acc = np.zeros(3, dtype=np.float64)
 
     # Solver priority for the numpy path:
-    #   1. sksparse KLU / UMFPACK (factorize once, solve P vectors sequentially)
+    #   1. sksparse KLU (factorize once, solve P vectors sequentially)
     #   2. sparsax (batched solve, but requires JAX array conversion overhead)
     #   3. GMRES (iterative fallback)
     # The JAX-native path (_make_flow_kron_jax) uses sparsax directly without
@@ -287,7 +287,7 @@ def flow_logdet_grad(
     from bayespecon._ops._backend import _select_sparse_backend, _sparse_factor
 
     backend = _select_sparse_backend()
-    if backend in ("klu", "umfpack"):
+    if backend == "klu":
         A_csc = kron.resolvent_T_sparse(rho_d, rho_o, rho_w)
         factor = _sparse_factor(A_csc, backend)
         for p in range(P):

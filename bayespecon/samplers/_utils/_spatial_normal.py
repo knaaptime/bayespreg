@@ -452,6 +452,251 @@ def cg_solve(
 
 
 # ---------------------------------------------------------------------------
+# Shift-invert Krylov basis for the precision matrix P(ρ)
+# ---------------------------------------------------------------------------
+
+
+class KrylovPrecisionBasis(NamedTuple):
+    """Precomputed shift-invert Krylov basis for the ρ-dependent precision.
+
+    The structural-form SAR/SEM Gibbs samplers slice over ρ against the
+    **precision**
+
+    .. math::
+
+        P(\\rho) = \\mathrm{base} - \\rho\\,G_1 + \\rho^2 G_2,
+
+    where ``base = I/σ² + diag(ω)`` (fixed within a slice step), ``G_1 =
+    (W+W^T)/σ²``, and ``G_2 = W^T W/σ²``.  Linearising about a centre
+    ``ρ_c`` gives
+
+    .. math::
+
+        P(\\rho) \\approx P_c - \\Delta\\rho\\, G, \\qquad
+        G = G_1 - 2\\rho_c G_2 \\;=\\; \\partial P / \\partial \\rho
+        \\big|_{\\rho_c},
+
+    so the inverse expands as a Neumann series
+
+    .. math::
+
+        P(\\rho)^{-1} \\approx \\sum_{j=0}^{m} (\\Delta\\rho)^j
+        (P_c^{-1} G)^j P_c^{-1}.
+
+    Factorising ``P_c`` **once** and building the Krylov basis
+    ``V_j = (P_c^{-1} G)^j P_c^{-1} \\mathrm{rhs}`` lets every slice
+    candidate evaluate ``P(\\rho)^{-1} \\mathrm{rhs}`` via a cheap Horner
+    sum — no per-candidate factorisation and no per-candidate Lanczos.
+
+    The same factorisation gives ``log|P(ρ)|``: the first-order
+    correction ``log|P(ρ)| ≈ log|P_c| − Δρ tr(P_c⁻¹ G)`` is estimated
+    with a small Hutchinson probe reusing the factored solver held on
+    the basis — no second Lanczos run.
+
+    Attributes
+    ----------
+    rho_basis : float
+        Centre ``ρ_c`` at which ``P_c`` was factored.
+    V_stack : ndarray, shape (m+1, n, k_rhs)
+        Krylov basis vectors for the multi-RHS solve.  ``V_stack[0] =
+        P_c⁻¹ rhs``, ``V_stack[j+1] = P_c⁻¹ G V_stack[j]``.
+    degree : int
+        Krylov degree ``m`` (correction terms beyond ``V_0``).
+    logdet_Pc : float
+        ``log|P_c|`` — the logdet at the centre.
+    G_matvec : callable (n,) -> (n,)
+        Cached ``G = G1 − 2ρ_c G2`` matvec driver (for the trace
+        correction in :func:`eval_precision_logdet_from_basis`).
+    solve_at_c : callable (n, k) -> (n, k)
+        Cached solver ``P_c⁻¹ rhs`` (the factored CHOLMOD factor or a
+        closure over CG) — reused by the trace correction.
+    """
+
+    rho_basis: float
+    V_stack: np.ndarray
+    degree: int
+    logdet_Pc: float
+    G_matvec: object  # callable (n,) -> (n,)
+    solve_at_c: object  # callable (n, k) -> (n, k)
+
+
+def build_precision_krylov_basis(
+    rho_c: float,
+    base: sp.spmatrix,
+    G1: sp.spmatrix,
+    G2: sp.spmatrix,
+    rhs: np.ndarray,
+    *,
+    degree: int = 12,
+    cholmod_factor: CholmodFactor | None = None,
+    n_probes: int = 10,
+    lanczos_deg: int = 30,
+    rng: np.random.Generator | None = None,
+    sigma2: float = 1.0,
+) -> KrylovPrecisionBasis:
+    """Build a shift-invert Krylov basis for ``P(ρ) = base − ρG1 + ρ²G2``.
+
+    Parameters
+    ----------
+    rho_c : float
+        Centre ``ρ_c`` at which ``P_c = P(ρ_c)`` is factored.
+    base, G1, G2 : sparse matrices
+        Components of the precision: ``P(ρ) = base − ρ·G1 + ρ²·G2``.
+        For SAR (σ²=1): ``base = I + diag(ω)``, ``G1 = W+W^T``,
+        ``G2 = W^T W``.  For σ²≠1, divide ``G1``, ``G2`` and the ``I``
+        term of ``base`` by ``σ²``.
+    rhs : ndarray, shape (n, k_rhs)
+        Right-hand side(s) the slice sampler will solve for at each
+        candidate ρ.  Stored as the seed ``V_0 = P_c⁻¹ rhs``.
+    degree : int, default 12
+        Krylov degree ``m``.
+    cholmod_factor : CholmodFactor or None
+        Pre-built CHOLMOD factor with the sparsity pattern of ``P``.
+        When provided, ``P_c`` is factored via CHOLMOD (fast for
+        moderate n) and ``logdet_Pc`` comes from CHOLMOD.  When
+        ``None``, a Lanczos run estimates ``log|P_c|`` and CG is used
+        for the solves (no factorisation).
+    n_probes, lanczos_deg : int
+        Lanczos settings for the ``log|P_c|`` estimate (CG path only).
+    rng : numpy.random.Generator, optional
+        RNG for the Lanczos probes (CG path only).
+    sigma2 : float, default 1.0
+        Error variance — only used to scale ``G1``, ``G2`` and the
+        identity term of ``base`` when the caller has not already done
+        so.  When the caller passes already-scaled matrices, leave at
+        1.0.
+
+    Returns
+    -------
+    KrylovPrecisionBasis
+    """
+    n = base.shape[0]
+    m = degree
+    k_rhs = rhs.shape[1] if rhs.ndim > 1 else 1
+    if rhs.ndim == 1:
+        rhs = rhs.reshape(n, 1)
+
+    # --- Assemble and factor P_c = base − ρ_c G1 + ρ_c² G2 ---
+    P_c = (base - rho_c * G1 + rho_c**2 * G2).tocsc()
+
+    # Derivative operator G = ∂P/∂ρ = G1 − 2ρ_c G2 (the matvec driver)
+    G_csr = (G1 - 2.0 * rho_c * G2).tocsr()
+
+    def _G_matvec(v):
+        return G_csr @ v
+
+    V_stack = np.empty((m + 1, n, k_rhs), dtype=np.float64)
+
+    if cholmod_factor is not None:
+        cholmod_factor.factorize(P_c)
+        logdet_Pc = cholmod_factor.logdet()
+        _solve_at_c = cholmod_factor.solve
+        V_stack[0] = _solve_at_c(rhs)
+        for j in range(m):
+            Gv = G_csr @ V_stack[j]
+            V_stack[j + 1] = _solve_at_c(Gv)
+    else:
+        # CG path: no factorisation.  Use Lanczos once for log|P_c|.
+        def _solve_at_c(r):
+            return iterative_solve(P_c, r, lambda_min=1e-3, lambda_max=1e6)
+
+        V_stack[0] = _solve_at_c(rhs)
+        for j in range(m):
+            Gv = G_csr @ V_stack[j]
+            V_stack[j + 1] = _solve_at_c(Gv)
+        logdet_Pc = lanczos_logdet(
+            P_c, n_probes=n_probes, lanczos_deg=lanczos_deg, rng=rng
+        )
+
+    return KrylovPrecisionBasis(
+        rho_basis=rho_c,
+        V_stack=V_stack,
+        degree=m,
+        logdet_Pc=logdet_Pc,
+        G_matvec=_G_matvec,
+        solve_at_c=_solve_at_c,
+    )
+
+
+def eval_precision_solve_from_basis(
+    basis: KrylovPrecisionBasis,
+    drho: float,
+) -> np.ndarray:
+    """Evaluate ``P(ρ_c + Δρ)⁻¹ rhs`` via the Horner recurrence.
+
+    Returns an array shaped like ``basis.V_stack[0]``: ``(n, k_rhs)``.
+    """
+    result = basis.V_stack[basis.degree].copy()
+    for j in range(basis.degree - 1, -1, -1):
+        result = basis.V_stack[j] + drho * result
+    return result
+
+
+def eval_precision_logdet_from_basis(
+    basis: KrylovPrecisionBasis,
+    drho: float,
+    *,
+    P_at_rho: sp.spmatrix | None = None,
+    cholmod_factor: CholmodFactor | None = None,
+    n_probes: int = 10,
+    lanczos_deg: int = 30,
+    rng: np.random.Generator | None = None,
+) -> float:
+    """Estimate ``log|P(ρ_c + Δρ)|``.
+
+    The first-order trace correction is
+
+    .. math::
+
+        \\log|P(\\rho)| \\approx \\log|P_c| - \\Delta\\rho\\,
+        \\mathrm{tr}(P_c^{-1} G),
+
+    where ``G = ∂P/∂ρ|_{ρ_c}``.  ``tr(P_c⁻¹ G)`` is estimated with a
+    small Hutchinson probe using the *same* factorisation already held
+    by the basis — one ``(degree+1)``-matvec chain, far cheaper than a
+    fresh Lanczos run.  The correction is accurate for the small
+    ``|Δρ|`` within the Krylov radius; for candidates outside the radius
+    the caller should use a direct factorisation instead.
+
+    Parameters
+    ----------
+    basis : KrylovPrecisionBasis
+    drho : float
+        Offset ``Δρ = ρ − ρ_c``.
+    P_at_rho : sparse matrix, optional
+        Unused — kept for API symmetry with the solve path.  The
+        correction is matvec-only.
+    cholmod_factor : CholmodFactor, optional
+        Unused — the basis already holds the factored solver.
+    n_probes, lanczos_deg, rng : see :func:`lanczos_logdet`
+    """
+    # Zeroth order when |drho| is negligible.
+    if abs(drho) < 1e-9:
+        return basis.logdet_Pc
+
+    # First-order Hutchinson estimate of tr(P_c⁻¹ G) using the basis's
+    # factored solver.  We re-run the Krylov recurrence with a few random
+    # probe vectors as the RHS, then read the trace of G applied to the
+    # solved vectors.  This is one (degree+1)-matvec chain per probe —
+    # the same cost as the basis build, but with far fewer probes than a
+    # fresh Lanczos logdet (which uses n_probes × lanczos_deg matvecs).
+    n = basis.V_stack.shape[1]
+    _rng = rng if rng is not None else np.random.default_rng()
+    n_tr_probes = 5  # small; only the linear correction needs it
+    trace_est = 0.0
+    G_matvec = basis.G_matvec  # cached on the basis (set during build)
+    solver = basis.solve_at_c  # CHOLMOD factor or CG driver
+    for _ in range(n_tr_probes):
+        z = _rng.standard_normal(n)
+        # w = P_c⁻¹ G z via one solve + one matvec
+        Gz = G_matvec(z)
+        wz = solver(Gz)
+        trace_est += float(z @ wz)
+    trace_est /= n_tr_probes
+    return basis.logdet_Pc - drho * trace_est
+
+
+# ---------------------------------------------------------------------------
 # Chebyshev-accelerated iterative solve
 # ---------------------------------------------------------------------------
 
@@ -1389,3 +1634,188 @@ def _jax_log_density_core_exact(
     logdet_W = logdet_jax(rho)
 
     return logdet_W - 0.5 * log_det_P + 0.5 * quad
+
+
+# ---------------------------------------------------------------------------
+# JAX-native shift-invert Krylov basis for the precision P(ρ)  (sparsax)
+# ---------------------------------------------------------------------------
+
+
+def _sparsax_factor_ops_available() -> bool:
+    """Return ``True`` when sparsax exposes the factor-reuse primitives."""
+    try:
+        import sparsax
+
+        return (
+            hasattr(sparsax, "factor")
+            and hasattr(sparsax, "solve_factor")
+            and hasattr(sparsax, "logdet_factor")
+        )
+    except ImportError:
+        return False
+
+
+def build_precision_krylov_basis_jax(
+    Ai,
+    Aj,
+    Ax_c,
+    G_vals,
+    rhs_seed,
+    *,
+    n: int,
+    degree: int = 12,
+):
+    """Build a JAX-native shift-invert Krylov basis for ``P(ρ_c)`` via sparsax.
+
+    The JAX analog of :func:`build_precision_krylov_basis`.  Factors ``P_c``
+    **once** via :func:`sparsax.factor`, then builds the recurrence
+    ``V_{j+1} = P_c⁻¹ (G · V_j)`` via a :func:`jax.lax.fori_loop` of
+    :func:`sparsax.solve_factor` calls against the held factor — zero
+    refactors across the recurrence.
+
+    Parameters
+    ----------
+    Ai, Aj : int32 arrays, shape (nnz,)
+        COO pattern (upper triangle).
+    Ax_c : float64 array, shape (nnz,)
+        COO values of ``P_c = P(ρ_c)``.
+    G_vals : float64 array, shape (nnz,)
+        COO values of ``G = G1 − 2ρ_c G2`` (the ρ-derivative of P), at the
+        same pattern positions as ``Ax_c``.
+    rhs_seed : float64 array, shape (n, k_rhs)
+        Right-hand side(s) the slice sampler will solve for.  Seed with the
+        ρ-*independent* columns (e.g. ``[κ, X, WtX]``) so the ρ-dependent RHS
+        is reconstructed as a linear combination of Horner evaluations.
+    n : int
+        Matrix dimension (static Python int).
+    degree : int, default 12
+        Krylov degree ``m``.
+
+    Returns
+    -------
+    token : sparsax Factor
+        The held numeric factor (pass to :func:`sparsax.solve_factor` for
+        the trace correction in :func:`eval_precision_logdet_from_basis_jax`).
+    V_stack : float64 array, shape (m+1, n, k_rhs)
+        Krylov basis vectors.  ``V_stack[0] = P_c⁻¹ rhs_seed``,
+        ``V_stack[j+1] = P_c⁻¹ G V_stack[j]``.
+    logdet_Pc : float64 scalar
+        ``log|P_c|`` from the held factor (free).
+
+    Notes
+    -----
+    Requires ``sparsax`` with the factor-reuse primitives (``factor``,
+    ``solve_factor``, ``logdet_factor``).  Use
+    :func:`_sparsax_factor_ops_available` to gate.
+
+    The whole function is ``jax.jit``-compatible and ``vmap``-able over
+    ``Ax_c`` (one factor per batch element).  The ``fori_loop`` issues
+    ``degree`` solves against a single factor —
+    ``sparsax.factorization_count()`` increments by exactly 1.
+    """
+    import jax
+    import jax.numpy as jnp
+    import sparsax
+
+    token = sparsax.factor(Ai, Aj, Ax_c, n)
+    logdet_Pc = sparsax.logdet_factor(token)
+    V0 = sparsax.solve_factor(token, rhs_seed)
+
+    def _G_matvec(V):
+        # COO sparse matvec: out[i, k] = sum_j G[i,j] V[j, k]
+        contrib = G_vals[:, None] * V[Aj]  # (nnz, k_rhs)
+        out = jnp.zeros((n, V.shape[1]), dtype=V.dtype)
+        out = out.at[Ai].add(contrib)
+        return out
+
+    # Build the Krylov recurrence V_0..V_m via lax.scan, stacking into
+    # (m+1, n, k_rhs).  scan avoids dynamic-index reads (V_stack[j] with
+    # a traced j) that break under eqx.filter_jit + vmap.
+    def _scan_step(V_prev, _):
+        V_new = sparsax.solve_factor(token, _G_matvec(V_prev))
+        return V_prev, V_new  # carry stays V_prev... no: we need to advance
+
+    # Use scan with carry = V_prev, collect V_new at each step.
+    def _scan_step_collect(carry, _):
+        V_prev = carry
+        V_new = sparsax.solve_factor(token, _G_matvec(V_prev))
+        return V_new, V_new
+
+    # V_0 is the seed; scan produces V_1..V_m as the collected outputs.
+    _, V_tail = jax.lax.scan(_scan_step_collect, V0, xs=None, length=degree)
+    # V_tail: (degree, n, k_rhs).  Prepend V_0 to get (degree+1, n, k_rhs).
+    V_stack = jnp.concatenate([V0[None], V_tail], axis=0)
+    return token, V_stack, logdet_Pc
+
+
+def eval_precision_solve_from_basis_jax(V_stack, drho):
+    """Evaluate ``P(ρ_c + Δρ)⁻¹ rhs`` via the Horner recurrence (pure JAX)."""
+
+    degree = V_stack.shape[0] - 1
+    result = V_stack[degree]
+    for j in range(degree - 1, -1, -1):
+        result = V_stack[j] + drho * result
+    return result
+
+
+def eval_precision_logdet_from_basis_jax(
+    token,
+    G_vals,
+    Ai,
+    Aj,
+    n,
+    drho,
+    *,
+    n_tr_probes: int = 5,
+    rng_key=None,
+):
+    """Estimate ``log|P(ρ_c + Δρ)|`` via first-order trace correction.
+
+    ``log|P(ρ)| ≈ log|P_c| − Δρ tr(P_c⁻¹ G)``, with ``tr(P_c⁻¹ G)`` estimated
+    by a small Hutchinson probe using :func:`sparsax.solve_factor` against the
+    held factor — no fresh Lanczos run.
+
+    Parameters
+    ----------
+    token : sparsax Factor
+        Held factor from :func:`build_precision_krylov_basis_jax`.
+    G_vals : float64, shape (nnz,)
+        COO values of ``G = G1 − 2ρ_c G2``.
+    Ai, Aj : int32, shape (nnz,)
+        COO pattern.
+    n : int
+        Matrix dimension.
+    drho : float64 scalar
+        Offset ``Δρ = ρ − ρ_c``.
+    n_tr_probes : int, default 5
+        Hutchinson probe count.
+    rng_key : jax PRNG key, optional
+        Key for the probes.  If ``None`` a default key is created.
+    """
+    import jax
+    import jax.numpy as jnp
+    import sparsax
+
+    logdet_Pc = sparsax.logdet_factor(token)
+
+    # Near-zero drho: zeroth order.
+    # (Use jnp.where at the end so the trace path is still traced.)
+    key = rng_key if rng_key is not None else jax.random.PRNGKey(0)
+    keys = jax.random.split(key, n_tr_probes)
+
+    def _G_matvec(v):
+        contrib = G_vals * v[Aj]
+        out = jnp.zeros(n, dtype=v.dtype)
+        return out.at[Ai].add(contrib)
+
+    # Use a fori_loop instead of vmap to avoid nested-vmap over chains
+    # (sparsax's ffi_call doesn't support vmap_method=None under nested vmap).
+    def _probe_sum(i, acc):
+        z = jax.random.normal(keys[i], (n,), dtype=jnp.float64)
+        Gz = _G_matvec(z)
+        wz = sparsax.solve_factor(token, Gz)
+        return acc + jnp.dot(z, wz)
+
+    trace_est = jax.lax.fori_loop(0, n_tr_probes, _probe_sum, jnp.float64(0.0))
+    trace_est = trace_est / n_tr_probes
+    return logdet_Pc - drho * trace_est

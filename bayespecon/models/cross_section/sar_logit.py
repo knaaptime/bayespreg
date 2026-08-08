@@ -157,23 +157,15 @@ class SARLogit(SpatialModel):
         n, k = X.shape
 
         # --- Profile-log-likelihood initialisation ---
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                _beta_g = np.linalg.lstsq(_Xtilde_g, y, rcond=None)[0]
-                _eta_g = _Xtilde_g @ _beta_g
-                _sig2_g = float(np.mean((y - _eta_g) ** 2))
-                if _sig2_g > 1e-10:
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll:
-                        _best_ll = _ll_g
-                        _best_rho = _rho_g
-                        _best_beta = _beta_g.copy()
-            except Exception:
-                pass
+        # Cached sparse solver: A = I - ρW shares its sparsity pattern across
+        # the grid, so the symbolic analysis is computed once (sparsax) or
+        # the pattern is pre-assembled (scipy fallback).
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(y, X, W_csc)
 
         # Jitter around the profile-loglik estimates (smaller for ρ — the
         # posterior is extremely peaked in ρ at high spatial autocorrelation).
@@ -189,8 +181,8 @@ class SARLogit(SpatialModel):
 
         # ω₀: draw from PG(1, η) at the profile η.
         try:
-            _A_init = sp.eye(n, format="csc") - rho_init * W_csc
-            eta_init = sp.linalg.spsolve(_A_init, X @ beta_init)
+            _init_solver = CachedSparseSolver([W_csc], n)
+            eta_init = _init_solver.solve([-rho_init], X @ beta_init)
         except Exception:
             eta_init = X @ beta_init
         from ...samplers._utils._polyagamma import sample_polyagamma
@@ -596,7 +588,7 @@ class SARLogit(SpatialModel):
             rho_f = float(rho)
             A = (I_n - rho_f * W).tocsc()
 
-            # KLU/UMFPACK reusable factor when available, else scipy SuperLU.
+            # KLU reusable factor when available, else scipy SuperLU.
             solver = _make_cached_sparse_solver(A)
             if solver is None:
                 solver = sp.linalg.splu(A)

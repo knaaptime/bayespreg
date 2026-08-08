@@ -246,3 +246,280 @@ def resolve_pg_jax_backend(backend, *, W_sparse, W_sym, WtW, n, logdet_bounds):
         jax_parts["sparsax_pattern"] = precompute_sparsax_pattern(W_sparse.tocsc(), n)
 
     return method, jax_parts
+
+
+# ---------------------------------------------------------------------------
+# NumPy-side cached-pattern sparse solve (host loops, no JIT)
+# ---------------------------------------------------------------------------
+
+
+class CachedSparseSolver:
+    r"""Sparse direct solver that reuses one symbolic analysis across calls.
+
+    Many posterior-loop hot paths solve
+
+    .. math::
+
+        A(\theta)\, x = b, \qquad A(\theta) = I - \sum_k \theta_k\, W_k,
+
+    repeatedly for many values of ``θ`` (posterior draws, ρ-grid search,
+    posterior-predictive replications) with a **fixed** sparsity pattern —
+    only the numeric values rescale.  sparsax's ``lu_solve`` caches the
+    fill-reducing symbolic analysis keyed on the ``(Ai, Aj)`` COO indices,
+    so calls sharing a pattern pay the symbolic cost once and each later
+    call is just a numeric refactor + triangular solves.
+
+    This helper precomputes the merged COO pattern
+    ``(Ai, Aj, const_vals, w_vals_list)`` once and assembles
+    ``Ax = const_vals + Σ_k θ_k · w_vals_list[k]`` per call, dispatching to
+    sparsax when available and falling back to a per-call scipy ``splu``
+    when it is not.  It is the host-side analogue of
+    :func:`precompute_sparsax_pattern` / :func:`make_sparsax_ops` for the
+    JAX Gibbs path.
+
+    Parameters
+    ----------
+    weight_matrices : list of scipy.sparse matrices
+        The :math:`W_k` (any sparse format).  All must share the same
+        shape.  The identity :math:`I` is added internally as a constant
+        coefficient (its pattern is merged with that of the :math:`W_k`).
+    n : int
+        Matrix dimension (``weight_matrices[0].shape[0]``).
+
+    Attributes
+    ----------
+    Ai, Aj : np.ndarray of int32
+        Merged COO row/column indices.
+    const_vals : np.ndarray of float64
+        Values of the identity at the pattern positions.
+    w_vals_list : list of np.ndarray of float64
+        Values of each :math:`W_k` at the pattern positions.
+
+    Notes
+    -----
+    sparsax availability is resolved once at construction time via
+    :func:`bayespecon._jax_dispatch._sparsax_available`; no JAX import is
+    required on the fallback path.  The merged pattern is built so every
+    nonzero of any :math:`W_k` plus the diagonal is present.
+
+    Examples
+    --------
+    Single-ρ SAR system, many posterior draws::
+
+        solver = CachedSparseSolver([W_sparse], n)
+        for rho in rho_draws:
+            x = solver.solve([rho], rhs)   # one cached symbolic analysis
+
+    Three-ρ flow system::
+
+        solver = CachedSparseSolver([Wd, Wo, Ww], N)
+        for rd, ro, rw in zip(rd_draws, ro_draws, rw_draws):
+            x = solver.solve([rd, ro, rw], rhs)
+    """
+
+    def __init__(self, weight_matrices, n):
+        self.n = int(n)
+        mats = [sp.csc_matrix(m) for m in weight_matrices]
+        shapes = {m.shape[0] for m in mats}
+        if len(shapes) != 1 or shapes.pop() != self.n:
+            raise ValueError(
+                "All weight matrices must be square with shape (n, n) matching n."
+            )
+        # Merge the I and every W_k patterns into one COO layout so a single
+        # (Ai, Aj) tuple drives every solve; duplicate (i, j) entries are
+        # summed, matching how Ax = const + Σ θ_k W_k is evaluated.
+        I_coo = sp.eye(self.n, format="coo")
+        rows = [I_coo.row]
+        cols = [I_coo.col]
+        data = [np.ones(I_coo.nnz, dtype=np.float64)]
+        for Wk in mats:
+            Wk_coo = Wk.tocoo()
+            rows.append(Wk_coo.row)
+            cols.append(Wk_coo.col)
+            data.append(Wk_coo.data.astype(np.float64, copy=False))
+        rows = np.concatenate(rows)
+        cols = np.concatenate(cols)
+        data = np.concatenate(data)
+        merged = sp.coo_matrix((data, (rows, cols)), shape=(self.n, self.n))
+        merged.eliminate_zeros()
+        merged.sum_duplicates()
+        # Split merged values back into const (I) and per-W contributions.
+        self.Ai = merged.row.astype(np.int32)
+        self.Aj = merged.col.astype(np.int32)
+        # const_vals: identity at each pattern position
+        I_at = sp.coo_matrix(
+            (np.ones(I_coo.nnz, dtype=np.float64), (I_coo.row, I_coo.col)),
+            shape=(self.n, self.n),
+        ).tocsr()
+        self.const_vals = np.asarray(
+            I_at[self.Ai, self.Aj].A1
+            if hasattr(I_at, "A1")
+            else np.asarray(I_at.todense()[self.Ai, self.Aj]).ravel(),
+            dtype=np.float64,
+        )
+        # Robust alignment: build per-W value vectors at the pattern positions
+        self.w_vals_list = []
+        for Wk in mats:
+            Wk_csr = Wk.tocsr()
+            vals = np.asarray(
+                Wk_csr[self.Ai, self.Aj].A1
+                if hasattr(Wk_csr, "A1")
+                else np.asarray(Wk_csr.todense()[self.Ai, self.Aj]).ravel(),
+                dtype=np.float64,
+            )
+            self.w_vals_list.append(vals)
+
+        from bayespecon._jax_dispatch import _sparsax_available
+
+        self._use_sparsax = _sparsax_available()
+        self._Ai_jax = None
+        self._Aj_jax = None
+        self._const_jax = None
+        self._w_jax_list = None
+        if self._use_sparsax:
+            import jax.numpy as jnp
+
+            from bayespecon._jax_dispatch import ensure_x64
+
+            ensure_x64()
+            self._Ai_jax = jnp.asarray(self.Ai, dtype=jnp.int32)
+            self._Aj_jax = jnp.asarray(self.Aj, dtype=jnp.int32)
+            self._const_jax = jnp.asarray(self.const_vals, dtype=jnp.float64)
+            self._w_jax_list = [
+                jnp.asarray(v, dtype=jnp.float64) for v in self.w_vals_list
+            ]
+
+    def _assemble_Ax(self, coeffs):
+        ax = self._const_jax.copy()
+        for c, wv in zip(coeffs, self._w_jax_list):
+            ax = ax + float(c) * wv
+        return ax
+
+    def solve(self, coeffs, rhs):
+        """Solve :math:`A(\\theta) x = b` for vector RHS.
+
+        Parameters
+        ----------
+        coeffs : sequence of float
+            Coefficients :math:`\\theta_k` for each weight matrix, in the
+            order passed to the constructor.  ``A = I + Σ θ_k W_k``; for the
+            usual ``I - ρ W`` form pass ``[-ρ]`` (or equivalently ``solve``
+            assembles ``const + Σ θ_k W_k``, so ``[-ρ]`` gives ``I - ρ W``).
+        rhs : ndarray, shape (n,) or (n, k)
+            Right-hand side(s).
+
+        Returns
+        -------
+        x : ndarray, shape matching ``rhs``
+        """
+        rhs_np = np.asarray(rhs, dtype=np.float64)
+        single = rhs_np.ndim == 1
+        if single:
+            rhs_np = rhs_np[:, None]
+        n_rhs = rhs_np.shape[1]
+        out = np.empty_like(rhs_np)
+        if self._use_sparsax:
+            import jax.numpy as jnp
+            import sparsax
+
+            Ax = self._assemble_Ax(coeffs)
+            for c in range(n_rhs):
+                out[:, c] = np.asarray(
+                    sparsax.lu_solve(
+                        self._Ai_jax, self._Aj_jax, Ax, jnp.asarray(rhs_np[:, c])
+                    ),
+                    dtype=np.float64,
+                )
+        else:
+            # Fallback: assemble scipy sparse A and factorise per call.
+            A_csc = sp.csc_matrix(
+                (self._numpy_Ax(coeffs), (self.Ai, self.Aj)),
+                shape=(self.n, self.n),
+            )
+            lu = sp.linalg.splu(A_csc)
+            for c in range(n_rhs):
+                out[:, c] = np.asarray(lu.solve(rhs_np[:, c]), dtype=np.float64)
+        return out[:, 0] if single else out
+
+    def _numpy_Ax(self, coeffs):
+        ax = self.const_vals.copy()
+        for c, wv in zip(coeffs, self.w_vals_list):
+            ax = ax + float(c) * wv
+        return ax
+
+
+def profile_loglik_rho_grid(
+    y,
+    X,
+    W_sparse,
+    *,
+    rho_min: float = 0.05,
+    rho_max: float = 0.95,
+    rho_step: float = 0.05,
+):
+    r"""Profile-log-likelihood ρ-grid search with cached sparse solves.
+
+    For each candidate ρ on ``[rho_min, rho_max]`` step ``rho_step``, solves
+    :math:`\tilde X = (I - \rho W)^{-1} X` and computes the Gaussian
+    profile log-likelihood
+
+    .. math::
+
+        \ell_p(\rho) = -\tfrac{n}{2}\log\hat\sigma^2(\rho) - \tfrac{n}{2},
+        \quad \hat\beta(\rho) = (\tilde X^\top \tilde X)^{-1} \tilde X^\top y,
+        \quad \hat\sigma^2(\rho) = \tfrac{1}{n}\|y - \tilde X \hat\beta\|^2.
+
+    The sparsity pattern of :math:`I - \rho W` is independent of ρ, so a
+    single :class:`CachedSparseSolver` is built once and reused across the
+    whole grid (sparsax caches the fill-reducing symbolic analysis; scipy
+    fallback still benefits from the precomputed pattern assembly).
+
+    Parameters
+    ----------
+    y, X : ndarray, shapes (n,) and (n, k)
+        Response and design matrix.
+    W_sparse : scipy.sparse matrix, shape (n, n)
+        Row-standardised spatial weights.
+    rho_min, rho_max, rho_step : float
+        Grid definition.
+
+    Returns
+    -------
+    best_rho : float
+        Grid argmax of the profile log-likelihood.
+    best_beta : ndarray, shape (k,)
+        Least-squares β at ``best_rho``.
+    best_ll : float
+        Profile log-likelihood at ``best_rho``.  ``-np.inf`` when every solve
+        failed (e.g. ρ outside the valid range for ``W``).
+    """
+    y = np.asarray(y, dtype=np.float64)
+    X = np.asarray(X, dtype=np.float64)
+    n, k = X.shape
+    solver = CachedSparseSolver([W_sparse], n)
+    grid = np.arange(rho_min, rho_max, rho_step)
+    best_rho, best_beta, best_ll = 0.0, np.zeros(k), -np.inf
+    for rho_g in grid:
+        try:
+            Xtilde = solver.solve([-float(rho_g)], X)
+            beta_g = np.linalg.lstsq(Xtilde, y, rcond=None)[0]
+            eta_g = Xtilde @ beta_g
+            sig2_g = float(np.mean((y - eta_g) ** 2))
+            if sig2_g > 1e-10:
+                ll_g = -0.5 * n * np.log(sig2_g) - 0.5 * n
+                if ll_g > best_ll:
+                    best_ll, best_rho, best_beta = ll_g, float(rho_g), beta_g.copy()
+        except Exception:
+            pass
+    return best_rho, best_beta, best_ll
+
+
+def cached_sar_solve(W_sparse, n, rho, rhs):
+    """Solve :math:`(I - \\rho W) x = b` with one cached symbolic analysis.
+
+    Thin convenience wrapper over :class:`CachedSparseSolver` for the common
+    one-off case: build the solver, solve once, return the result.  Callers
+    doing many solves should construct a :class:`CachedSparseSolver` once
+    and call ``solve([-ρ], rhs)`` per draw to amortise the pattern build.
+    """
+    return CachedSparseSolver([W_sparse], n).solve([-float(rho)], rhs)

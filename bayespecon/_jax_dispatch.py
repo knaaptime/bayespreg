@@ -77,23 +77,10 @@ def _sparsax_available() -> bool:
 
 
 @lru_cache(maxsize=1)
-def _umfpack_available() -> bool:
-    """Return ``True`` when ``sksparse.umfpack`` (scikit-sparse) is importable."""
-    # ``find_spec`` raises ``ModuleNotFoundError`` in Python 3.14+ when the
-    # parent package (here ``sksparse``) is not installed at all, so guard.
-    try:
-        return importlib.util.find_spec("sksparse.umfpack") is not None
-    except (ImportError, ValueError):
-        return False
-
-
-@lru_cache(maxsize=1)
 def _warn_jax_auto_fallback_once(missing: str, target: str) -> None:
     """Emit a one-time advisory warning for JAX sparse backend auto-fallbacks."""
     install_hint = ""
-    if missing == "sksparse.umfpack":
-        install_hint = " Install 'scikit-sparse' to enable the UMFPACK callback path."
-    elif missing == "sparsax":
+    if missing == "sparsax":
         install_hint = " Install 'sparsax' to enable the JAX-native SuiteSparse (CHOLMOD/KLU) path."
     warnings.warn(
         "BAYESPECON_JAX_SPARSE_BACKEND=auto selected fallback backend "
@@ -129,14 +116,9 @@ def _select_jax_sparse_backend() -> str:
             return "sparsax"
         # JAX path fallback chain:
         #   1) sparsax (JAX-native SuiteSparse: CHOLMOD/KLU)
-        #   2) callback + umfpack
-        #   3) callback + scipy
+        #   2) callback + scipy SuperLU
         # The callback solver selection is handled in ops._select_sparse_backend.
-        if _umfpack_available():
-            _warn_jax_auto_fallback_once("sparsax", "callback+umfpack")
-        else:
-            _warn_jax_auto_fallback_once("sparsax", "callback+scipy")
-            _warn_jax_auto_fallback_once("sksparse.umfpack", "callback+scipy")
+        _warn_jax_auto_fallback_once("sparsax", "callback+scipy")
         return "callback"
 
     if requested in {"callback", "scipy", "pure_callback"}:

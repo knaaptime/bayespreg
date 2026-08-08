@@ -39,6 +39,12 @@ import numpy as np
 from bayespecon._jax_dispatch import ensure_x64
 
 from .._utils._jax_polyagamma import jax_polyagamma
+from .._utils._spatial_normal import (
+    _sparsax_factor_ops_available,
+    build_precision_krylov_basis_jax,
+    eval_precision_logdet_from_basis_jax,
+    eval_precision_solve_from_basis_jax,
+)
 from ._core import JAXLogitGibbsState
 
 # On-device Pólya-Gamma for the ω ~ PG(1, η) block.  Prefer pgjax's exact Devroye
@@ -95,6 +101,8 @@ def _make_gibbs_step_with_data(
     n_probes,
     lanczos_deg,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ):
     """Build a JIT-compiled Gibbs step with data bound into the closure.
 
@@ -283,6 +291,36 @@ def _make_gibbs_step_with_data(
         # MALA requires (autodiff through Cholesky + solve is ~3× the
         # forward cost).  Each slice candidate needs only a forward
         # evaluation — no backward pass.
+        #
+        # ── Krylov basis (sparsax factor-reuse path) ──
+        # When krylov_degree > 0 and the sparsax factor-reuse primitives
+        # are available, factor P(ρ_c) ONCE at the slice centre ρ_c = ρ,
+        # build the shift-invert Krylov basis via a fori_loop of
+        # solve_factor calls (zero refactors), and evaluate every candidate
+        # within krylov_dmax via a Horner recurrence in pure JAX.  Candidates
+        # outside the radius fall back to a direct factor_solve.  This is
+        # the JAX-native analog of the NumPy KrylovPrecisionBasis.
+        _use_krylov = (
+            use_sparsax and krylov_degree > 0 and _sparsax_factor_ops_available()
+        )
+        if _use_krylov:
+            # G = ∂P/∂ρ|_{ρ_c} = G1 − 2ρ_c G2  (COO values at the pattern)
+            _G_vals_c = _W_sym_vals - 2.0 * rho * _WtW_vals
+            # Seed with the ρ-independent RHS columns [κ, X, WtX]
+            # so P(ρ)⁻¹u(ρ) = P(ρ)⁻¹X − ρ·P(ρ)⁻¹WtX is a linear combo of
+            # two Horner evaluations against the same basis.
+            _rhs_seed = jnp.column_stack([kappa, X_jax, WtX])  # (n, 1 + 2k)
+            _Ax_c = _assemble_Ax(omega_new, rho)
+            _kry_key = jax.random.fold_in(key_rho, 7)
+            _token, _V_stack, _logdet_Pc = build_precision_krylov_basis_jax(
+                _Ai,
+                _Aj,
+                _Ax_c,
+                _G_vals_c,
+                _rhs_seed,
+                n=_n_static,
+                degree=krylov_degree,
+            )
 
         def log_density_rho(rho_val):
             """Doubly-collapsed log-density of ρ (η and β integrated out).
@@ -298,9 +336,40 @@ def _make_gibbs_step_with_data(
             rhs_stack = jnp.column_stack([kappa, u])  # (n, k+1)
 
             if use_sparsax:
-                Ax_r = _assemble_Ax(omega_new, rho_val)
-                # Multi-RHS solve + logdet from one factorization (factor_solve).
-                sol, log_det_P = _solve_logdet(Ax_r, rhs_stack)  # sol: (n, k+1)
+                if _use_krylov:
+                    # Krylov-accelerated path: Horner eval against the basis
+                    # built at ρ_c, plus first-order logdet trace correction.
+                    drho = rho_val - rho
+                    within = jnp.abs(drho) <= krylov_dmax
+                    # Horner in pure JAX (no sparsax calls):
+                    sol_all = eval_precision_solve_from_basis_jax(_V_stack, drho)
+                    # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹X, P(ρ)⁻¹WtX]
+                    z_kry = sol_all[:, 0]
+                    PX = sol_all[:, 1 : 1 + k]
+                    PWtX = sol_all[:, 1 + k :]
+                    # u(ρ) = X − ρ·WtX  →  P(ρ)⁻¹u = PX − ρ·PWtX
+                    M_kry = PX - rho_val * PWtX
+                    log_det_P_kry = eval_precision_logdet_from_basis_jax(
+                        _token,
+                        _G_vals_c,
+                        _Ai,
+                        _Aj,
+                        _n_static,
+                        drho,
+                        rng_key=_kry_key,
+                    )
+                    # Fallback outside radius: direct factor_solve
+                    Ax_r = _assemble_Ax(omega_new, rho_val)
+                    sol_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_stack)
+                    z_vec = jnp.where(within, z_kry, sol_dir[:, 0])
+                    M_mat = jnp.where(within, M_kry, sol_dir[:, 1:])
+                    log_det_P = jnp.where(within, log_det_P_kry, log_det_P_dir)
+                else:
+                    Ax_r = _assemble_Ax(omega_new, rho_val)
+                    # Multi-RHS solve + logdet from one factorization (factor_solve).
+                    sol, log_det_P = _solve_logdet(Ax_r, rhs_stack)  # sol: (n, k+1)
+                    z_vec = sol[:, 0]
+                    M_mat = sol[:, 1:]
             else:
                 # P_η = I + diag(ω) - ρ(W+W^T) + ρ²W^TW  (σ² = 1)
                 P_diag_r = jnp.ones(n) + omega_new
@@ -310,9 +379,8 @@ def _make_gibbs_step_with_data(
                 L_r = jnp.linalg.cholesky(P_r)
                 sol = cho_solve((L_r, True), rhs_stack)  # (n, k+1)
                 log_det_P = 2.0 * jnp.sum(jnp.log(jnp.diag(L_r)))
-
-            z_vec = sol[:, 0]  # P_η⁻¹ κ  — (n,)
-            M_mat = sol[:, 1:]  # P_η⁻¹ u  — (n, k)
+                z_vec = sol[:, 0]
+                M_mat = sol[:, 1:]
 
             # Σ_β*⁻¹ = X^TX + V₀⁻¹ - u^T M  — (k, k)
             Sig_beta_inv = XtX_jax + beta_prior_prec - u.T @ M_mat
@@ -399,6 +467,8 @@ def run_chain_jax(
     pg_n_terms: int = 25,
     n_probes: int = 5,
     lanczos_deg: int = 15,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
     progress_manager=None,
     chain_id: int = 0,
 ):
@@ -509,6 +579,8 @@ def run_chain_jax(
         priors=priors,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     # Warmup the JIT function (first call triggers compilation)
@@ -572,6 +644,8 @@ def _make_gibbs_step_with_data_sem(
     n_probes,
     lanczos_deg,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ):
     """Build a JIT-compiled SEM-logit Gibbs step with data bound into the closure.
 
@@ -714,6 +788,36 @@ def _make_gibbs_step_with_data_sem(
         WsymXbeta_r = Wsym_matvec(Xbeta_r)
         WtWXbeta_r = WtW_matvec(Xbeta_r)
 
+        # ── Krylov basis (sparsax factor-reuse path, SEM) ──
+        # The SEM RHS is quadratic in λ: rhs = Xβ − λ·W_sym·Xβ + λ²·WtW·Xβ + κ.
+        # Seed with [κ, Xβ, W_sym·Xβ, WtW·Xβ] and reconstruct the solve as a
+        # quadratic combination of Horner evaluations.
+        _use_krylov_sem = (
+            use_sparsax and krylov_degree > 0 and _sparsax_factor_ops_available()
+        )
+        if _use_krylov_sem:
+            _lam_c = lam
+            _G_vals_c_sem = _W_sym_vals - 2.0 * _lam_c * _WtW_vals
+            _rhs_seed_sem = jnp.column_stack(
+                [
+                    kappa,
+                    Xbeta_r,
+                    WsymXbeta_r,
+                    WtWXbeta_r,
+                ]
+            )  # (n, 4)
+            _Ax_c_sem = _assemble_Ax(omega_new, _lam_c)
+            _kry_key_sem = jax.random.fold_in(key_lam, 7)
+            _token_sem, _V_stack_sem, _logdet_Pc_sem = build_precision_krylov_basis_jax(
+                _Ai,
+                _Aj,
+                _Ax_c_sem,
+                _G_vals_c_sem,
+                _rhs_seed_sem,
+                n=_n_static,
+                degree=krylov_degree,
+            )
+
         def log_density_lam(lam_val):
             """Collapsed log-density of λ (η integrated out, β conditioned).
 
@@ -723,10 +827,41 @@ def _make_gibbs_step_with_data_sem(
             rhs_r = Xbeta_r - lam_val * WsymXbeta_r + lam_val**2 * WtWXbeta_r + kappa
 
             if use_sparsax:
-                Ax_r = _assemble_Ax(omega_new, lam_val)
-                # Solve + logdet from one factorization (factor_solve).
-                m, log_det_P = _solve_logdet(Ax_r, rhs_r)
-                quad_r = rhs_r @ m
+                if _use_krylov_sem:
+                    dlam = lam_val - _lam_c
+                    within = jnp.abs(dlam) <= krylov_dmax
+                    sol_all = eval_precision_solve_from_basis_jax(_V_stack_sem, dlam)
+                    # sol_all: [P(λ)⁻¹κ, P(λ)⁻¹Xβ, P(λ)⁻¹W_symXβ, P(λ)⁻¹WtWXβ]
+                    Pkappa = sol_all[:, 0]
+                    PXbeta = sol_all[:, 1:2]
+                    PWsymXbeta = sol_all[:, 2:3]
+                    PWtWXbeta = sol_all[:, 3:]
+                    # rhs = Xβ − λ·W_symXβ + λ²·WtWXβ + κ
+                    m_kry = (
+                        PXbeta - lam_val * PWsymXbeta + lam_val**2 * PWtWXbeta
+                    ).ravel() + Pkappa
+                    log_det_P_kry = eval_precision_logdet_from_basis_jax(
+                        _token_sem,
+                        _G_vals_c_sem,
+                        _Ai,
+                        _Aj,
+                        _n_static,
+                        dlam,
+                        rng_key=_kry_key_sem,
+                    )
+                    quad_kry = rhs_r @ m_kry
+                    # Fallback outside radius
+                    Ax_r = _assemble_Ax(omega_new, lam_val)
+                    m_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_r)
+                    quad_dir = rhs_r @ m_dir
+                    m = jnp.where(within, m_kry, m_dir)
+                    log_det_P = jnp.where(within, log_det_P_kry, log_det_P_dir)
+                    quad_r = jnp.where(within, quad_kry, quad_dir)
+                else:
+                    Ax_r = _assemble_Ax(omega_new, lam_val)
+                    # Solve + logdet from one factorization (factor_solve).
+                    m, log_det_P = _solve_logdet(Ax_r, rhs_r)
+                    quad_r = rhs_r @ m
             else:
                 P_diag_r = jnp.ones(n) + omega_new
                 P_r = jnp.diag(P_diag_r) - lam_val * W_sym + lam_val**2 * WtW
@@ -790,6 +925,8 @@ def run_chain_jax_sem(
     pg_n_terms: int = 25,
     n_probes: int = 5,
     lanczos_deg: int = 15,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
     progress_manager=None,
     chain_id: int = 0,
 ):
@@ -891,6 +1028,8 @@ def run_chain_jax_sem(
         priors=priors,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     # Warmup the JIT function
@@ -1079,6 +1218,8 @@ def run_chains_jax_vectorized(
     lanczos_deg: int = 15,
     progressbar: bool = True,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ) -> list[dict]:
     """Run multiple SAR-logit Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1144,6 +1285,8 @@ def run_chains_jax_vectorized(
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
         sparsax_pattern=sparsax_pattern,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     init_states = _stack_chain_inits(inits, JAXLogitGibbsState, "rho")
@@ -1278,6 +1421,8 @@ def run_chains_jax_sem_vectorized(
     lanczos_deg: int = 15,
     progressbar: bool = True,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ) -> list[dict]:
     """Run multiple SEM-logit Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1313,6 +1458,8 @@ def run_chains_jax_sem_vectorized(
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
         sparsax_pattern=sparsax_pattern,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     init_states = _stack_chain_inits(inits, JAXSEMLogitGibbsState, "lam")
