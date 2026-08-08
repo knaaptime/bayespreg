@@ -486,12 +486,12 @@ class KrylovPrecisionBasis(NamedTuple):
     Factorising ``P_c`` **once** and building the Krylov basis
     ``V_j = (P_c^{-1} G)^j P_c^{-1} \\mathrm{rhs}`` lets every slice
     candidate evaluate ``P(\\rho)^{-1} \\mathrm{rhs}`` via a cheap Horner
-    sum — no per-candidate factorisation and no per-candidate Lanczos.
+    sum.
 
     The same factorisation gives ``log|P(ρ)|``: the first-order
     correction ``log|P(ρ)| ≈ log|P_c| − Δρ tr(P_c⁻¹ G)`` is estimated
     with a small Hutchinson probe reusing the factored solver held on
-    the basis — no second Lanczos run.
+    the basis.
 
     Attributes
     ----------

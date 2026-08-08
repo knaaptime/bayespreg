@@ -204,8 +204,7 @@ class GibbsCache(NamedTuple):
     # --- Krylov basis reuse for the ρ slice -------------------------------
     # When krylov_degree > 0 and n >= krylov_min_n, the slice step factors
     # P(ρ_c) once and reuses the basis for all candidates within
-    # krylov_dmax — eliminating the per-candidate Lanczos/CHOLMOD
-    # factorisation.  Only beneficial on high-fill-in graphs (queen, knn);
+    # krylov_dmax.  Only beneficial on high-fill-in graphs (queen, knn);
     # the threshold guards against slowdowns on low-fill-in lattices.
     krylov_degree: int = 0
     krylov_dmax: float = 0.4
@@ -772,7 +771,7 @@ def _sample_rho(
         # --- Krylov-accelerated solve + logdet ------------------------------
         # When the basis is available and ρ is within the Krylov radius,
         # P⁻¹rhs and log|P(ρ)| come from Horner evaluations against the
-        # single factored P_c — no per-candidate factorisation.
+        # single factored P_c.
         if (
             _krylov_basis is not None
             and abs(rho - _krylov_basis.rho_basis) <= cache.krylov_dmax

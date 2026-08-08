@@ -623,12 +623,9 @@ def _make_reduced_gibbs_step(
         # ── Block 1: ρ — slice sampling with Krylov basis ──
 
         # Krylov-only slice: solve_at=None means candidates outside the Krylov
-        # radius are rejected (−inf) rather than evaluated with a per-candidate
-        # direct solve.  Under jax.vmap the fallback solve is computed for *every*
-        # candidate (jnp.where evaluates both branches), which was ~62% of the
-        # sweep; the bounded ρ step it induces is offset by a wider krylov_dmax
-        # (with enough degree to stay accurate).  The NumPy path keeps its cheap
-        # conditional fallback.
+        # radius are rejected (−inf) rather than evaluated with a direct solve.
+        # The bounded ρ step is offset by a wider krylov_dmax (with enough
+        # degree to stay accurate).  The NumPy path keeps its conditional fallback.
         rho_new = _slice_sample_rho_jax(
             rho_current=rho,
             V_stack=V_stack,

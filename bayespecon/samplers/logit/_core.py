@@ -127,9 +127,7 @@ class LogitGibbsCache(NamedTuple):
     lanczos_deg: int = 30
     # --- Krylov basis reuse for the ρ slice -------------------------------
     # When krylov_degree > 0, the slice step factors P(ρ_c) once and
-    # reuses the basis for all candidates within krylov_dmax, matching
-    # the negbin_reduced sampler.  This eliminates the per-candidate
-    # Lanczos/CHOLMOD factorisation that dominated the slice cost.
+    # reuses the basis for all candidates within krylov_dmax.
     # Only beneficial on high-fill-in graphs (queen contiguity, knn);
     # on ring/lattices with minimal fill-in CHOLMOD is already cheap.
     # The threshold guards against a slowdown on those graphs.
@@ -473,15 +471,13 @@ def _sample_rho(
 
     # --- Krylov basis for the precision P(ρ) (scipy sparse path only) -------
     # Build once at the slice centre ρ_c = state.rho, then evaluate every
-    # candidate within krylov_dmax via a Horner sum — eliminating the
-    # per-candidate CHOLMOD factorisation / Lanczos run that previously
-    # dominated the slice cost.  Mirrors the negbin_reduced sampler.
+    # candidate within krylov_dmax via a Horner sum.
     #
     # The RHS for the slice is [κ, u(ρ)] where u(ρ) = X − ρ·WtX is itself
     # ρ-dependent.  We seed the basis with the ρ-independent columns
     # [κ, X, WtX] so that P(ρ)⁻¹u(ρ) = P(ρ)⁻¹X − ρ·P(ρ)⁻¹WtX is recovered
     # as a linear combination of two Horner evaluations against the same
-    # single factorisation — no second basis, no per-candidate factor.
+    # single factorisation.
     _krylov_basis: KrylovPrecisionBasis | None = None
     if (
         not use_jax
@@ -526,7 +522,7 @@ def _sample_rho(
         # --- Krylov-accelerated solve + logdet ------------------------------
         # When the basis is available and ρ is within the Krylov radius,
         # P⁻¹[κ | u(ρ)] and log|P(ρ)| come from Horner evaluations against
-        # the single factored P_c — no per-candidate factorisation.
+        # the single factored P_c.
         if (
             _krylov_basis is not None
             and abs(rho - _krylov_basis.rho_basis) <= cache.krylov_dmax
@@ -873,9 +869,7 @@ class SEMLogitGibbsCache(NamedTuple):
     lanczos_deg: int = 30
     # --- Krylov basis reuse for the λ slice -------------------------------
     # When krylov_degree > 0, the slice step factors P(λ_c) once and
-    # reuses the basis for all candidates within krylov_dmax, matching
-    # the negbin_reduced sampler.  This eliminates the per-candidate
-    # Lanczos/CHOLMOD factorisation that dominated the slice cost.
+    # reuses the basis for all candidates within krylov_dmax.
     # Only beneficial on high-fill-in graphs (queen contiguity, knn);
     # on ring/lattices with minimal fill-in CHOLMOD is already cheap.
     krylov_degree: int = 0

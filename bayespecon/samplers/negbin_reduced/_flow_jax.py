@@ -295,10 +295,9 @@ def _make_flow_gibbs_step(
         """One ρ_k slice with a W_k-direction basis at the current A_0.
 
         Krylov-only (``solve_at=None``): candidates outside the Krylov radius are
-        rejected rather than evaluated with a per-candidate direct solve, which
-        under ``jax.vmap`` would be computed for *every* candidate (the dominant
-        cost).  The bounded ρ_k step this induces is offset by a wider
-        ``krylov_dmax`` with enough degree to stay accurate.
+        rejected rather than evaluated with a direct solve.  The bounded ρ_k
+        step this induces is offset by a wider ``krylov_dmax`` with enough degree
+        to stay accurate.
 
         Basis reuse: when all three ρ's are within ``_reuse_threshold`` of
         the basis centre, the previous sweep's basis is reused.
@@ -477,13 +476,11 @@ def run_chains_jax_flow(
 ):
     """Run the unrestricted flow NB Gibbs sampler on the JAX backend.
 
-    All chains run together under ``jax.vmap`` (like the reduced-form SAR-NB and
-    logit paths).  The non-symmetric LU solve goes through ``sparsax.lu_solve``
-    (SuiteSparse KLU) — vmap-safe with numeric factor-reuse under
-    ``jit(vmap(...))``.  The three ρ
-    slices are Krylov-only (no per-candidate direct solve, which under vmap would
-    run for every candidate).  ``W`` is never densified; the exact PG draw uses
-    the host callback.
+    All chains run together under ``jax.vmap``.  The non-symmetric LU solve goes
+    through ``sparsax.lu_solve`` (SuiteSparse KLU) — vmap-safe with numeric
+    factor-reuse under ``jit(vmap(...))``.  The three ρ slices are Krylov-only
+    (no per-candidate direct solve under vmap).  ``W`` is never densified; the
+    exact PG draw uses the host callback.
 
     Returns one dict per chain with keys ``rho_d``, ``rho_o``, ``rho_w``,
     ``beta``, ``alpha``, ``log_lik``.
