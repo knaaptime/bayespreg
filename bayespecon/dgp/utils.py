@@ -128,8 +128,7 @@ def rook_grid_weights(n_side: int) -> tuple[np.ndarray, Graph]:
         raise ValueError("n must be a positive integer when generating a default grid.")
     if n_side == 1:
         raise ValueError(
-            "n_side=1 is degenerate: a 1×1 grid has no rook neighbors. "
-            "Use n_side >= 2."
+            "n_side=1 is degenerate: a 1×1 grid has no rook neighbors. Use n_side >= 2."
         )
 
     n_side * n_side
