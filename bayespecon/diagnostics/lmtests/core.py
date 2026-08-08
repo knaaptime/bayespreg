@@ -9,6 +9,7 @@ LM test families (cross-sectional, panel, flow):
 - Matrix algebra utilities (_mx_quadratic, _mx_cross)
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
@@ -16,6 +17,16 @@ import numpy as np
 from scipy import stats as sp_stats
 
 from ..._lazy_deps import az
+
+# ---------------------------------------------------------------------------
+# Module constants
+# ---------------------------------------------------------------------------
+
+#: Ridge added to the diagonal before inversion in :func:`_safe_inv` / :func:`_safe_solve`.
+_INV_RIDGE = 1e-12
+
+#: Condition-number threshold above which the regularised inverse falls back to ``pinv``.
+_INV_COND_THRESHOLD = 1e12
 
 # ---------------------------------------------------------------------------
 # BayesianLMTestResult dataclass
@@ -169,18 +180,56 @@ def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
     """
     M = np.asarray(M, dtype=np.float64)
     n = M.shape[0]
-    M_reg = M + 1e-12 * np.eye(n)
+    M_reg = M + _INV_RIDGE * np.eye(n)
     cond = np.linalg.cond(M_reg)
-    if not np.isfinite(cond) or cond > 1e12:
-        import warnings
-
+    if not np.isfinite(cond) or cond > _INV_COND_THRESHOLD:
         warnings.warn(
-            f"{label} is ill-conditioned (cond={cond:.2e}); falling back to pseudo-inverse.",
+            f"{label} is ill-conditioned (cond={cond:.2e}); "
+            f"ridge {_INV_RIDGE:.0e} insufficient, falling back to pseudo-inverse.",
             RuntimeWarning,
             stacklevel=2,
         )
         return np.linalg.pinv(M)
     return np.linalg.inv(M_reg)
+
+
+def _safe_solve(
+    M: np.ndarray, b: np.ndarray, label: str = "information matrix"
+) -> np.ndarray:
+    """Solve ``M x = b`` with ridge regularisation and ``pinv`` fallback.
+
+    Companion to :func:`_safe_inv` for code paths that only need ``M⁻¹ @ b``
+    (avoiding the explicit inverse).  Same ridge magnitude and condition-number
+    threshold so results are consistent with :func:`_safe_inv`.
+
+    Parameters
+    ----------
+    M : np.ndarray
+        Square matrix (typically a Fisher information block or ``XᵀX``).
+    b : np.ndarray
+        Right-hand side (vector or matrix).
+    label : str
+        Human-readable label used in the warning message.
+
+    Returns
+    -------
+    np.ndarray
+        ``solve(M + ε I, b)`` (well-conditioned) or ``pinv(M) @ b``
+        (ill-conditioned).
+    """
+    M = np.asarray(M, dtype=np.float64)
+    n = M.shape[0]
+    M_reg = M + _INV_RIDGE * np.eye(n)
+    cond = np.linalg.cond(M_reg)
+    if not np.isfinite(cond) or cond > _INV_COND_THRESHOLD:
+        warnings.warn(
+            f"{label} is ill-conditioned (cond={cond:.2e}); "
+            f"ridge {_INV_RIDGE:.0e} insufficient, falling back to pseudo-inverse.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return np.linalg.pinv(M) @ b
+    return np.linalg.solve(M_reg, b)
 
 
 def _mx_quadratic(X: np.ndarray, v: np.ndarray) -> float:

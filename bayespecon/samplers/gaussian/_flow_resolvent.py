@@ -34,6 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import scipy.linalg
 
 from ..._logdet._flow_resolvent import (
     FlowKron,
@@ -110,7 +111,7 @@ class FlowResolventTarget:
     rho_bound: float = 0.999
     positive: bool = False
     n_probes: int = 48
-    seed: int = 0
+    seed: int | np.random.SeedSequence = 0
     logdet_method: str = "jax"
     n_quad: int = 8
 
@@ -137,7 +138,8 @@ class FlowResolventTarget:
             ]
         )
         self.XtX = self.X.T @ self.X
-        self.XtX_inv = np.linalg.inv(self.XtX)
+        # Cached Cholesky factor of XtX (used by draw_beta_sigma2).
+        self._XtX_cho = scipy.linalg.cho_factor(self.XtX, lower=True)
         self._last_ld_val = 0.0  # cached per-period log|A| for the Jacobian
         self._cached_rho = None  # cache key for logdet reuse after Gibbs
         self._cached_ld_val = 0.0
@@ -230,16 +232,18 @@ class FlowResolventTarget:
     def draw_beta_sigma2(self, rho, rng, a0=1e-3, b0=1e-3):
         """Draw ``(β, σ²)`` from their conjugate conditionals given ρ."""
         e = self.Ay(rho)
-        bhat = self.XtX_inv @ (self.X.T @ e)
+        bhat = scipy.linalg.cho_solve(self._XtX_cho, self.X.T @ e)
         resid = e - self.X @ bhat
         sse = float(resid @ resid)
         # σ² | ρ  (inverse-gamma with weak prior)
         a_n = a0 + self.Ntot / 2.0
         b_n = b0 + 0.5 * sse
         sigma2 = 1.0 / rng.gamma(a_n, 1.0 / b_n)
-        # β | ρ, σ²  (Normal)
-        chol = np.linalg.cholesky(sigma2 * self.XtX_inv)
-        beta = bhat + chol @ rng.standard_normal(self.X.shape[1])
+        # β | ρ, σ²  (Normal): bhat + sqrt(σ²) · (L')⁻¹ z
+        z = rng.standard_normal(self.X.shape[1])
+        beta = bhat + np.sqrt(sigma2) * scipy.linalg.solve_triangular(
+            self._XtX_cho[0], z, lower=True, trans="T"
+        )
         return beta, sigma2
 
 
@@ -281,7 +285,7 @@ class SEMFlowResolventTarget:
     rho_bound: float = 0.999
     positive: bool = False
     n_probes: int = 48
-    seed: int = 0
+    seed: int | np.random.SeedSequence = 0
     logdet_method: str = "jax"
     n_quad: int = 8
 
@@ -392,13 +396,16 @@ class SEMFlowResolventTarget:
     def draw_beta_sigma2(self, rho, rng, a0=1e-3, b0=1e-3):
         ytil, Xtil = self._whiten(rho)
         XtX = Xtil.T @ Xtil
-        XtX_inv = np.linalg.inv(XtX)
-        bhat = XtX_inv @ (Xtil.T @ ytil)
+        # Cholesky-based solve: faster and more stable than forming inv(XtX).
+        L = np.linalg.cholesky(XtX)  # XtX = L L'
+        bhat = scipy.linalg.cho_solve((L, True), Xtil.T @ ytil)
         resid = ytil - Xtil @ bhat
         sse = float(resid @ resid)
         sigma2 = 1.0 / rng.gamma(a0 + self.Ntot / 2.0, 1.0 / (b0 + 0.5 * sse))
-        beta = bhat + np.linalg.cholesky(sigma2 * XtX_inv) @ rng.standard_normal(
-            self.X.shape[1]
+        # β draw: bhat + sqrt(σ²) · (L')⁻¹ z  (cov = σ² (L L')⁻¹ = σ² (L')⁻¹ L⁻¹)
+        z = rng.standard_normal(self.X.shape[1])
+        beta = bhat + np.sqrt(sigma2) * scipy.linalg.solve_triangular(
+            L, z, lower=True, trans="T"
         )
         return beta, sigma2
 
@@ -441,6 +448,12 @@ def run_flow_resolvent_gibbs(
     window = 0
     for it in range(tune + draws):
         eps = np.exp(log_eps)
+        # Save cached logdet so we can restore it if the MALA proposal is
+        # rejected (logpost_and_grad overwrites _cached_ld_val with the
+        # *proposed* ρ's logdet, which is wrong for the retained ρ).
+        _saved_ld_val = target._cached_ld_val
+        _saved_ld_grad = target._cached_ld_grad
+        _saved_cached_rho = target._cached_rho
         # --- MALA proposal on ρ ---
         prop = rho + eps * grad + np.sqrt(2 * eps) * rng.standard_normal(3)
         logp_p, grad_p = target.logpost_and_grad(prop, beta, sigma2)
@@ -454,6 +467,12 @@ def run_flow_resolvent_gibbs(
             if np.log(rng.uniform()) < log_alpha:
                 rho, logp, grad = prop, logp_p, grad_p
                 accepted_this = True
+            else:
+                # Proposal rejected: restore the cache to the current ρ's logdet
+                # so logpost_cached below uses the correct value.
+                target._cached_ld_val = _saved_ld_val
+                target._cached_ld_grad = _saved_ld_grad
+                target._cached_rho = _saved_cached_rho
         # --- step-size adaptation (during tuning only) ---
         if it < tune:
             accepted_window += accept
@@ -539,8 +558,9 @@ def _sample_flow_chains(
     if coord_names is None:
         coord_names = [f"x{j}" for j in range(k)]
 
-    child_seeds = np.random.SeedSequence(random_seed).spawn(chains)
-    seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+    from .._utils._seeds import spawn_chain_seeds
+
+    seeds = spawn_chain_seeds(random_seed, chains)
 
     def _chain_fn(chain_id, seed, progress_manager=None, chain_id_kw=0):
         target = target_cls(

@@ -615,9 +615,30 @@ class SharedSpatialMethods:
         (e.g. by the eigenvalue logdet method); Chebyshev / trace / sparse-grid
         methods never trigger it.  Cross-section models return ``None`` when no
         ``W`` was supplied (panel models always have a ``W``).
+
+        Raises
+        ------
+        ValueError
+            If ``n`` exceeds ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500).
+            The eigenvalue logdet method densifies ``W`` and runs an O(n³)
+            eigendecomposition, which is prohibitively expensive for large
+            graphs.  Use ``logdet_method="cheb_cholesky"`` (symmetric ``W``)
+            or ``logdet_method="aaa"`` (non-symmetric ``W``) instead.
         """
         if self._W_sparse is None:
             return None
+        from ..._logdet._config import _eigen_hard_max_n
+
+        n = self._W_sparse.shape[0]
+        if n > _eigen_hard_max_n():
+            raise ValueError(
+                f"Eigenvalue logdet/effect computation requires densifying W "
+                f"(n={n} > BAYESPECON_LOGDET_EIGEN_HARD_MAX_N={_eigen_hard_max_n()}). "
+                f"This is O(n³) and O(n²) memory. Use "
+                f'logdet_method="cheb_cholesky" (symmetric W) or '
+                f'logdet_method="aaa" (non-symmetric W) instead, or raise '
+                f"BAYESPECON_LOGDET_EIGEN_HARD_MAX_N."
+            )
         return np.linalg.eigvals(self._W_sparse.toarray().astype(np.float64))
 
     @cached_property
@@ -888,9 +909,27 @@ class SharedSpatialMethods:
         stability.  Row-standardised W is generally non-symmetric, so V
         and Vinv are complex; taking ``.real`` prematurely drops imaginary
         parts and produces wrong results for spatial effects.
+
+        Raises
+        ------
+        ValueError
+            If ``n`` exceeds ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500).
+            See :attr:`_W_eigs` for details and alternatives.
         """
         if self._W_sparse is None:
             return None
+        from ..._logdet._config import _eigen_hard_max_n
+
+        n = self._W_sparse.shape[0]
+        if n > _eigen_hard_max_n():
+            raise ValueError(
+                f"Eigenvalue logdet/effect computation requires densifying W "
+                f"(n={n} > BAYESPECON_LOGDET_EIGEN_HARD_MAX_N={_eigen_hard_max_n()}). "
+                f"This is O(n³) and O(n²) memory. Use "
+                f'logdet_method="cheb_cholesky" (symmetric W) or '
+                f'logdet_method="aaa" (non-symmetric W) instead, or raise '
+                f"BAYESPECON_LOGDET_EIGEN_HARD_MAX_N."
+            )
         W_dense = np.asarray(self._W_sparse.toarray(), dtype=np.float64)
         eigs, V = np.linalg.eig(W_dense)
         Vinv = np.linalg.inv(V)

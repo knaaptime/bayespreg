@@ -56,3 +56,21 @@ def test_sar_logdet_bounds_from_priors():
     assert b.rho_min == -0.5
     assert b.rho_max == 0.8
     assert b.source == "prior"
+
+
+def test_eigenvalue_guard_large_n():
+    """Forcing eigenvalue on a large W raises a clear ValueError."""
+    import pytest
+
+    from bayespecon._logdet._config import _eigen_hard_max_n
+
+    hard_limit = _eigen_hard_max_n()
+    n = hard_limit + 50  # above the hard guard
+    y, X, W = _toy_inputs(n=n)
+    m = SAR(y=y, X=X, W=W, logdet_method="eigenvalue")
+    # Accessing _W_eigs should raise, not silently densify.
+    with pytest.raises(ValueError, match="BAYESPECON_LOGDET_EIGEN_HARD_MAX_N"):
+        _ = m._W_eigs
+    # Same for the full eigendecomposition.
+    with pytest.raises(ValueError, match="BAYESPECON_LOGDET_EIGEN_HARD_MAX_N"):
+        _ = m._W_eigendecomposition

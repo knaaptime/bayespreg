@@ -146,10 +146,11 @@ def run_negbin_flow_gibbs(
 
     # --- Run chains ---
     if gibbs_backend == "jax":
-        if random_seed is not None:
-            seeds = [random_seed + i for i in range(chains)]
-        else:
-            seeds = [int(s) for s in np.random.SeedSequence().generate_state(chains)]
+        from ...samplers._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        # JAX PRNGKey needs an int; use the 128-bit .entropy for full entropy.
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
         # One init per chain (same closure the NumPy path uses).
         inits = [_make_init(np.random.default_rng(s)) for s in seeds]
 
@@ -192,12 +193,15 @@ def run_negbin_flow_gibbs(
                 krylov_reuse=krylov_reuse,
             )
     else:
+        from ...samplers._utils._seeds import spawn_chain_seeds
+
+        np_seeds = (
+            spawn_chain_seeds(random_seed, chains) if random_seed is not None else None
+        )
         chain_results = run_chains(
             chain_fn=_chain_fn,
             n_chains=chains,
-            seeds=[random_seed + i for i in range(chains)]
-            if random_seed is not None
-            else None,
+            seeds=np_seeds,
             n_jobs=n_jobs,
             progressbar=progressbar,
             parallel=n_jobs != 1,

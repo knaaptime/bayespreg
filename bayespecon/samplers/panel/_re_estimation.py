@@ -147,13 +147,10 @@ class REGibbsEstimation:
         )
         t_start = time.time()
 
-        # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        # Derive per-chain seeds (full 128-bit SeedSequence children)
+        from .._utils._seeds import spawn_chain_seeds
+
+        seeds = spawn_chain_seeds(random_seed, chains)
 
         # Define per-chain function
         def _run_one_chain(chain_id, seed, progress_manager=None, chain_id_kw=None):

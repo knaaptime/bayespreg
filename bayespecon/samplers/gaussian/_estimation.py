@@ -193,13 +193,13 @@ class GibbsEstimation:
         _log.info(f"Gibbs sampling ({chains} chains, 3-block: β, σ², {spatial_param})")
         t_start = time.time()
 
-        # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        # Derive per-chain seeds (full 128-bit SeedSequence children)
+        from .._utils._seeds import spawn_chain_seeds
+
+        # extra=1 for the scouting phase (index 0), chains at indices 1..n
+        all_seeds = spawn_chain_seeds(random_seed, chains, extra=1)
+        scouting_seed = all_seeds[0]
+        seeds = all_seeds[1:]  # list[SeedSequence]
 
         parallel = n_jobs != 1
 
@@ -208,7 +208,10 @@ class GibbsEstimation:
                 # A scouting phase consumed the base seed, so the phase that
                 # follows it must not reuse it.  Runs without a refit keep the
                 # original seeding exactly.
-                rng = np.random.default_rng(seed + 1 if init_by_chain[0] else seed)
+                if scouting:
+                    rng = np.random.default_rng(scouting_seed)
+                else:
+                    rng = np.random.default_rng(seed)
                 init = init_by_chain[chain_id]
                 if init is None:
                     init = _initialize_gaussian_gibbs(
@@ -396,13 +399,11 @@ class GibbsEstimation:
 
         # ── Vectorized path: jax.vmap ──
         if chain_method == "vectorized":
-            # Derive per-chain seeds
-            if random_seed is not None:
-                parent_ss = np.random.SeedSequence(random_seed)
-            else:
-                parent_ss = np.random.SeedSequence()
-            child_seeds = parent_ss.spawn(chains)
-            seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+            # Derive per-chain seeds (full 128-bit SeedSequence children)
+            from .._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+            child_seeds = spawn_chain_seeds(random_seed, chains)
+            seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
             # Build cache for initialization
             cache = self._build_cache()
@@ -475,13 +476,11 @@ class GibbsEstimation:
         if logdet_jax is None:
             logdet_jax = self._build_logdet_jax()
 
-        # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        # Derive per-chain seeds (full 128-bit SeedSequence children)
+        from .._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
         # Build cache for initialization
         cache = self._build_cache()

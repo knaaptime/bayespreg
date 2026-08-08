@@ -217,12 +217,8 @@ def _auto_logdet_method(n: int, W=None) -> str:
     seconds.  Raise it further via ``BAYESPECON_LOGDET_CHEB_MAX_N`` if Cholesky
     fill-in on your graph stays affordable past that.
     """
-    eigen_cutoff_raw = os.getenv("BAYESPECON_LOGDET_EIGEN_MAX_N", "500")
+    eigen_cutoff = _eigen_cutoff()
     cheb_cutoff_raw = os.getenv("BAYESPECON_LOGDET_CHEB_MAX_N", "60000")
-    try:
-        eigen_cutoff = max(1, int(eigen_cutoff_raw))
-    except ValueError:
-        eigen_cutoff = 500
     try:
         cheb_cutoff = max(eigen_cutoff + 1, int(cheb_cutoff_raw))
     except ValueError:
@@ -241,6 +237,48 @@ def _auto_logdet_method(n: int, W=None) -> str:
     # Stochastic Chebyshev (Han et al. 2015): geometric convergence via
     # Bernstein ellipse, avoids O(n³) eigendecomposition.
     return "cheb_stochastic"
+
+
+def _eigen_cutoff() -> int:
+    """Return the eigendecomposition size cutoff (``BAYESPECON_LOGDET_EIGEN_MAX_N``).
+
+    Single source of truth for the maximum ``n`` at which the O(n³)
+    eigendecomposition is considered affordable.  Read from the environment
+    variable ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500).  Used by
+    :func:`_auto_logdet_method` for auto-selection.
+    """
+    raw = os.getenv("BAYESPECON_LOGDET_EIGEN_MAX_N", "500")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 500
+
+
+#: Hard limit for explicit ``logdet_method="eigenvalue"`` on large W.
+#: The auto-select cutoff (:func:`_eigen_cutoff`, default 500) is a performance
+#: guideline — slightly exceeding it is fine.  This hard guard prevents
+#: genuinely dangerous O(n²) memory allocations (e.g. a dense 20k×20k matrix
+#: is ~3 GB).  Override with ``BAYESPECON_LOGDET_EIGEN_HARD_MAX_N``.
+_EIGEN_HARD_MAX_N_DEFAULT = 5000
+
+
+def _eigen_hard_max_n() -> int:
+    """Return the hard size limit for explicit eigenvalue eigendecomposition.
+
+    The auto-select cutoff (``BAYESPECON_LOGDET_EIGEN_MAX_N``, default 500) is
+    a performance guideline — tests and users may legitimately force
+    ``logdet_method="eigenvalue"`` on moderately larger W.  This hard guard
+    only fires when the allocation would be genuinely dangerous (O(n²) memory
+    in the multi-GB range).  Read from ``BAYESPECON_LOGDET_EIGEN_HARD_MAX_N``
+    (default 5000; a 5000×5000 dense matrix is ~200 MB).
+    """
+    raw = os.getenv(
+        "BAYESPECON_LOGDET_EIGEN_HARD_MAX_N", str(_EIGEN_HARD_MAX_N_DEFAULT)
+    )
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return _EIGEN_HARD_MAX_N_DEFAULT
 
 
 def resolve_logdet_bounds(

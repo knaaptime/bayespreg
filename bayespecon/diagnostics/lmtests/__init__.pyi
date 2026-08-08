@@ -40,6 +40,9 @@ from .core import (
 from .core import (
     _safe_inv as _safe_inv,
 )
+from .core import (
+    _safe_solve as _safe_solve,
+)
 from .cross_sectional import (
     _info_matrix_blocks_sdem as _info_matrix_blocks_sdem,
 )

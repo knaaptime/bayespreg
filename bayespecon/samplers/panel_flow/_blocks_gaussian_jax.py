@@ -307,9 +307,15 @@ def _make_gibbs_step_with_data(
             )
 
         prec_post = beta_prior_prec + XtX_sum / sigma2_u
-        cov_post = jnp.linalg.inv(prec_post)
-        mean_post = cov_post @ (beta_prior_prec @ beta_prior_mean + XtEta / sigma2_u)
-        beta_new = jax.random.multivariate_normal(key_beta, mean_post, cov_post)
+        # Cholesky-based solve: faster and more stable than forming inv(prec).
+        L_prec = jnp.linalg.cholesky(prec_post)  # prec_post = L L'
+        rhs = beta_prior_prec @ beta_prior_mean + XtEta / sigma2_u
+        mean_post = jax.scipy.linalg.cho_solve((L_prec, True), rhs)
+        # Draw: β = mean + (L_prec')⁻¹ z  (cov = (L L')⁻¹ = (L')⁻¹ L⁻¹)
+        z = jax.random.normal(key_beta, (k,))
+        beta_new = mean_post + jax.scipy.linalg.solve_triangular(
+            L_prec, z, lower=True, trans="T"
+        )
 
         # ── Block 3: σ²_u (conjugate IG) ──
         # Use eigenbasis innovations for consistency with FFBS

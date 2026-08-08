@@ -2257,12 +2257,15 @@ class NegBinFlow(_NegBinFlowMixin, OLSFlow):
             )
 
         # --- Run chains ---
+        from ...samplers._utils._seeds import spawn_chain_seeds
+
+        np_seeds = (
+            spawn_chain_seeds(random_seed, chains) if random_seed is not None else None
+        )
         chain_results = run_chains(
             chain_fn=_chain_fn,
             n_chains=chains,
-            seeds=[random_seed + i for i in range(chains)]
-            if random_seed is not None
-            else None,
+            seeds=np_seeds,
             n_jobs=n_jobs,
             progressbar=progressbar,
             parallel=n_jobs != 1,

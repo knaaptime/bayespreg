@@ -329,13 +329,11 @@ class SARNegBinStructural(SpatialModel):
             rho_slice_width_state=None,  # per-chain; built inside _run_one_chain
         )
 
-        # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        # Derive per-chain seeds (full 128-bit entropy via SeedSequence.entropy)
+        from ...samplers._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
         # Define the per-chain function
         # When using the full-JIT JAX backend, delegate to run_chain_jax()
