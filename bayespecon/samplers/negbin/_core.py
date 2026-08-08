@@ -745,6 +745,7 @@ def _sample_rho(
             n_probes=cache.lanczos_n_probes,
             lanczos_deg=cache.lanczos_deg,
             rng=_lanczos_rng,
+            dmax=cache.krylov_dmax,
         )
 
     def log_density(rho: float) -> float:
@@ -774,7 +775,7 @@ def _sample_rho(
         # single factored P_c.
         if (
             _krylov_basis is not None
-            and abs(rho - _krylov_basis.rho_basis) <= cache.krylov_dmax
+            and abs(rho - _krylov_basis.rho_basis) <= _krylov_basis.safe_dmax
         ):
             drho = rho - _krylov_basis.rho_basis
             sol_all = eval_precision_solve_from_basis(_krylov_basis, drho)

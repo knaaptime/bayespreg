@@ -63,8 +63,8 @@ from ..negbin_reduced._core import (
     ReducedGibbsCache,
     ReducedGibbsPriors,
     ReducedGibbsState,
-    _CholmodNormalEqSolver,
     _make_solver,
+    make_sar_solver,
 )
 from ..negbin_reduced._core import (
     _sample_beta as _sample_beta_cnt,
@@ -339,7 +339,7 @@ def run_zinb_chain(
             and rg_cache.W_sym is not None
             and rg_cache.WtW is not None
         ):
-            return _CholmodNormalEqSolver(
+            return make_sar_solver(
                 cholmod_factor=CholmodFactor(rg_cache.cholmod_pattern),
                 W_csc=rg_cache.W_csc,
                 W_sym=rg_cache.W_sym,

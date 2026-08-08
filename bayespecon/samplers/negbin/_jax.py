@@ -377,15 +377,22 @@ def _make_gibbs_step_with_data(
                     Wt_Xbeta_r * inv_s2_r,
                 ]
             )  # (n, 3)
-            _kry_key_nb = jax.random.fold_in(key_rho, 7)
-            _token_nb, _V_stack_nb, _logdet_Pc_nb = build_precision_krylov_basis_jax(
+            _G2_vals_nb = _WtW_vals * inv_s2_r
+            (
+                _token_nb,
+                _V_stack_nb,
+                _ld_coefs_nb,
+                _safe_dmax_nb,
+            ) = build_precision_krylov_basis_jax(
                 _Ai,
                 _Aj,
                 _Ax_c_nb,
                 _G_vals_c_nb,
+                _G2_vals_nb,
                 _rhs_seed_nb,
                 n=_n_static,
                 degree=krylov_degree,
+                dmax=krylov_dmax,
             )
 
         def log_density_rho(rho_val):
@@ -400,7 +407,7 @@ def _make_gibbs_step_with_data(
             if use_sparsax:
                 if _use_krylov:
                     drho = rho_val - rho
-                    within = jnp.abs(drho) <= krylov_dmax
+                    within = jnp.abs(drho) <= _safe_dmax_nb
                     # Horner in pure JAX against the basis built at ρ_c
                     sol_all = eval_precision_solve_from_basis_jax(_V_stack_nb, drho)
                     # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹Xβ/σ², P(ρ)⁻¹WtXβ/σ²]
@@ -410,16 +417,21 @@ def _make_gibbs_step_with_data(
                     # rhs = Xβ/σ² − ρ·WtXβ/σ² + κ
                     m_kry = (PXbeta - rho_val * PWtXbeta).ravel() + Pkappa
                     log_det_P_kry = eval_precision_logdet_from_basis_jax(
-                        _token_nb,
-                        _G_vals_c_nb,
-                        _Ai,
-                        _Aj,
-                        _n_static,
-                        drho,
-                        rng_key=_kry_key_nb,
+                        _ld_coefs_nb, drho
                     )
                     quad_kry = rhs_r @ m_kry
-                    # Fallback outside radius: direct factor_solve
+                    # Direct solve for candidates outside the Krylov radius.
+                    #
+                    # `jnp.where` evaluates both operands, so this factorization
+                    # runs on every candidate and the basis is pure added work —
+                    # `krylov_degree > 0` measures 0.84x end-to-end rather than
+                    # the ~3x the per-candidate microbenchmark suggests.
+                    # `lax.cond` does not help (chains run under vmap, where
+                    # cond lowers to select), and dropping the fallback to make
+                    # the basis authoritative was tried and reverted: rejecting
+                    # out-of-radius candidates walls off the slice and collapsed
+                    # the ρ posterior (sd 0.290 -> 0.153, ESS 114 -> 62) for no
+                    # real speed gain.  Hence `krylov_degree` defaults to 0.
                     Ax_r = _assemble_Ax(omega_new, rho_val, inv_s2_r)
                     m_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_r)
                     quad_dir = rhs_r @ m_dir

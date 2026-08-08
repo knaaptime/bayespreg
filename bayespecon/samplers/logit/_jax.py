@@ -311,15 +311,21 @@ def _make_gibbs_step_with_data(
             # two Horner evaluations against the same basis.
             _rhs_seed = jnp.column_stack([kappa, X_jax, WtX])  # (n, 1 + 2k)
             _Ax_c = _assemble_Ax(omega_new, rho)
-            _kry_key = jax.random.fold_in(key_rho, 7)
-            _token, _V_stack, _logdet_Pc = build_precision_krylov_basis_jax(
+            (
+                _token,
+                _V_stack,
+                _ld_coefs,
+                _safe_dmax,
+            ) = build_precision_krylov_basis_jax(
                 _Ai,
                 _Aj,
                 _Ax_c,
                 _G_vals_c,
+                _WtW_vals,
                 _rhs_seed,
                 n=_n_static,
                 degree=krylov_degree,
+                dmax=krylov_dmax,
             )
 
         def log_density_rho(rho_val):
@@ -340,7 +346,7 @@ def _make_gibbs_step_with_data(
                     # Krylov-accelerated path: Horner eval against the basis
                     # built at ρ_c, plus first-order logdet trace correction.
                     drho = rho_val - rho
-                    within = jnp.abs(drho) <= krylov_dmax
+                    within = jnp.abs(drho) <= _safe_dmax
                     # Horner in pure JAX (no sparsax calls):
                     sol_all = eval_precision_solve_from_basis_jax(_V_stack, drho)
                     # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹X, P(ρ)⁻¹WtX]
@@ -350,15 +356,13 @@ def _make_gibbs_step_with_data(
                     # u(ρ) = X − ρ·WtX  →  P(ρ)⁻¹u = PX − ρ·PWtX
                     M_kry = PX - rho_val * PWtX
                     log_det_P_kry = eval_precision_logdet_from_basis_jax(
-                        _token,
-                        _G_vals_c,
-                        _Ai,
-                        _Aj,
-                        _n_static,
-                        drho,
-                        rng_key=_kry_key,
+                        _ld_coefs, drho
                     )
-                    # Fallback outside radius: direct factor_solve
+                    # Direct solve for candidates outside the Krylov radius.
+                    # `jnp.where` evaluates both operands, so this factorization
+                    # runs regardless and the basis is pure added work — see the
+                    # note in ``samplers/negbin/_jax.py`` for why the fallback
+                    # cannot simply be dropped.
                     Ax_r = _assemble_Ax(omega_new, rho_val)
                     sol_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_stack)
                     z_vec = jnp.where(within, z_kry, sol_dir[:, 0])
@@ -807,15 +811,21 @@ def _make_gibbs_step_with_data_sem(
                 ]
             )  # (n, 4)
             _Ax_c_sem = _assemble_Ax(omega_new, _lam_c)
-            _kry_key_sem = jax.random.fold_in(key_lam, 7)
-            _token_sem, _V_stack_sem, _logdet_Pc_sem = build_precision_krylov_basis_jax(
+            (
+                _token_sem,
+                _V_stack_sem,
+                _ld_coefs_sem,
+                _safe_dmax_sem,
+            ) = build_precision_krylov_basis_jax(
                 _Ai,
                 _Aj,
                 _Ax_c_sem,
                 _G_vals_c_sem,
+                _WtW_vals,
                 _rhs_seed_sem,
                 n=_n_static,
                 degree=krylov_degree,
+                dmax=krylov_dmax,
             )
 
         def log_density_lam(lam_val):
@@ -829,7 +839,7 @@ def _make_gibbs_step_with_data_sem(
             if use_sparsax:
                 if _use_krylov_sem:
                     dlam = lam_val - _lam_c
-                    within = jnp.abs(dlam) <= krylov_dmax
+                    within = jnp.abs(dlam) <= _safe_dmax_sem
                     sol_all = eval_precision_solve_from_basis_jax(_V_stack_sem, dlam)
                     # sol_all: [P(λ)⁻¹κ, P(λ)⁻¹Xβ, P(λ)⁻¹W_symXβ, P(λ)⁻¹WtWXβ]
                     Pkappa = sol_all[:, 0]
@@ -841,16 +851,10 @@ def _make_gibbs_step_with_data_sem(
                         PXbeta - lam_val * PWsymXbeta + lam_val**2 * PWtWXbeta
                     ).ravel() + Pkappa
                     log_det_P_kry = eval_precision_logdet_from_basis_jax(
-                        _token_sem,
-                        _G_vals_c_sem,
-                        _Ai,
-                        _Aj,
-                        _n_static,
-                        dlam,
-                        rng_key=_kry_key_sem,
+                        _ld_coefs_sem, dlam
                     )
                     quad_kry = rhs_r @ m_kry
-                    # Fallback outside radius
+                    # Direct solve outside the radius (see the SAR-logit site).
                     Ax_r = _assemble_Ax(omega_new, lam_val)
                     m_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_r)
                     quad_dir = rhs_r @ m_dir
@@ -884,7 +888,11 @@ def _make_gibbs_step_with_data_sem(
                 (lam_val >= lam_lower_jax) & (lam_val <= lam_upper_jax), 0.0, -jnp.inf
             )
             return (
-                logdet_W - 0.5 * log_det_P + 0.5 * quad_r + xbeta_correction + log_prior
+                logdet_W
+                - 0.5 * log_det_P
+                + 0.5 * quad_r
+                + xbeta_correction
+                + log_prior
             )
 
         # ── Slice sampling for λ (shared JAX helper) ──

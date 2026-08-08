@@ -300,7 +300,7 @@ def _make_flow_gibbs_step(
         to stay accurate.
 
         Basis reuse: when all three ρ's are within ``_reuse_threshold`` of
-        the basis centre, the previous sweep's basis is reused.
+        the basis center, the previous sweep's basis is reused.
         """
 
         def _rebuild(_):
@@ -329,12 +329,19 @@ def _make_flow_gibbs_step(
             operand=None,
         )
 
+        # Horner origin must be the center V_stack was *built* at, not the
+        # current ρ_k: on the reuse branch they differ by up to
+        # ``_reuse_threshold``, and measuring Δρ from ρ_k would evaluate
+        # U at ρ_basis + (ρ − ρ_k) instead of at ρ.  ``wkey`` is a static
+        # Python string, so this selects at trace time.
+        rho_basis_k = {"d": rd_b, "o": ro_b, "w": rw_b}[wkey]
+
         lo, hi = _wall_bounds(other_abs)
 
         rho_new = _slice_sample_rho_jax(
             rho_current=rho_k,
             V_stack=V_stack,
-            rho_basis=rho_k,
+            rho_basis=rho_basis_k,
             omega=omega,
             y_jax=y_jax,
             alpha=alpha,

@@ -47,6 +47,7 @@ from ..negbin_reduced._core import (
     _eval_U_from_basis,
     _make_solver,
     _prior_precision_and_mean,
+    make_sar_solver,
 )
 
 
@@ -112,7 +113,7 @@ def _rho_log_density_marginal(
     use_basis = (
         basis is not None
         and basis.degree > 0
-        and abs(rho - basis.rho_basis) <= krylov_dmax
+        and abs(rho - basis.rho_basis) <= min(krylov_dmax, basis.safe_dmax)
     )
     if use_basis:
         U = _eval_U_from_basis(basis, rho - basis.rho_basis)
@@ -363,7 +364,7 @@ def run_chain(
         and cache.WtW is not None
     ):
         cholmod_factor = CholmodFactor(cache.cholmod_pattern)
-        cholmod_solver = _CholmodNormalEqSolver(
+        cholmod_solver = make_sar_solver(
             cholmod_factor=cholmod_factor,
             W_csc=cache.W_csc,
             W_sym=cache.W_sym,
@@ -460,7 +461,7 @@ def run_chain(
                 Xtilde = X.copy()
             elif basis is not None:
                 drho = state.rho - basis.rho_basis
-                if abs(drho) <= cache.krylov_dmax:
+                if abs(drho) <= min(cache.krylov_dmax, basis.safe_dmax):
                     Xtilde = _eval_U_from_basis(basis, drho)
                 else:
                     _A_rho = _build_A_rho(state.rho, cache.W_csc, n)

@@ -22,6 +22,8 @@ but returns int32 COO arrays suitable for ``sparsax``.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import scipy.sparse as sp
 
@@ -67,47 +69,42 @@ def precompute_sparsax_pattern(
     WtW = (W_csc.T @ W_csc).tocsc()
     pattern = (sp.eye(n, format="csc") + 0.5 * W_sym + 0.25 * WtW).tocoo()
 
-    Ai = pattern.row.astype(np.int32)
-    Aj = pattern.col.astype(np.int32)
-    nnz = len(Ai)
+    # sparsax reads only the upper triangle, so carrying the lower one would
+    # be ~2x the COO entries for no effect.  Restrict the pattern up front.
+    keep = pattern.row <= pattern.col
+    Ai = pattern.row[keep].astype(np.int32)
+    Aj = pattern.col[keep].astype(np.int32)
+    nnz = Ai.size
 
-    # Extract W_sym and WtW values at the pattern positions.
-    # We do this by converting to COO and aligning with the pattern.
-    W_sym_coo = W_sym.tocoo()
-    WtW_coo = WtW.tocoo()
+    # Align W_sym / WtW values onto the pattern by matching linearized
+    # (row, col) keys.  A Python dict over nnz entries would cost hundreds of
+    # MB and seconds at realistic n; searchsorted is O(nnz log nnz) and stays
+    # in numpy.
+    pattern_keys = Ai.astype(np.int64) * n + Aj.astype(np.int64)
+    key_order = np.argsort(pattern_keys, kind="stable")
+    sorted_keys = pattern_keys[key_order]
 
-    # Build a lookup from (row, col) → index in the pattern array.
-    # The pattern is symmetric (upper triangle), so we only need to
-    # match entries with Ai <= Aj (lower triangle entries are ignored
-    # by sparsax).
-    pattern_lookup: dict[tuple[int, int], int] = {}
-    for k in range(nnz):
-        pattern_lookup[(int(Ai[k]), int(Aj[k]))] = k
+    def _align_upper(M):
+        M_coo = M.tocoo()
+        vals = np.zeros(nnz, dtype=np.float64)
+        if M_coo.nnz == 0:
+            return vals
+        upper = M_coo.row <= M_coo.col
+        mk = M_coo.row[upper].astype(np.int64) * n + M_coo.col[upper].astype(np.int64)
+        pos = np.searchsorted(sorted_keys, mk)
+        np.clip(pos, 0, max(nnz - 1, 0), out=pos)
+        found = sorted_keys[pos] == mk
+        vals[key_order[pos[found]]] = M_coo.data[upper][found]
+        return vals
 
-    W_sym_vals = np.zeros(nnz, dtype=np.float64)
-    WtW_vals = np.zeros(nnz, dtype=np.float64)
-
-    for k in range(len(W_sym_coo.row)):
-        i, j = int(W_sym_coo.row[k]), int(W_sym_coo.col[k])
-        # sparsax reads only upper triangle (Ai <= Aj)
-        if i <= j:
-            idx = pattern_lookup.get((i, j))
-            if idx is not None:
-                W_sym_vals[idx] = W_sym_coo.data[k]
-
-    for k in range(len(WtW_coo.row)):
-        i, j = int(WtW_coo.row[k]), int(WtW_coo.col[k])
-        if i <= j:
-            idx = pattern_lookup.get((i, j))
-            if idx is not None:
-                WtW_vals[idx] = WtW_coo.data[k]
+    W_sym_vals = _align_upper(W_sym)
+    WtW_vals = _align_upper(WtW)
 
     is_diag = Ai == Aj
     # For each diagonal position i, find its index in the pattern.
     diag_idx = np.full(n, -1, dtype=np.int32)
-    for k in range(nnz):
-        if is_diag[k]:
-            diag_idx[Ai[k]] = k
+    diag_pos = np.flatnonzero(is_diag)
+    diag_idx[Ai[diag_pos]] = diag_pos.astype(np.int32)
 
     return {
         "Ai": Ai,
@@ -346,28 +343,38 @@ class CachedSparseSolver:
         # Split merged values back into const (I) and per-W contributions.
         self.Ai = merged.row.astype(np.int32)
         self.Aj = merged.col.astype(np.int32)
-        # const_vals: identity at each pattern position
-        I_at = sp.coo_matrix(
-            (np.ones(I_coo.nnz, dtype=np.float64), (I_coo.row, I_coo.col)),
-            shape=(self.n, self.n),
-        ).tocsr()
-        self.const_vals = np.asarray(
-            I_at[self.Ai, self.Aj].A1
-            if hasattr(I_at, "A1")
-            else np.asarray(I_at.todense()[self.Ai, self.Aj]).ravel(),
-            dtype=np.float64,
-        )
-        # Robust alignment: build per-W value vectors at the pattern positions
-        self.w_vals_list = []
-        for Wk in mats:
-            Wk_csr = Wk.tocsr()
-            vals = np.asarray(
-                Wk_csr[self.Ai, self.Aj].A1
-                if hasattr(Wk_csr, "A1")
-                else np.asarray(Wk_csr.todense()[self.Ai, self.Aj]).ravel(),
-                dtype=np.float64,
+
+        # Align each matrix's values onto the merged pattern by matching
+        # linearized (row, col) keys.  Sparse fancy-indexing would either
+        # densify the n x n matrix or build an nnz-sized Python dict; a
+        # searchsorted over the sorted key array is O(nnz log nnz) and
+        # stays sparse.
+        pattern_keys = self.Ai.astype(np.int64) * self.n + self.Aj.astype(np.int64)
+        key_order = np.argsort(pattern_keys, kind="stable")
+        sorted_keys = pattern_keys[key_order]
+
+        def _align(M):
+            """Values of sparse ``M`` at the merged pattern positions."""
+            M_coo = M.tocoo()
+            M_coo.sum_duplicates()
+            vals = np.zeros(pattern_keys.size, dtype=np.float64)
+            if M_coo.nnz == 0:
+                return vals
+            mk = M_coo.row.astype(np.int64) * self.n + M_coo.col.astype(np.int64)
+            pos = np.searchsorted(sorted_keys, mk)
+            # Entries dropped by eliminate_zeros() have no slot; mask them
+            # out rather than scattering into a neighboring position.
+            np.clip(pos, 0, sorted_keys.size - 1, out=pos)
+            found = sorted_keys[pos] == mk
+            np.add.at(
+                vals,
+                key_order[pos[found]],
+                M_coo.data.astype(np.float64, copy=False)[found],
             )
-            self.w_vals_list.append(vals)
+            return vals
+
+        self.const_vals = _align(I_coo)
+        self.w_vals_list = [_align(Wk) for Wk in mats]
 
         from bayespecon._jax_dispatch import _sparsax_available
 
@@ -376,8 +383,10 @@ class CachedSparseSolver:
         self._Aj_jax = None
         self._const_jax = None
         self._w_jax_list = None
+        self._has_lu_factor = False
         if self._use_sparsax:
             import jax.numpy as jnp
+            import sparsax as sparsax_mod
 
             from bayespecon._jax_dispatch import ensure_x64
 
@@ -388,12 +397,34 @@ class CachedSparseSolver:
             self._w_jax_list = [
                 jnp.asarray(v, dtype=jnp.float64) for v in self.w_vals_list
             ]
+            self._has_lu_factor = hasattr(sparsax_mod, "lu_factor") and hasattr(
+                sparsax_mod, "lu_solve_factor"
+            )
+        # Last (coeffs -> LU token) pair, so back-to-back solves at the same
+        # θ (e.g. several RHS blocks per posterior draw) skip the refactor.
+        self._last_coeffs = None
+        self._last_token = None
+        self._splu = None  # scipy fallback factor, held by factorize()
 
     def _assemble_Ax(self, coeffs):
-        ax = self._const_jax.copy()
+        ax = self._const_jax
         for c, wv in zip(coeffs, self._w_jax_list):
             ax = ax + float(c) * wv
         return ax
+
+    def _token(self, coeffs):
+        """Return an LU token for ``A(θ)``, reusing the last one when θ repeats."""
+        import sparsax
+
+        key = tuple(float(c) for c in coeffs)
+        if self._last_token is not None and key == self._last_coeffs:
+            return self._last_token
+        token = sparsax.lu_factor(
+            self._Ai_jax, self._Aj_jax, self._assemble_Ax(coeffs), self.n
+        )
+        self._last_coeffs = key
+        self._last_token = token
+        return token
 
     def solve(self, coeffs, rhs):
         """Solve :math:`A(\\theta) x = b` for vector RHS.
@@ -416,29 +447,34 @@ class CachedSparseSolver:
         single = rhs_np.ndim == 1
         if single:
             rhs_np = rhs_np[:, None]
-        n_rhs = rhs_np.shape[1]
-        out = np.empty_like(rhs_np)
         if self._use_sparsax:
             import jax.numpy as jnp
             import sparsax
 
-            Ax = self._assemble_Ax(coeffs)
-            for c in range(n_rhs):
-                out[:, c] = np.asarray(
+            b = jnp.asarray(rhs_np)
+            if self._has_lu_factor:
+                # One numeric factorization, then every RHS column solved
+                # against the held token.
+                out = np.asarray(
+                    sparsax.lu_solve_factor(self._token(coeffs), b), dtype=np.float64
+                )
+            else:
+                # Older sparsax: lu_solve still takes a 2-D RHS and caches
+                # the symbolic analysis on (Ai, Aj).
+                out = np.asarray(
                     sparsax.lu_solve(
-                        self._Ai_jax, self._Aj_jax, Ax, jnp.asarray(rhs_np[:, c])
+                        self._Ai_jax, self._Aj_jax, self._assemble_Ax(coeffs), b
                     ),
                     dtype=np.float64,
                 )
         else:
-            # Fallback: assemble scipy sparse A and factorize per call.
+            # Fallback: assemble scipy sparse A and factorize once per call,
+            # then solve all columns against that factor.
             A_csc = sp.csc_matrix(
                 (self._numpy_Ax(coeffs), (self.Ai, self.Aj)),
                 shape=(self.n, self.n),
             )
-            lu = sp.linalg.splu(A_csc)
-            for c in range(n_rhs):
-                out[:, c] = np.asarray(lu.solve(rhs_np[:, c]), dtype=np.float64)
+            out = np.asarray(sp.linalg.splu(A_csc).solve(rhs_np), dtype=np.float64)
         return out[:, 0] if single else out
 
     def _numpy_Ax(self, coeffs):
@@ -446,6 +482,116 @@ class CachedSparseSolver:
         for c, wv in zip(coeffs, self.w_vals_list):
             ax = ax + float(c) * wv
         return ax
+
+    # -- Explicit factor / solve / logdet, for callers that reuse one θ -----
+
+    def factorize(self, coeffs):
+        """Factor ``A(θ)`` and hold the factor for later solves.
+
+        Separating this from :meth:`solve` lets a caller pay one numeric
+        factorization and then issue many solves and read ``log|A|`` off the
+        same factor — the pattern the ρ-slice samplers need.
+        """
+        if self._use_sparsax and self._has_lu_factor:
+            self._token(coeffs)
+        else:
+            A_csc = sp.csc_matrix(
+                (self._numpy_Ax(coeffs), (self.Ai, self.Aj)),
+                shape=(self.n, self.n),
+            )
+            self._splu = sp.linalg.splu(A_csc)
+            self._last_coeffs = tuple(float(c) for c in coeffs)
+        return self
+
+    def solve_factored(self, rhs):
+        """Solve against the factor held by the last :meth:`factorize` call."""
+        rhs_np = np.asarray(rhs, dtype=np.float64)
+        single = rhs_np.ndim == 1
+        if single:
+            rhs_np = rhs_np[:, None]
+        if self._use_sparsax and self._has_lu_factor:
+            import jax.numpy as jnp
+            import sparsax
+
+            if self._last_token is None:
+                raise RuntimeError("factorize() must be called before solve_factored()")
+            out = np.asarray(
+                sparsax.lu_solve_factor(self._last_token, jnp.asarray(rhs_np)),
+                dtype=np.float64,
+            )
+        else:
+            if getattr(self, "_splu", None) is None:
+                raise RuntimeError("factorize() must be called before solve_factored()")
+            out = np.asarray(self._splu.solve(rhs_np), dtype=np.float64)
+        return out[:, 0] if single else out
+
+    def logdet(self):
+        r"""``log|det A(θ)|`` from the held factor.
+
+        For :math:`A = I - \rho W` with ``ρ`` inside the stability range the
+        determinant is positive, so this is :math:`\log\det(I-\rho W)` — the
+        SAR Jacobian term, free from a factorization the sampler already
+        needed.  Valid for asymmetric ``W``: KLU's LU carries the determinant
+        just as Cholesky does for the symmetric case.
+        """
+        if self._use_sparsax and self._has_lu_factor:
+            import sparsax
+
+            if self._last_token is None:
+                raise RuntimeError("factorize() must be called before logdet()")
+            return float(sparsax.lu_logdet_factor(self._last_token))
+        if getattr(self, "_splu", None) is None:
+            raise RuntimeError("factorize() must be called before logdet()")
+        return float(np.sum(np.log(np.abs(self._splu.U.diagonal()))))
+
+
+class KluSarSolver:
+    r"""Solve :math:`(I-\rho W)x = b` by KLU on ``A`` directly.
+
+    Drop-in replacement for the CHOLMOD normal-equation solver used by the
+    reduced-form samplers, exposing the same ``factorize(rho)`` /
+    ``solve(rhs)`` pair.  The normal-equation route factorizes
+
+    .. math::
+
+        A^\top A = I - \rho(W + W^\top) + \rho^2 W^\top W,
+
+    which is only worth its cost when ``W`` is symmetric: for asymmetric
+    ``W`` it squares the condition number and :math:`W^\top W` carries
+    several times the nonzeros of ``W`` (two-hop fill-in), so the Cholesky
+    is both slower and less accurate than an LU of ``A`` itself.  KLU
+    factorizes the unsymmetric ``A`` once per ρ and additionally hands back
+    :math:`\log\det A` for free via :meth:`logdet`.
+
+    Parameters
+    ----------
+    W : scipy.sparse matrix, shape (n, n)
+        Spatial weights.  May be asymmetric.
+    n : int
+        Matrix dimension.
+    """
+
+    def __init__(self, W, n):
+        self._inner = CachedSparseSolver([W], n)
+        self._n = int(n)
+        self._rho: float | None = None
+
+    def factorize(self, rho: float) -> None:
+        """Factor ``A = I − ρW`` at the given ρ."""
+        self._rho = float(rho)
+        self._inner.factorize([-float(rho)])
+
+    def solve(self, rhs: np.ndarray) -> np.ndarray:
+        """Solve ``(I − ρW) x = rhs`` (vector or matrix RHS)."""
+        if self._rho is None:
+            raise RuntimeError("factorize(rho) must be called before solve()")
+        return self._inner.solve_factored(rhs)
+
+    def logdet(self) -> float:
+        """``log det(I − ρW)`` from the held LU factor."""
+        if self._rho is None:
+            raise RuntimeError("factorize(rho) must be called before logdet()")
+        return self._inner.logdet()
 
 
 def profile_loglik_rho_grid(
@@ -497,20 +643,36 @@ def profile_loglik_rho_grid(
     X = np.asarray(X, dtype=np.float64)
     n, k = X.shape
     solver = CachedSparseSolver([W_sparse], n)
-    grid = np.arange(rho_min, rho_max, rho_step)
+    # Inclusive of rho_max (up to floating-point slack): np.arange would drop
+    # the endpoint, silently truncating the default grid at 0.90.
+    n_steps = int(np.floor((rho_max - rho_min) / rho_step + 1e-9)) + 1
+    grid = rho_min + rho_step * np.arange(max(n_steps, 1))
     best_rho, best_beta, best_ll = 0.0, np.zeros(k), -np.inf
+    failures: list[tuple[float, str]] = []
     for rho_g in grid:
         try:
             Xtilde = solver.solve([-float(rho_g)], X)
-            beta_g = np.linalg.lstsq(Xtilde, y, rcond=None)[0]
-            eta_g = Xtilde @ beta_g
-            sig2_g = float(np.mean((y - eta_g) ** 2))
-            if sig2_g > 1e-10:
-                ll_g = -0.5 * n * np.log(sig2_g) - 0.5 * n
-                if ll_g > best_ll:
-                    best_ll, best_rho, best_beta = ll_g, float(rho_g), beta_g.copy()
-        except Exception:
-            pass
+        except (RuntimeError, ValueError, np.linalg.LinAlgError) as exc:
+            # A singular / indefinite A_ρ means this ρ is outside the valid
+            # range for W; skip it but keep a record so an all-failed grid
+            # can say why rather than returning a bare -inf.
+            failures.append((float(rho_g), str(exc)))
+            continue
+        beta_g = np.linalg.lstsq(Xtilde, y, rcond=None)[0]
+        eta_g = Xtilde @ beta_g
+        sig2_g = float(np.mean((y - eta_g) ** 2))
+        if sig2_g > 1e-10:
+            ll_g = -0.5 * n * np.log(sig2_g) - 0.5 * n
+            if ll_g > best_ll:
+                best_ll, best_rho, best_beta = ll_g, float(rho_g), beta_g.copy()
+    if not np.isfinite(best_ll) and failures:
+        warnings.warn(
+            f"profile_loglik_rho_grid: every ρ in [{rho_min}, {rho_max}] failed to "
+            f"solve ({len(failures)} candidates); first error at ρ={failures[0][0]}: "
+            f"{failures[0][1]}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     return best_rho, best_beta, best_ll
 
 
