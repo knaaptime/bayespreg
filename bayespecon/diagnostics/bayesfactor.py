@@ -35,6 +35,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import multivariate_normal
 
+from ._native_log_posterior import native_log_posterior
+
 _BAYES_FACTOR_METHODS = {}
 
 
@@ -1179,13 +1181,22 @@ def bayes_factor_compare_models(
                 )
             idata_list.append(idata)
             if method == "bridge":
-                pymc_model = obj.pymc_model
-                if pymc_model is None:
-                    raise ValueError(
-                        f"Model at index {i} ('{model_labels[i]}') has no "
-                        "pymc_model. Call .fit() before comparing models."
-                    )
-                logp_fn, _, _, to_unconstrained = compile_log_posterior(pymc_model)
+                # Prefer the closed-form density when the model family has one.
+                # A Gibbs fit has no PyTensor graph, so the PyMC route below
+                # would build and compile one purely as a density oracle — work
+                # the native path skips entirely.  ``None`` means "unsupported
+                # family", not "failed", so fall through rather than raise.
+                native = native_log_posterior(obj)
+                if native is not None:
+                    logp_fn, _, _, to_unconstrained = native
+                else:
+                    pymc_model = obj.pymc_model
+                    if pymc_model is None:
+                        raise ValueError(
+                            f"Model at index {i} ('{model_labels[i]}') has no "
+                            "pymc_model. Call .fit() before comparing models."
+                        )
+                    logp_fn, _, _, to_unconstrained = compile_log_posterior(pymc_model)
                 log_posterior_list.append(logp_fn)
                 constrained_to_unconstrained_list.append(to_unconstrained)
             else:

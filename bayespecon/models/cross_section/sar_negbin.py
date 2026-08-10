@@ -659,9 +659,7 @@ class SARNegBin(SpatialModel):
             )  # (n,)
 
             if self._is_row_std:
-                multiplier_row_sums = np.full(
-                    n, 1.0 / (1.0 - float(rho)), dtype=np.float64
-                )
+                multiplier_row_sums = self._multiplier_row_sums(rho)
             else:
                 # row_sum_i = (V @ diag(inv_eigs) @ Vinv @ 1)_i
                 multiplier_row_sums = (V_c @ (inv_eigs_c * Vinv_ones)).real.astype(
@@ -804,7 +802,7 @@ class SARNegBin(SpatialModel):
                 sol = np.asarray(solver.solve(rhs), dtype=np.float64)
                 eta = sol[:, 0]
                 AinvZ = sol[:, 1:]
-                multiplier_row_sums = np.full(n, 1.0 / (1.0 - rho_f), dtype=np.float64)
+                multiplier_row_sums = self._multiplier_row_sums(rho_f)
             else:
                 rhs = np.empty((n, 2 + n_probes), dtype=np.float64)
                 rhs[:, 0] = Xbeta

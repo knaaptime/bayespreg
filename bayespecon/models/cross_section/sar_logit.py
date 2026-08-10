@@ -532,9 +532,7 @@ class SARLogit(SpatialModel):
 
             multiplier_diag = ((V_c * Vinv_c.T) @ inv_eigs_c).real.astype(np.float64)
             if self._is_row_std:
-                multiplier_row_sums = np.full(
-                    n, 1.0 / (1.0 - float(rho)), dtype=np.float64
-                )
+                multiplier_row_sums = self._multiplier_row_sums(rho)
             else:
                 multiplier_row_sums = (V_c @ (inv_eigs_c * Vinv_ones)).real.astype(
                     np.float64
@@ -600,7 +598,7 @@ class SARLogit(SpatialModel):
                 sol = np.asarray(solver.solve(rhs), dtype=np.float64)
                 eta = sol[:, 0]
                 AinvZ = sol[:, 1:]
-                multiplier_row_sums = np.full(n, 1.0 / (1.0 - rho_f), dtype=np.float64)
+                multiplier_row_sums = self._multiplier_row_sums(rho_f)
             else:
                 rhs = np.empty((n, 2 + n_probes), dtype=np.float64)
                 rhs[:, 0] = Xbeta

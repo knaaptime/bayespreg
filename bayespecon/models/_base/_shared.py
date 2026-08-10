@@ -1066,6 +1066,20 @@ class SharedSpatialMethods:
         """Number of units with no neighbours."""
         return int(self._isolate_mask.sum())
 
+    def _multiplier_row_sums(self, rho: float) -> np.ndarray:
+        """Per-unit row sums of ``(I - ρW)⁻¹`` for row-standardized ``W``.
+
+        ``1/(1 − ρ)`` on connected units, and exactly 1 on isolates, whose row
+        of the multiplier is just ``e_i``.  O(n) and factorization-free — the
+        alternative is carrying an extra ``ones`` column through the sparse
+        solve on every draw.
+        """
+        n = int(self._W_sparse.shape[0])
+        out = np.full(n, 1.0 / (1.0 - float(rho)), dtype=np.float64)
+        if self._n_isolates:
+            out[self._isolate_mask] = 1.0
+        return out
+
     def _batch_mean_row_sum(self, rho_draws: np.ndarray) -> np.ndarray:
         """Compute mean row sum of (I - rho*W)^{-1} for each posterior draw.
 
