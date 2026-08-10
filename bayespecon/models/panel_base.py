@@ -22,7 +22,7 @@ from .._backends.sampler_helpers import (
 from .._lazy_deps import az, pm
 from ._base._shared import (
     SharedSpatialMethods,
-    _is_row_standardized_csr,
+    _check_row_standardization,
     _pointwise_gaussian_loglik,
     _write_log_likelihood_to_idata,
 )
@@ -203,11 +203,8 @@ def _parse_panel_W(
     """
     if isinstance(W, Graph):
         W_csr = W.sparse.tocsr().astype(np.float64)
-        transform = getattr(W, "transformation", None)
-        row_std = transform in ("r", "R") or _is_row_standardized_csr(W_csr)
     elif sp.issparse(W):
         W_csr = W.tocsr().astype(np.float64)
-        row_std = _is_row_standardized_csr(W_csr)
     elif hasattr(W, "sparse") and hasattr(W, "transform"):
         raise TypeError(
             "W appears to be a legacy libpysal.weights.W object. "
@@ -235,18 +232,7 @@ def _parse_panel_W(
             f"W must be ({N},{N}) or ({N * T},{N * T})."
         )
 
-    if not row_std:
-        warnings.warn(
-            "W does not appear to be row-standardized (row sums \u2260 1). "
-            "Most spatial models assume W is row-standardized; results may be "
-            "unreliable otherwise. For a scipy sparse matrix normalize rows "
-            "manually (divide each row by its sum). To use a libpysal.graph.Graph "
-            "set its transformation attribute: "
-            "graph = graph.transform('r').",
-            UserWarning,
-            stacklevel=3,
-        )
-    return W_csr, row_std
+    return W_csr, _check_row_standardization(W_csr)
 
 
 class SpatialPanelModel(SharedSpatialMethods, ABC):

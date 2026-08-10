@@ -180,18 +180,14 @@ class SARProbit(SharedSpatialMethods):
 
     @staticmethod
     def _as_dense_region_W(W: Union[Graph, Any, np.ndarray]) -> np.ndarray:
-        import warnings
-
         import scipy.sparse as sp
+
+        from .._base import _check_row_standardization
 
         if isinstance(W, Graph):
             W_csr = W.sparse.tocsr().astype(float)
-            transform = getattr(W, "transformation", None)
-            row_std = transform in ("r", "R")
         elif sp.issparse(W):
             W_csr = W.tocsr().astype(float)
-            row_sums = np.asarray(W_csr.sum(axis=1)).ravel()
-            row_std = bool(np.allclose(row_sums, 1.0, atol=1e-6))
         elif hasattr(W, "sparse") and hasattr(W, "transform"):
             raise TypeError(
                 "W appears to be a legacy libpysal.weights.W object. "
@@ -205,17 +201,7 @@ class SARProbit(SharedSpatialMethods):
             )
         if W_csr.ndim != 2 or W_csr.shape[0] != W_csr.shape[1]:
             raise ValueError("W must be a square region-level matrix.")
-        if not row_std:
-            warnings.warn(
-                "W does not appear to be row-standardized (row sums \u2260 1). "
-                "Most spatial models assume W is row-standardized; results may be "
-                "unreliable otherwise. For a scipy sparse matrix normalize rows "
-                "manually (divide each row by its sum). To use a libpysal.graph.Graph "
-                "set its transformation attribute: "
-                "graph = graph.transform('r').",
-                UserWarning,
-                stacklevel=3,
-            )
+        _check_row_standardization(W_csr, stacklevel=3)
         return W_csr.toarray()
 
     @staticmethod
