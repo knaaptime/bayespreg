@@ -85,10 +85,10 @@ class SpatialModel(SharedSpatialMethods, ABC):
     robust : bool, default False
         If True, use a Student-t error distribution instead of Normal,
         yielding a model that is robust to heavy-tailed outliers. When
-        ``robust=True``, a ``nu`` (degrees of freedom) parameter is added
-        to the model with an :math:`\\mathrm{Exp}(\\lambda_\\nu)` prior (default
-        ``nu_lam = 1/30``, mean ≈ 30). The ``nu`` prior can be controlled
-        via the ``priors`` dict with key ``nu_lam``.
+        ``robust=True``, the errors follow a Student-t with **fixed**
+        degrees of freedom :math:`\\nu`, set via ``priors={"nu": value}``
+        (default 4, LeSage's ``rval``).  Fixing :math:`\\nu` is what keeps
+        the NUTS and Gibbs paths targeting the same posterior.
     w_vars : list of str, optional
         Names of X columns to spatially lag. Only relevant for models that
         include ``WX`` terms (SLX, SDM, SDEM and their panel/Tobit variants).
@@ -452,6 +452,13 @@ class SpatialModel(SharedSpatialMethods, ABC):
         if spatial_param not in {"rho", "lam"}:
             return
 
+        # When ``_build_pymc_model`` registered the likelihood as an observed
+        # CustomDist with the Jacobian folded in, PyMC already captured a
+        # complete pointwise log-likelihood — rebuilding it here would be pure
+        # duplicated work.
+        if getattr(self, "_native_log_likelihood", False):
+            return
+
         # SEM/SDEM on JAX backends build an observed CustomDist and already
         # have complete log_likelihood from PyMC.
         if spatial_param == "lam" and use_jax_likelihood(nuts_sampler):
@@ -464,7 +471,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
         spatial_draws = idata.posterior[spatial_param].values.reshape(-1)
         beta_draws = idata.posterior["beta"].values.reshape(-1, Z.shape[1])
         sigma_draws = idata.posterior["sigma"].values.reshape(-1)
-        nu_draws = idata.posterior["nu"].values.reshape(-1) if self.robust else None
+        nu_draws = np.full(spatial_draws.shape[0], self._nu) if self.robust else None
 
         if spatial_param == "rho":
             mu = spatial_draws[:, None] * self._Wy[None, :] + (beta_draws @ Z.T)

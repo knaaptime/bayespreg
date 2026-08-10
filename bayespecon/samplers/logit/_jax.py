@@ -611,7 +611,7 @@ def run_chain_jax(
                 log_lik_samples[idx] = _logit_loglik_pointwise_jax(y, eta_np)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     if progress_manager is not None:
         progress_manager.refresh()
@@ -1060,7 +1060,7 @@ def run_chain_jax_sem(
                 log_lik_samples[idx] = _logit_loglik_pointwise_jax(y, eta_np)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     if progress_manager is not None:
         progress_manager.refresh()
@@ -1362,7 +1362,7 @@ def run_chains_jax_vectorized(
 
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, iter_done - 1, tuning=True, accept=None)
+                    pm.update(c, iter_done - 1, tuning=True)
 
         final_warm_states = state
 
@@ -1382,7 +1382,7 @@ def run_chains_jax_vectorized(
 
         if pm is not None:
             for c in range(chains):
-                pm.update(c, tune + draws - 1, tuning=False, accept=None)
+                pm.update(c, tune + draws - 1, tuning=False)
 
     # Convert to numpy
     rhos = np.asarray(rhos)
@@ -1530,7 +1530,7 @@ def run_chains_jax_sem_vectorized(
 
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, iter_done - 1, tuning=True, accept=None)
+                    pm.update(c, iter_done - 1, tuning=True)
 
         final_warm_states = state
 
@@ -1550,7 +1550,7 @@ def run_chains_jax_sem_vectorized(
 
         if pm is not None:
             for c in range(chains):
-                pm.update(c, tune + draws - 1, tuning=False, accept=None)
+                pm.update(c, tune + draws - 1, tuning=False)
 
     # Convert to numpy
     lams = np.asarray(lams)

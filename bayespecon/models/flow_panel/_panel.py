@@ -540,11 +540,6 @@ class FlowPanelModel(SpatialPanelModel):
         )
         return idata
 
-    def _add_nu_prior(self):
-        """Add Student-t degrees-of-freedom prior for robust models."""
-        nu_lam = self.priors.get("nu_lam", 1.0 / 30.0)
-        return pm.Truncated("nu", pm.Exponential.dist(lam=nu_lam), lower=2.0)
-
     def _assemble_A(self, rho_d: float, rho_o: float, rho_w: float) -> sp.csr_matrix:
         """Assemble A = I - rho_d*Wd - rho_o*Wo - rho_w*Ww for one period."""
         eye_n = sp.eye(self._N_flow, format="csr", dtype=np.float64)
@@ -1057,9 +1052,8 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
         with a differentiable quadratic-wall stability potential.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -1071,7 +1065,7 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``rho_lower`` : float, default -1.0 — Lower bound of Uniform prior on each ρ (only when ``restrict_positive=False``).
         - ``rho_upper`` : float, default 1.0 — Upper bound of Uniform prior on each ρ (only when ``restrict_positive=False``).
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
     """
 
     def __init__(self, *args, **kwargs):
@@ -1130,7 +1124,7 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
             mu = pt.reshape(eta_mat.T, (N * T,))
 
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)
@@ -1206,9 +1200,8 @@ class SARFlowSeparablePanel(FlowPanelModel):
         Method for the Kronecker-factored log-determinant.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -1220,7 +1213,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``rho_lower`` : float, default -0.999 — Lower bound of Uniform prior on ``rho_d`` and ``rho_o``.
         - ``rho_upper`` : float, default 0.999 — Upper bound of Uniform prior on ``rho_d`` and ``rho_o``.
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
 
     Notes
     -----
@@ -1270,7 +1263,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
 
             mu = rho_d * Wd_y_t + rho_o * Wo_y_t + rho_w * Ww_y_t + pt.dot(X_t, beta)
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)
@@ -1361,8 +1354,8 @@ class OLSFlowPanel(FlowPanelModel):
           :math:`\beta`.
         - ``sigma_sigma`` (float, default 10.0): HalfNormal prior std
           for :math:`\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
         Spatial keys (``rho_*``) are ignored in this aspatial baseline.
     robust : bool, default False
@@ -1396,7 +1389,7 @@ class OLSFlowPanel(FlowPanelModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
             mu = pt.dot(X_t, beta)
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)
@@ -2192,9 +2185,8 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         used with a differentiable quadratic-wall stability potential.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -2206,7 +2198,7 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``lam_lower`` : float, default -1.0 — Lower bound of Uniform prior on each λ (only when ``restrict_positive=False``).
         - ``lam_upper`` : float, default 1.0 — Upper bound of Uniform prior on each λ (only when ``restrict_positive=False``).
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
     """
 
     def __init__(self, y, X, W, T, **kwargs):
@@ -2311,9 +2303,8 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
         Method for the Kronecker-factored log-determinant.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -2325,7 +2316,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``lam_lower`` : float, default -0.999 — Lower bound of Uniform prior on ``lam_d`` and ``lam_o``.
         - ``lam_upper`` : float, default 0.999 — Upper bound of Uniform prior on ``lam_d`` and ``lam_o``.
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
 
     Notes
     -----
@@ -2387,7 +2378,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
                 - lam_w * pt.dot(Ww_X_t, beta)
             )
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)

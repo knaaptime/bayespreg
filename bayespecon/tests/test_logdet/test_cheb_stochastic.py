@@ -9,6 +9,7 @@ import scipy.sparse as sp
 from bayespecon._logdet import make_logdet_numpy_fn, make_logdet_numpy_vec_fn
 from bayespecon._logdet._cheb_stochastic import (
     ChebStochasticPrecompute,
+    _clamp_off_pole,
     _exact_cheb_moments,
     _log_cheb_coeffs,
     _power_traces,
@@ -103,6 +104,66 @@ class TestLogChebCoeffs:
                 b_curr = b_new
             cheb_val = coeffs[0] + x * b_curr - b_next
             assert abs(cheb_val - exact) < 1e-8, f"x={x}: {cheb_val} vs {exact}"
+
+
+class TestPoleClamp:
+    """ρ on the stability boundary must not reach ``log(0)``.
+
+    The Clenshaw-Curtis nodes include x = ±1, i.e. λ = λ_max and λ = λ_min, so
+    ρ = 1/λ_max makes the first node evaluate log|1 − ρλ_max| = log 0.  For
+    row-standardized ``W`` that is ρ = 1 — the default ``rho_max``.
+    """
+
+    @pytest.mark.parametrize("lam_min,lam_max", [(-1.0, 1.0), (-0.5, 1.0), (-1.0, 2.0)])
+    def test_boundary_rho_stays_finite(self, lam_min, lam_max):
+        coeffs = _log_cheb_coeffs(1.0 / lam_max, lam_min, lam_max, 64)
+        assert np.isfinite(coeffs).all()
+
+    def test_negative_boundary_rho_stays_finite(self):
+        coeffs = _log_cheb_coeffs(1.0 / -1.0, -1.0, 1.0, 64)
+        assert np.isfinite(coeffs).all()
+
+    def test_no_divide_by_zero_warning_on_default_interval(self):
+        """The default (rho_max=1, λ_max=1) is the common case, not a rare one."""
+        with np.errstate(divide="raise", invalid="raise"):
+            cheb_stochastic_order(-1.0, 1.0, n=200_000)
+            _log_cheb_coeffs(1.0, -1.0, 1.0, 256)
+
+    def test_order_selection_tail_bound_is_finite(self):
+        """The tail bound must be a finding, not an artifact.
+
+        Before the clamp the bound came back ``inf``, ``tail <= target`` was
+        False everywhere, and the selection fell through to ``cap`` for want of
+        any order that could clear it.  It still asks for the cap at the
+        boundary — 1e-6 from a log pole genuinely needs more than 120 terms —
+        but now because the bound says so.
+        """
+        r = _clamp_off_pole(1.0, -1.0, 1.0)
+        coeffs = np.abs(_log_cheb_coeffs(r, -1.0, 1.0, 256))
+        assert np.isfinite(coeffs).all()
+        assert coeffs[121:].sum() > _probe_noise_rtol(r, 1_600, 50)
+        assert cheb_stochastic_order(-1.0, 1.0, n=1_600) == 120
+
+    def test_interior_rho_is_untouched(self):
+        """Clamping must not perturb ρ away from the boundary."""
+        for rho in (-0.9, -0.5, 0.0, 0.5, 0.9, 0.99):
+            assert _clamp_off_pole(rho, -1.0, 1.0) == rho
+
+    def test_clamp_is_inert_when_no_pole_exists(self):
+        """With λ_max ≤ 0 and λ_min ≥ 0 there is no boundary to clamp against."""
+        assert _clamp_off_pole(50.0, -1.0, -0.5) == 50.0
+        assert _clamp_off_pole(-50.0, 0.5, 1.0) == -50.0
+
+    def test_boundary_coeffs_are_those_of_the_clamped_rho(self):
+        """The clamp expands a neighbouring ρ exactly, rather than flooring the
+        log and fabricating a finite value at the pole itself.  Guards against
+        a future "fix" that clamps ``np.log`` at the nodes instead."""
+        rho_eff = _clamp_off_pole(1.0, -1.0, 1.0)
+        assert rho_eff < 1.0
+        assert np.array_equal(
+            _log_cheb_coeffs(1.0, -1.0, 1.0, 200),
+            _log_cheb_coeffs(rho_eff, -1.0, 1.0, 200),
+        )
 
 
 # ---------------------------------------------------------------------------

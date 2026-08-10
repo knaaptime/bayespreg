@@ -2230,7 +2230,7 @@ class NegBinFlow(_NegBinFlowMixin, OLSFlow):
                         log_lik_samples[idx] = _nb_loglik_pointwise(y, eta, alpha)
 
                 if progress_manager is not None:
-                    progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+                    progress_manager.update(chain_id, i, tuning=i < tune)
 
             return {
                 "beta": beta_samples,

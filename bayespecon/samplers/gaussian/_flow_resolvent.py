@@ -458,7 +458,6 @@ def run_flow_resolvent_gibbs(
         prop = rho + eps * grad + np.sqrt(2 * eps) * rng.standard_normal(3)
         logp_p, grad_p = target.logpost_and_grad(prop, beta, sigma2)
         accept = 0.0
-        accepted_this = False
         if np.isfinite(logp_p):
             q_fwd = -np.sum((prop - rho - eps * grad) ** 2) / (4 * eps)
             q_bwd = -np.sum((rho - prop - eps * grad_p) ** 2) / (4 * eps)
@@ -466,7 +465,6 @@ def run_flow_resolvent_gibbs(
             accept = min(1.0, np.exp(min(0.0, log_alpha)))
             if np.log(rng.uniform()) < log_alpha:
                 rho, logp, grad = prop, logp_p, grad_p
-                accepted_this = True
             else:
                 # Proposal rejected: restore the cache to the current ρ's logdet.
                 target._cached_ld_val = _saved_ld_val
@@ -508,9 +506,7 @@ def run_flow_resolvent_gibbs(
                 out["loglik"].append(ll)
         # --- progress bar ---
         if progress_manager is not None:
-            progress_manager.update(
-                chain_idx, it, tuning=it < tune, accept=accepted_this
-            )
+            progress_manager.update(chain_idx, it, tuning=it < tune)
     return {k: np.asarray(v) for k, v in out.items()}
 
 

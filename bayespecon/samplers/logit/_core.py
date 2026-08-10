@@ -777,7 +777,7 @@ def run_chain(
                     eta_samples[idx] = state.eta
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     result = {
         "rho": rho_samples,
@@ -1562,7 +1562,7 @@ def run_chain_sem(
                     eta_samples[idx] = state.eta
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     result = {
         "lam": lam_samples,

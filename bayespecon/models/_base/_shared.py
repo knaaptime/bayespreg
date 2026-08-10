@@ -17,7 +17,7 @@ import scipy.sparse as sp
 from formulaic import model_matrix
 from libpysal.graph import Graph
 
-from ..._lazy_deps import az, pm
+from ..._lazy_deps import az
 from ..._logdet import (
     make_logdet_fn,
     make_logdet_grad_numpy_vec_fn,
@@ -418,27 +418,28 @@ class SharedSpatialMethods:
         """
         return [self._feature_names[i] for i in self._nonintercept_indices]
 
-    def _add_nu_prior(self, model: pm.Model) -> pm.Model:
-        """Add the degrees-of-freedom prior for robust (Student-t) models.
+    @property
+    def _nu(self) -> float:
+        """Student-t degrees of freedom for robust models (a fixed constant).
 
-        Called inside ``_build_pymc_model`` when ``self.robust`` is True.
-        Uses an :math:`\\mathrm{Exp}(\\lambda_\\nu)` prior on ``nu`` with rate ``nu_lam`` (default
-        1/30, giving mean ≈ 30, favouring near-Normal tails). A lower
-        bound of 2 is enforced so that the variance exists.
+        Following LeSage (2009), :math:`\\nu` is a fixed hyperparameter (his
+        ``rval``, default 4) rather than a sampled quantity.  Fixing it is
+        what lets the NUTS and Gibbs paths target *identical* posteriors: the
+        Gibbs sampler reaches the Student-t likelihood through the scale
+        mixture :math:`\\varepsilon \\sim N(0, \\sigma^2 V)`,
+        :math:`V = \\mathrm{diag}(v_i)`, with :math:`r/v_i \\sim \\chi^2(r)`,
+        whose conditional is only conjugate for known :math:`r`.
 
-        Parameters
-        ----------
-        model : pymc.Model
-            The model context in which to add the ``nu`` prior.
-
-        Returns
-        -------
-        pymc.Model
-            The same model context (``nu`` is added as a side effect).
+        Values around 4 give genuinely fat tails (outliers are downweighted);
+        large values (≳ 30) approach the Normal.  A lower bound of 2 is
+        enforced so the variance exists.
         """
-        nu_lam = self.priors.get("nu_lam", 1.0 / 30.0)
-        pm.Truncated("nu", pm.Exponential.dist(lam=nu_lam), lower=2.0)
-        return model
+        nu = float(self.priors.get("nu", 4.0))
+        if nu <= 2.0:
+            raise ValueError(
+                f"priors['nu'] must be > 2 so the Student-t variance exists; got {nu}."
+            )
+        return nu
 
     def _beta_names(self) -> list[str]:
         """Return coefficient labels used for posterior summaries.

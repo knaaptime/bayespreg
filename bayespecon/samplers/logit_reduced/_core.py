@@ -483,7 +483,7 @@ def run_chain(
                 log_lik_samples[idx] = _logit_loglik_pointwise(y, eta)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     return {
         "rho": rho_samples,

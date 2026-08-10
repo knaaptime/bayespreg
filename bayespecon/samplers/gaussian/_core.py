@@ -864,7 +864,7 @@ def run_gaussian_chain(
 
         # Update progress bar
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     # Name the spatial parameter appropriately
     param_name = "rho" if model_type in ("sar", "sdm") else "lam"

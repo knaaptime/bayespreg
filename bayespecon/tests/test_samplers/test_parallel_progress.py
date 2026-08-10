@@ -100,11 +100,12 @@ class TestSharedCounterReporter:
         assert buf[0, 0] == 8 and buf[0, 1] == 0
         assert buf[1, 0] == 10 and buf[1, 1] == 1
 
-    def test_set_accept_rate_is_noop(self, shm_block):
+    def test_no_accept_rate_interface(self, shm_block):
         shm, n_chains = shm_block
         reporter = _SharedCounterReporter(shm.name, chain_id=0, n_chains=n_chains)
-        # Must not raise; accept rate is intentionally not surfaced.
-        reporter.set_accept_rate(0, 0.5)
+        # Every Gibbs block here accepts by construction (conjugate or
+        # slice), so there is no accept rate to report and no column for it.
+        assert not hasattr(reporter, "set_accept_rate")
 
     def test_pickle_roundtrip(self, shm_block):
         shm, n_chains = shm_block

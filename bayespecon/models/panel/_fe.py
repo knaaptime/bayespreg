@@ -77,8 +77,8 @@ class OLSPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
           :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): InverseGamma
           scale for :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         Accepted for API consistency; unused in OLSPanelFE (no
@@ -102,10 +102,9 @@ class OLSPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         \\varepsilon_{it} \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _priors_cls = PanelOLSPriors
@@ -205,8 +204,8 @@ class SARPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
           :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): InverseGamma
           scale for :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`. ``None`` (default)
@@ -230,10 +229,9 @@ class SARPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         \\varepsilon_{it} \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _priors_cls = PanelSARPriors
@@ -346,8 +344,8 @@ class SEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
           :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): InverseGamma
           scale for :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\lambda W|`. ``None`` (default)
@@ -372,10 +370,9 @@ class SEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         \\varepsilon_t = (I - \\lambda W)\\bigl(y_t - X_t \\beta - \\alpha\\bigr) \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _priors_cls = PanelSEMPriors
@@ -478,8 +475,8 @@ class SDMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
           :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): InverseGamma
           scale for :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`; auto-selected when
@@ -503,10 +500,9 @@ class SDMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         \\varepsilon_{it} \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _has_wx_in_beta: bool = True
@@ -641,8 +637,8 @@ class SDEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
           :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): InverseGamma
           scale for :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\lambda W|`; auto-selected
@@ -666,10 +662,9 @@ class SDEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         \\varepsilon_t = (I - \\lambda W)\\bigl(y_t - X_t \\beta - (W X_t)\\theta - \\alpha\\bigr) \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _has_wx_in_beta: bool = True
@@ -787,8 +782,8 @@ class SLXPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
           :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): InverseGamma
           scale for :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         Accepted for API consistency; unused (SLX has no spatial
@@ -811,10 +806,9 @@ class SLXPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         \\varepsilon_{it} \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _has_wx_in_beta: bool = True

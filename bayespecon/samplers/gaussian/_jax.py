@@ -697,7 +697,7 @@ def run_chain_jax_gaussian(
         # Update progress bar for warmup phase
         if progress_manager is not None:
             for i in range(tune):
-                progress_manager.update(chain_id, i, tuning=True, accept=None)
+                progress_manager.update(chain_id, i, tuning=True)
             progress_manager.refresh()
 
     # ── Phase 2: Post-warmup draws via jax.lax.scan ──
@@ -718,9 +718,7 @@ def run_chain_jax_gaussian(
     # Update progress bar for draw phase
     if progress_manager is not None:
         for i in range(tune, total_iters):
-            progress_manager.update(chain_id, i, tuning=False, accept=None)
-        # Set the aggregate slice accept rate for this chain (≈1.0)
-        progress_manager.set_accept_rate(chain_id, float(draw_accept_rate))
+            progress_manager.update(chain_id, i, tuning=False)
         progress_manager.refresh()
 
     # ── Post-chain: vectorized pointwise log-likelihood ──
@@ -969,7 +967,7 @@ def run_chains_jax_gibbs_vectorized(
                 iter_done += step
                 if pm is not None:
                     for c in range(chains):
-                        pm.update(c, iter_done - 1, tuning=True, accept=None)
+                        pm.update(c, iter_done - 1, tuning=True)
 
                 # ── Warmup Jacobian refit ──
                 # Rebuild the interpolant on the ρ range the chains found, then
@@ -1065,17 +1063,14 @@ def run_chains_jax_gibbs_vectorized(
             iter_done += step
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, tune + iter_done - 1, tuning=False, accept=None)
+                    pm.update(c, tune + iter_done - 1, tuning=False)
 
         rhos = np.concatenate(rho_chunks, axis=1)
         betas = np.concatenate(beta_chunks, axis=1)
         sigma2s = np.concatenate(sigma2_chunks, axis=1)
         accept_rates = draw_accept_sum / jnp.float64(draws)
 
-        # Set the aggregate slice accept rate for each chain (≈1.0)
         if pm is not None:
-            for c in range(chains):
-                pm.set_accept_rate(c, float(accept_rates[c]))
             pm.refresh()
 
     # Convert to NumPy and assemble per-chain results

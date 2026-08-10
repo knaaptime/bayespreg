@@ -87,8 +87,8 @@ class OLSPanelRE(SpatialPanelModel):
           for :math:`\\sigma`.
         - ``sigma_alpha_sigma`` (float, default 10.0): HalfNormal
           prior std for :math:`\\sigma_\\alpha`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     robust : bool, default False
         If True, replace the Normal error with Student-t. See
@@ -113,10 +113,9 @@ class OLSPanelRE(SpatialPanelModel):
 
         \\varepsilon_{it} \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails.  The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _priors_cls = PanelOLSREPriors
@@ -158,8 +157,7 @@ class OLSPanelRE(SpatialPanelModel):
 
             mu = pt.dot(self._X, beta) + alpha[unit_idx]
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y)
@@ -258,8 +256,8 @@ class SARPanelRE(SpatialPanelModel):
           for :math:`\\sigma`.
         - ``sigma_alpha_sigma`` (float, default 10.0): HalfNormal
           prior std for :math:`\\sigma_\\alpha`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`; auto-selected
@@ -284,10 +282,9 @@ class SARPanelRE(SpatialPanelModel):
 
         \\varepsilon_{it} \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails.  The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _priors_cls = PanelSARREPriors
@@ -334,8 +331,7 @@ class SARPanelRE(SpatialPanelModel):
 
             mu = rho * self._Wy + pt.dot(self._X, beta) + alpha[unit_idx]
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y)
@@ -517,8 +513,8 @@ class SEMPanelRE(SpatialPanelModel):
           for :math:`\\sigma`.
         - ``sigma_alpha_sigma`` (float, default 10.0): HalfNormal
           prior std for :math:`\\sigma_\\alpha`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\lambda W|`; auto-selected
@@ -606,10 +602,9 @@ class SEMPanelRE(SpatialPanelModel):
 
         \\varepsilon_{it} = (I - \\lambda W)(y - X\\beta - \\alpha_i) \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails.  The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _priors_cls = PanelSEMREPriors
@@ -748,9 +743,6 @@ class SEMPanelRE(SpatialPanelModel):
             sigma_alpha = pm.HalfNormal("sigma_alpha", sigma=sigma_alpha_sigma)
             alpha = pm.Normal("alpha", mu=0.0, sigma=sigma_alpha, dims="unit")
 
-            if self.robust:
-                self._add_nu_prior(model)
-
             if jax_logp:
                 X_const = pt.as_tensor_variable(self._X)
                 y_const = pt.as_tensor_variable(self._y)
@@ -764,7 +756,7 @@ class SEMPanelRE(SpatialPanelModel):
                     )
 
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
 
                     def sempanel_re_logp(value, lam_, beta_, sigma_, alpha_, nu_):
                         eps = _eps(lam_, beta_, alpha_)
@@ -805,7 +797,7 @@ class SEMPanelRE(SpatialPanelModel):
                 resid = self._y - pt.dot(self._X, beta) - alpha[unit_idx]
                 eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
                     logp_eps = pm.logp(
                         pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma), eps
                     ).sum()
@@ -988,8 +980,8 @@ class SDEMPanelRE(SpatialPanelModel):
           for :math:`\\sigma`.
         - ``sigma_alpha_sigma`` (float, default 10.0): HalfNormal
           prior std for :math:`\\sigma_\\alpha`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\lambda W|`; auto-selected
@@ -1073,9 +1065,6 @@ class SDEMPanelRE(SpatialPanelModel):
             sigma_alpha = pm.HalfNormal("sigma_alpha", sigma=sigma_alpha_sigma)
             alpha = pm.Normal("alpha", mu=0.0, sigma=sigma_alpha, dims="unit")
 
-            if self.robust:
-                self._add_nu_prior(model)
-
             if jax_logp:
                 Z_const = pt.as_tensor_variable(Z)
                 y_const = pt.as_tensor_variable(self._y)
@@ -1089,7 +1078,7 @@ class SDEMPanelRE(SpatialPanelModel):
                     )
 
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
 
                     def sdempanel_re_logp(value, lam_, beta_, sigma_, alpha_, nu_):
                         eps = _eps(lam_, beta_, alpha_)
@@ -1128,7 +1117,7 @@ class SDEMPanelRE(SpatialPanelModel):
                 resid = self._y - pt.dot(Z, beta) - alpha[unit_idx]
                 eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
                     logp_eps = pm.logp(
                         pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma), eps
                     ).sum()

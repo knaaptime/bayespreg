@@ -164,6 +164,10 @@ class PanelStructure(SpatialStructure):
 
             W = self._W_sparse
             if W.shape[0] == self._N:
+                # Ensure int64 indices to prevent overflow in scipy kron
+                W = sp.csr_matrix(W, dtype=np.float64)
+                W.indices = W.indices.astype(np.int64)
+                W.indptr = W.indptr.astype(np.int64)
                 # Force ``csr_matrix`` (not ``csr_array``) so the result is
                 # accepted by :mod:`pytensor.sparse`, which currently only
                 # supports the legacy ``scipy.sparse`` matrix API.

@@ -310,7 +310,7 @@ class _DynamicPanelMixin:
 
         phi_draws = idata.posterior["phi"].values.reshape(-1)
         sigma_draws = idata.posterior["sigma"].values.reshape(-1)
-        nu_draws = idata.posterior["nu"].values.reshape(-1) if self.robust else None
+        nu_draws = np.full(phi_draws.shape[0], self._nu) if self.robust else None
         spatial_draws = idata.posterior[spatial_param].values.reshape(-1)
 
         if spatial_param == "rho":
@@ -462,8 +462,8 @@ class OLSPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         - ``sigma2_alpha`` (float, default 2.0): InverseGamma prior alpha for sigma2
         - ``sigma2_beta`` (float, default var(y)): InverseGamma prior beta for sigma2
           for :math:`\\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         Accepted for API consistency; unused (no contemporaneous
@@ -486,10 +486,9 @@ class OLSPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
         \\varepsilon_t \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     def _build_pymc_model(self) -> pm.Model:
@@ -509,8 +508,7 @@ class OLSPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
             sigma = pm.Deterministic("sigma", pt.sqrt(sigma2))
             mu = phi * self._y_lag + pt.dot(self._Z_dyn, beta)
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y_dyn)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y_dyn)
@@ -552,10 +550,9 @@ class SDMRPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
         \\varepsilon_t \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     def _build_pymc_model(self) -> pm.Model:
@@ -586,8 +583,7 @@ class SDMRPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
                 + pt.dot(self._Z_dyn, beta)
             )
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y_dyn)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y_dyn)
@@ -693,8 +689,8 @@ class SDMUPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         - ``sigma2_alpha`` (float, default 2.0): InverseGamma prior alpha for sigma2
         - ``sigma2_beta`` (float, default var(y)): InverseGamma prior beta for sigma2
           for :math:`\\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`; auto-selected when
@@ -716,10 +712,9 @@ class SDMUPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
         \\varepsilon_t \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     def _build_pymc_model(self) -> pm.Model:
@@ -754,8 +749,7 @@ class SDMUPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
                 + pt.dot(self._Z_dyn, beta)
             )
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y_dyn)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y_dyn)
@@ -858,8 +852,8 @@ class SARPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         - ``sigma2_alpha`` (float, default 2.0): InverseGamma prior alpha for sigma2
         - ``sigma2_beta`` (float, default var(y)): InverseGamma prior beta for sigma2
           for :math:`\\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`; auto-selected when
@@ -878,10 +872,9 @@ class SARPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
         \\varepsilon_t \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     def _beta_names(self) -> list[str]:
@@ -911,8 +904,7 @@ class SARPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
             mu = phi * self._y_lag + rho * self._Wy_dyn + pt.dot(self._X_dyn, beta)
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y_dyn)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y_dyn)
@@ -1008,8 +1000,8 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         - ``sigma2_alpha`` (float, default 2.0): InverseGamma prior alpha for sigma2
         - ``sigma2_beta`` (float, default var(y)): InverseGamma prior beta for sigma2
           for :math:`\\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\lambda W|`; auto-selected
@@ -1029,10 +1021,9 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
         \\varepsilon_t = (I - \\lambda W)(y_t - \\phi y_{t-1} - X_t \\beta) \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     def _beta_names(self) -> list[str]:
@@ -1067,9 +1058,6 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
             sigma2 = pm.InverseGamma("sigma2", alpha=sigma2_alpha, beta=sigma2_beta)
             sigma = pm.Deterministic("sigma", pt.sqrt(sigma2))
 
-            if self.robust:
-                self._add_nu_prior(model)
-
             if jax_logp:
                 ylag_const = pt.as_tensor_variable(self._y_lag)
                 X_const = pt.as_tensor_variable(self._X_dyn)
@@ -1082,7 +1070,7 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
                     )
 
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
 
                     def sempanel_dyn_logp(value, lam_, phi_, beta_, sigma_, nu_):
                         eps = _eps(value, lam_, phi_, beta_)
@@ -1121,7 +1109,7 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
                 resid = self._y_dyn - phi * self._y_lag - pt.dot(self._X_dyn, beta)
                 eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
                     logp_eps = pm.logp(
                         pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma), eps
                     ).sum()
@@ -1220,8 +1208,8 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         - ``sigma2_alpha`` (float, default 2.0): InverseGamma prior alpha for sigma2
         - ``sigma2_beta`` (float, default var(y)): InverseGamma prior beta for sigma2
           for :math:`\\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\lambda W|`; auto-selected
@@ -1244,10 +1232,9 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
         \\varepsilon_t = (I - \\lambda W)\\bigl(y_t - \\phi y_{t-1} - X_t \\beta - (W X_t)\\theta\\bigr) \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     def _beta_names(self) -> list[str]:
@@ -1285,9 +1272,6 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
             sigma2 = pm.InverseGamma("sigma2", alpha=sigma2_alpha, beta=sigma2_beta)
             sigma = pm.Deterministic("sigma", pt.sqrt(sigma2))
 
-            if self.robust:
-                self._add_nu_prior(model)
-
             if jax_logp:
                 ylag_const = pt.as_tensor_variable(self._y_lag)
                 Z_const = pt.as_tensor_variable(Z)
@@ -1300,7 +1284,7 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
                     )
 
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
 
                     def sdempanel_dyn_logp(value, lam_, phi_, beta_, sigma_, nu_):
                         eps = _eps(value, lam_, phi_, beta_)
@@ -1339,7 +1323,7 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
                 resid = self._y_dyn - phi * self._y_lag - pt.dot(Z, beta)
                 eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
                     logp_eps = pm.logp(
                         pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma), eps
                     ).sum()
@@ -1434,8 +1418,8 @@ class SLXPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
         - ``sigma2_alpha`` (float, default 2.0): InverseGamma prior alpha for sigma2
         - ``sigma2_beta`` (float, default var(y)): InverseGamma prior beta for sigma2
           for :math:`\\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         Accepted for API consistency; unused (no spatial Jacobian).
@@ -1456,10 +1440,9 @@ class SLXPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
         \\varepsilon_t \\sim t_\\nu(0, \\sigma^2)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails. The lower bound of 2 ensures the
-    variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     def _beta_names(self) -> list[str]:
@@ -1489,8 +1472,7 @@ class SLXPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
             mu = phi * self._y_lag + pt.dot(Z, beta)
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y_dyn)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y_dyn)

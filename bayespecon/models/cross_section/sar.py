@@ -62,8 +62,8 @@ class SAR(GaussianLikelihoodMixin, SpatialModel):
           InverseGamma prior on :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): Scale of the
           InverseGamma prior on :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`. ``None`` (default)
@@ -115,9 +115,9 @@ class SAR(GaussianLikelihoodMixin, SpatialModel):
 
         \\varepsilon \\sim t_\\nu(0, \\sigma^2 I)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`
-    with rate ``nu_lam`` (default 1/30, mean ≈ 30, favouring near-Normal
-    tails). The lower bound of 2 ensures the variance exists.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
     """
 
     _priors_cls = SARPriors

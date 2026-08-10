@@ -1176,7 +1176,7 @@ def run_re_chain(
                 pass  # Progress handled by progress_manager if available
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     spatial_param = "rho" if model_type in ("sar", "sdm") else "lam"
     return {

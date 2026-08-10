@@ -1097,7 +1097,7 @@ def run_chains_jax_reduced(
             iter_done += step
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, iter_done - 1, tuning=True, accept=None)
+                    pm.update(c, iter_done - 1, tuning=True)
 
         # ── Phase 2: post-warmup draws — chunked scan ──
         draw_window = max(50, draws // 10) if draws > 0 else 50
@@ -1113,7 +1113,7 @@ def run_chains_jax_reduced(
             iter_done += step
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, tune + iter_done - 1, tuning=False, accept=None)
+                    pm.update(c, tune + iter_done - 1, tuning=False)
 
         # Concatenate chunk traces
         rho_all = np.concatenate([np.asarray(t[0]) for t in trace_parts], axis=1)

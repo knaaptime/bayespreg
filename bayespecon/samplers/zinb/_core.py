@@ -573,7 +573,7 @@ def run_zinb_chain(
                 pi_mean_samples[idx] = float(np.mean(_expit(state.eta_sel)))
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     return {
         "lam": lam_samples,

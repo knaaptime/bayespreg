@@ -1200,7 +1200,7 @@ def run_chains_jax_vectorized(
             iter_done += step
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, iter_done - 1, tuning=True, accept=None)
+                    pm.update(c, iter_done - 1, tuning=True)
 
         final_warm_states = state
 
@@ -1233,7 +1233,7 @@ def run_chains_jax_vectorized(
             iter_done += step
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, tune + iter_done - 1, tuning=False, accept=None)
+                    pm.update(c, tune + iter_done - 1, tuning=False)
 
         rhos = np.concatenate(rho_chunks, axis=1)
         betas = np.concatenate(beta_chunks, axis=1)

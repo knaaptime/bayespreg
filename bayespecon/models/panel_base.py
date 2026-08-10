@@ -310,9 +310,8 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         ``SpatialModel`` base class.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with a
-        ``TruncExp(lower=2)`` prior of rate ``nu_lam`` (default 1/30,
-        mean ≈ 30). Override via ``priors={"nu_lam": value}``.
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     w_vars : list of str, optional
         Names of X columns to spatially lag. Only relevant for
         subclasses that include ``WX`` terms (``SLXPanelFE``,
@@ -960,6 +959,13 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         if spatial_param not in {"rho", "lam"}:
             return
 
+        # When ``_build_pymc_model`` registered the likelihood as an observed
+        # CustomDist with the Jacobian folded in, PyMC already captured a
+        # complete pointwise log-likelihood — rebuilding it here would be pure
+        # duplicated work.
+        if getattr(self, "_native_log_likelihood", False):
+            return
+
         # SEM/SDEM on JAX backends build an observed CustomDist and already
         # have complete log_likelihood from PyMC.
         if spatial_param == "lam" and use_jax_likelihood(nuts_sampler):
@@ -973,7 +979,7 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         spatial_draws = idata.posterior[spatial_param].values.reshape(-1)
         beta_draws = idata.posterior["beta"].values.reshape(-1, Z.shape[1])
         sigma_draws = idata.posterior["sigma"].values.reshape(-1)
-        nu_draws = idata.posterior["nu"].values.reshape(-1) if self.robust else None
+        nu_draws = np.full(spatial_draws.shape[0], self._nu) if self.robust else None
         alpha_component = None
         if "alpha" in idata.posterior and hasattr(self, "_unit_idx"):
             alpha_draws = idata.posterior["alpha"].values
@@ -993,7 +999,10 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
             eps = resid - spatial_draws[:, None] * W_resid
 
         ll_data = _pointwise_gaussian_loglik(eps, sigma_draws, nu_draws)
-        jacobian = self._logdet_numpy_vec_fn(spatial_draws) * T_mult
+        # ``_logdet_numpy_vec_fn`` is built with ``T=self._T`` and so already
+        # returns T·log|I_N - ρW_N|.  Multiplying by ``T_mult`` again here
+        # squared the Jacobian; ``T_mult`` scales the spatial lag only.
+        jacobian = self._logdet_numpy_vec_fn(spatial_draws)
         ll_total = ll_data + jacobian[:, None] / n
 
         n_chains = idata.posterior.sizes["chain"]
