@@ -77,3 +77,108 @@ def test_resolve_none_auto_selects_nonsymmetric_W():
 def test_resolve_unknown_method_raises():
     with pytest.raises(ValueError, match="Unknown logdet method"):
         resolve_logdet_method("bogus", n=100)
+
+
+# ---------------------------------------------------------------------------
+# Fill-in guard tests
+# ---------------------------------------------------------------------------
+
+
+def _knn_graph(n: int, k: int, seed: int = 42):
+    """Build a symmetric k-NN graph with high fill-in."""
+    import numpy as np
+    import scipy.sparse as sp
+
+    rng = np.random.default_rng(seed)
+    pts = rng.standard_normal((n, 2))
+    d = np.sqrt(((pts[:, None, :] - pts[None, :, :]) ** 2).sum(axis=2))
+    W = np.zeros((n, n))
+    for i in range(n):
+        nearest = np.argsort(d[i])[: k + 1]
+        for j in nearest:
+            if j != i:
+                W[i, j] = 1.0
+    W = np.maximum(W, W.T)
+    return sp.csr_matrix(W)
+
+
+def test_fillin_guard_routes_dense_to_stochastic():
+    """Dense W at medium n should auto-select cheb_stochastic with a warning."""
+    import numpy as np
+    import scipy.sparse as sp
+
+    n = 2000
+    W_dense = np.ones((n, n)) - np.eye(n)  # fully dense, symmetric
+    with pytest.warns(UserWarning, match="fill-in ratio"):
+        result = resolve_logdet_method(None, n=n, W=W_dense)
+    assert result == "cheb_stochastic"
+
+
+def test_fillin_guard_routes_high_degree_sparse_to_stochastic():
+    """High-degree sparse W (KNN) at medium n should route to stochastic."""
+    n = 1000
+    W = _knn_graph(n, k=50)
+    with pytest.warns(UserWarning, match="fill-in ratio"):
+        result = resolve_logdet_method(None, n=n, W=W)
+    assert result == "cheb_stochastic"
+
+
+def test_fillin_guard_preserves_low_degree_sparse():
+    """Low-degree sparse W (rook-like) should still route to chol_aaa."""
+    import numpy as np
+    import scipy.sparse as sp
+
+    # Small sparse symmetric graph with low degree — ratio well below 20
+    rows = np.array([0, 1, 1, 2, 2, 3, 3, 0])
+    cols = np.array([1, 0, 2, 1, 3, 2, 0, 3])
+    vals = np.ones(len(rows))
+    W = sp.csr_matrix((vals, (rows, cols)), shape=(4, 4))
+    # n=4 is below eigen_cutoff (500), so this hits eigenvalue, not the guard.
+    # Use n in the medium range with a sparse W.
+    n = 1000
+    W_sparse = sp.csr_matrix((vals, (rows, cols)), shape=(n, n))
+    W_sparse = W_sparse + W_sparse.T
+    result = resolve_logdet_method(None, n=n, W=W_sparse)
+    assert result == "chol_aaa"
+
+
+def test_fillin_guard_no_W_unchanged():
+    """No W provided should still default to chol_aaa (no fill-in check)."""
+    result = resolve_logdet_method(None, n=10000)
+    assert result == "chol_aaa"
+
+
+def test_fillin_guard_explicit_method_respected():
+    """Explicit logdet_method should bypass the fill-in guard entirely."""
+    import numpy as np
+
+    n = 2000
+    W_dense = np.ones((n, n)) - np.eye(n)
+    # No warning should be emitted when method is explicit
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = resolve_logdet_method("chol_aaa", n=n, W=W_dense)
+    assert result == "chol_aaa"
+
+
+def test_fillin_guard_env_var_override():
+    """BAYESPECON_LOGDET_MAX_FILLIN_RATIO=999 should disable the guard."""
+    import numpy as np
+
+    n = 2000
+    W_dense = np.ones((n, n)) - np.eye(n)
+    # Set env var to effectively disable the guard
+    import os
+
+    old = os.environ.get("BAYESPECON_LOGDET_MAX_FILLIN_RATIO")
+    os.environ["BAYESPECON_LOGDET_MAX_FILLIN_RATIO"] = "99999"
+    try:
+        result = resolve_logdet_method(None, n=n, W=W_dense)
+        assert result == "chol_aaa"
+    finally:
+        if old is None:
+            os.environ.pop("BAYESPECON_LOGDET_MAX_FILLIN_RATIO", None)
+        else:
+            os.environ["BAYESPECON_LOGDET_MAX_FILLIN_RATIO"] = old
