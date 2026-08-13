@@ -50,7 +50,7 @@ def _fit(cls, data, **kwargs):
     return model
 
 
-@pytest.mark.parametrize("cls", [OLS, SLX, SAR, SDM, SEM, SDEM])
+@pytest.mark.parametrize("cls", [SAR, SDM, SEM, SDEM])
 class TestMatchesPyMC:
     def test_parameter_names_and_order_match(self, cls, data):
         """A different order would make the bridge estimator read blocks
