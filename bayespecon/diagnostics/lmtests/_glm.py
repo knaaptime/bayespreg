@@ -21,7 +21,7 @@ carries over with the substitutions
 * projection :math:`M_X \;\longrightarrow\; M_X^\Omega
   = I - X(X^\top \Omega X)^{-1} X^\top \Omega`.
 
-We marginalise :math:`\omega` analytically by replacing it with its
+We marginalize :math:`\omega` analytically by replacing it with its
 conditional mean given the current draw of :math:`\beta` (and
 :math:`\alpha` for NB):
 
@@ -36,7 +36,7 @@ Parameter conventions
 ---------------------
 * Logit:  :math:`b_i = 1`,  :math:`\kappa_i = y_i - 1/2`.
 * NegBin: :math:`b_i = y_i + \alpha`,  :math:`\kappa_i = (y_i - \alpha)/2`,
-  with :math:`\alpha` the dispersion of the NB-2 logistic parameterisation.
+  with :math:`\alpha` the dispersion of the NB-2 logistic parameterization.
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def _negbin_working_response(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""Working response, working residual and PG weights for an NB-2 model.
 
-    Uses the logistic parameterisation :math:`\psi_i = \log(\mu_i/\alpha)`
+    Uses the logistic parameterization :math:`\psi_i = \log(\mu_i/\alpha)`
     so :math:`\psi_i = x_i'\beta - \log\alpha`.  PG shape is
     :math:`b_i = y_i + \alpha` and :math:`\kappa_i = (y_i - \alpha)/2`.
 
@@ -138,7 +138,7 @@ def _negbin_working_response(
     y = np.asarray(model._y, dtype=np.float64)
     eta = _glm_eta_draws(model, beta_draws)  # (draws, n) — log-mu
     alpha = alpha_draws[:, None]  # (draws, 1)
-    psi = eta - np.log(alpha)  # logistic-parameterised linear predictor
+    psi = eta - np.log(alpha)  # logistic-parameterized linear predictor
     b = y[None, :] + alpha  # (draws, n)
     kappa = 0.5 * (y[None, :] - alpha)  # (draws, n)
     omega = _pg_mean_weight(psi, b=b)

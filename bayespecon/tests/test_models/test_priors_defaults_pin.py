@@ -24,49 +24,49 @@ import pytest
 from bayespecon.models import priors as P
 from bayespecon.models.priors import priors_as_dict
 
-NU = 1.0 / 30.0
+NU = 4.0  # fixed Student-t df (LeSage's rval)
 
 EXPECTED: dict[str, dict[str, float]] = {
-    "BasePriors": {"nu_lam": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
-    "OLSPriors": {"nu_lam": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
-    "SLXPriors": {"nu_lam": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
+    "BasePriors": {"nu": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
+    "OLSPriors": {"nu": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
+    "SLXPriors": {"nu": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
     "SARPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "rho_lower": -1.0,
         "rho_upper": 1.0,
     },
     "SEMPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "lam_lower": -1.0,
         "lam_upper": 1.0,
     },
     "SDMPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "rho_lower": -1.0,
         "rho_upper": 1.0,
     },
     "SDEMPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "lam_lower": -1.0,
         "lam_upper": 1.0,
     },
     "NegBinPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "alpha_sigma": 2.5,
         "alpha_nu": 3.0,
     },
     "SARNegBinPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "alpha_sigma": 2.5,
@@ -75,7 +75,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "rho_upper": 1.0,
     },
     "SARTobitPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "rho_lower": -1.0,
@@ -83,7 +83,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "censor_sigma": 10.0,
     },
     "SEMTobitPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "lam_lower": -1.0,
@@ -91,7 +91,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "censor_sigma": 10.0,
     },
     "SDMTobitPriors": {
-        "nu_lam": NU,
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "rho_lower": -1.0,
@@ -117,39 +117,45 @@ EXPECTED: dict[str, dict[str, float]] = {
         "lam_lower": -0.999,
         "lam_upper": 0.999,
     },
-    "PanelBasePriors": {"sigma2_alpha": 2.0, "sigma_sigma": 10.0},
-    "PanelOLSPriors": {"sigma2_alpha": 2.0, "sigma_sigma": 10.0},
-    "PanelSLXPriors": {"sigma2_alpha": 2.0, "sigma_sigma": 10.0},
+    "PanelBasePriors": {"nu": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
+    "PanelOLSPriors": {"nu": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
+    "PanelSLXPriors": {"nu": NU, "sigma2_alpha": 2.0, "sigma_sigma": 10.0},
     "PanelSARPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "rho_lower": -1.0,
         "rho_upper": 1.0,
     },
     "PanelSEMPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "lam_lower": -1.0,
         "lam_upper": 1.0,
     },
     "PanelSDMPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "rho_lower": -1.0,
         "rho_upper": 1.0,
     },
     "PanelSDEMPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "lam_lower": -1.0,
         "lam_upper": 1.0,
     },
     "PanelOLSREPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "sigma_alpha_sigma": 10.0,
     },
     "PanelSARREPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "sigma_alpha_sigma": 10.0,
@@ -157,6 +163,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "rho_upper": 1.0,
     },
     "PanelSEMREPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "sigma_alpha_sigma": 10.0,
@@ -164,6 +171,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "lam_upper": 1.0,
     },
     "PanelSDEMREPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "sigma_alpha_sigma": 10.0,
@@ -171,6 +179,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "lam_upper": 1.0,
     },
     "PanelSARTobitPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "rho_lower": -1.0,
@@ -178,6 +187,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "censor_sigma": 10.0,
     },
     "PanelSEMTobitPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "lam_lower": -1.0,
@@ -185,24 +195,28 @@ EXPECTED: dict[str, dict[str, float]] = {
         "censor_sigma": 10.0,
     },
     "PanelDynamicBasePriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,
         "phi_upper": 0.95,
     },
     "PanelOLSDynamicPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,
         "phi_upper": 0.95,
     },
     "PanelSLXDynamicPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,
         "phi_upper": 0.95,
     },
     "PanelSARDynamicPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,
@@ -211,6 +225,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "rho_upper": 0.95,
     },
     "PanelSEMDynamicPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,
@@ -219,6 +234,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "lam_upper": 0.95,
     },
     "PanelSDMRDynamicPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,
@@ -227,6 +243,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "rho_upper": 0.95,
     },
     "PanelSDMUDynamicPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,
@@ -237,6 +254,7 @@ EXPECTED: dict[str, dict[str, float]] = {
         "theta_upper": 0.95,
     },
     "PanelSDEMDynamicPriors": {
+        "nu": NU,
         "sigma2_alpha": 2.0,
         "sigma_sigma": 10.0,
         "phi_lower": -0.95,

@@ -1,4 +1,4 @@
-"""Mixins providing reusable model-construction behaviours."""
+"""Mixins providing reusable model-construction behaviors."""
 
 from ._gaussian import GaussianLikelihoodMixin
 

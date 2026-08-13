@@ -50,7 +50,7 @@ from bayespecon.diagnostics.lmtests import (
 
 
 def _ring_W(n: int):
-    """Row-normalised ring weights (1 above, 1 below, wrap-around)."""
+    """Row-normalized ring weights (1 above, 1 below, wrap-around)."""
     W = np.eye(n, k=1) + np.eye(n, k=-1)
     W[0, -1] = W[-1, 0] = 1.0
     W = W / W.sum(axis=1, keepdims=True)
@@ -1014,7 +1014,7 @@ class TestPanelClosedForm:
 #
 #     LM_lag_bayes = (e'Wy)² / (T_ww σ̂² + ‖Wy‖²)
 #
-# These are algebraically distinct statistics (different score normalisation
+# These are algebraically distinct statistics (different score normalization
 # and different denominator), so a numerical comparison would mislead users
 # into thinking one implementation is wrong. The Phase-1 hand-derivations
 # already verify that the bayespecon code matches the Doğan formula to

@@ -8,7 +8,7 @@ The unrestricted origin–destination flow model has system matrix
 
 on the ``N = n^2`` flow lattice.  ``A`` is **directed** (non-symmetric,
 non-D-symmetrizable), so no Cholesky applies; and it is far too large to
-densify (``N \times N`` with ``N = n^2``).  The numpy chain factorises the
+densify (``N \times N`` with ``N = n^2``).  The numpy chain factorizes the
 sparse ``A`` on the host every time a ``\rho`` moves (see
 ``_flow._solve_A_unrestricted``).  This module provides the JAX-native
 equivalent: a single ``sparsax`` symbolic analysis reused across the whole
@@ -19,10 +19,10 @@ The crucial invariant is that **the sparsity pattern of ``A`` is constant**
 across ``\rho`` (it is the structural union of ``I, W_d, W_o, W_w``).  We
 build that shared pattern once and carry four value vectors aligned to it, so
 each solve only rescales values and calls ``sparsax.lu_solve`` — the
-symbolic factorisation (AMD ordering + elimination tree) is never redone.
+symbolic factorization (AMD ordering + elimination tree) is never redone.
 
 Keeping this alongside the numpy host path is intentional: sparsax shines on
-GPU, while host KLU/UMFPACK remains competitive on CPU.
+GPU, while host KLU remains competitive on CPU.
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ def _make_flow_solvers(ctx):
     ``A(ρ)⁻¹ rhs`` via ``sparsax.lu_solve`` (SuiteSparse KLU) and ``matvec``
     is a dict ``{"d","o","w"}`` of sparse (BCOO) lag matvecs.
 
-    ``sparsax.lu_solve`` is vmap-safe and reuses its numeric factorisation via
+    ``sparsax.lu_solve`` is vmap-safe and reuses its numeric factorization via
     a content-addressed cache: the m+1 solves of a Krylov basis at a fixed
     (ρ_d,ρ_o,ρ_w) pay one ``klu_factor`` and m cheap solves — per chain — even
     under ``jax.vmap`` over chains, which stays vmap-safe under ``jit(vmap(...))``;
@@ -295,13 +295,12 @@ def _make_flow_gibbs_step(
         """One ρ_k slice with a W_k-direction basis at the current A_0.
 
         Krylov-only (``solve_at=None``): candidates outside the Krylov radius are
-        rejected rather than evaluated with a per-candidate direct solve, which
-        under ``jax.vmap`` would be computed for *every* candidate (the dominant
-        cost).  The bounded ρ_k step this induces is offset by a wider
-        ``krylov_dmax`` with enough degree to stay accurate.
+        rejected rather than evaluated with a direct solve.  The bounded ρ_k
+        step this induces is offset by a wider ``krylov_dmax`` with enough degree
+        to stay accurate.
 
         Basis reuse: when all three ρ's are within ``_reuse_threshold`` of
-        the basis centre, the previous sweep's basis is reused.
+        the basis center, the previous sweep's basis is reused.
         """
 
         def _rebuild(_):
@@ -330,12 +329,19 @@ def _make_flow_gibbs_step(
             operand=None,
         )
 
+        # Horner origin must be the center V_stack was *built* at, not the
+        # current ρ_k: on the reuse branch they differ by up to
+        # ``_reuse_threshold``, and measuring Δρ from ρ_k would evaluate
+        # U at ρ_basis + (ρ − ρ_k) instead of at ρ.  ``wkey`` is a static
+        # Python string, so this selects at trace time.
+        rho_basis_k = {"d": rd_b, "o": ro_b, "w": rw_b}[wkey]
+
         lo, hi = _wall_bounds(other_abs)
 
         rho_new = _slice_sample_rho_jax(
             rho_current=rho_k,
             V_stack=V_stack,
-            rho_basis=rho_k,
+            rho_basis=rho_basis_k,
             omega=omega,
             y_jax=y_jax,
             alpha=alpha,
@@ -477,13 +483,11 @@ def run_chains_jax_flow(
 ):
     """Run the unrestricted flow NB Gibbs sampler on the JAX backend.
 
-    All chains run together under ``jax.vmap`` (like the reduced-form SAR-NB and
-    logit paths).  The non-symmetric LU solve goes through ``sparsax.lu_solve``
-    (SuiteSparse KLU) — vmap-safe with numeric factor-reuse under
-    ``jit(vmap(...))``.  The three ρ
-    slices are Krylov-only (no per-candidate direct solve, which under vmap would
-    run for every candidate).  ``W`` is never densified; the exact PG draw uses
-    the host callback.
+    All chains run together under ``jax.vmap``.  The non-symmetric LU solve goes
+    through ``sparsax.lu_solve`` (SuiteSparse KLU) — vmap-safe with numeric
+    factor-reuse under ``jit(vmap(...))``.  The three ρ slices are Krylov-only
+    (no per-candidate direct solve under vmap).  ``W`` is never densified; the
+    exact PG draw uses the host callback.
 
     Returns one dict per chain with keys ``rho_d``, ``rho_o``, ``rho_w``,
     ``beta``, ``alpha``, ``log_lik``.
@@ -630,7 +634,7 @@ def _build_sar_solver_jax(W_csc, n):
 
     Returns ``solve(rho, rhs)`` where ``rhs`` is ``(n,)`` or ``(n, m)``.
     The symbolic analysis is cached by sparsax keyed on the constant
-    COO pattern, so only the numeric factorisation is redone per ρ.
+    COO pattern, so only the numeric factorization is redone per ρ.
     """
     import jax.numpy as jnp
     import sparsax
@@ -990,7 +994,7 @@ def run_chains_jax_flow_separable(
     """Run the separable flow NB Gibbs sampler on the JAX backend.
 
     The separable Kronecker model (``ρ_w = -ρ_d·ρ_o``) factors the ``N×N``
-    system into two ``n×n`` solves, each using a sparsax KLU factorisation
+    system into two ``n×n`` solves, each using a sparsax KLU factorization
     on the regional weights pattern.  Each ρ_k slice uses a Krylov basis
     on the n×n system with cross-sweep reuse via ``jax.lax.cond``.
 

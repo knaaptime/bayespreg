@@ -92,9 +92,12 @@ class BasePriors:
         Half-normal scale on σ.  **Tobit/Probit models only.**  Ignored
         by the Gaussian and NB paths, which use ``sigma2_alpha`` /
         ``sigma2_beta`` (InverseGamma on σ²).
-    nu_lam
-        Rate of the Exponential prior on Student-t degrees of freedom when
-        ``robust=True``.  Mean ``1/nu_lam`` (default mean ≈ 30).
+    nu
+        Student-t degrees of freedom used when ``robust=True``.  Following
+        LeSage (2009) this is a **fixed** hyperparameter rather than a
+        sampled quantity, which keeps the NUTS and Gibbs paths targeting the
+        same posterior.  The default of 4 matches LeSage's ``rval`` and gives
+        genuinely fat tails; large values (≳ 30) approach the Normal.
 
     References
     ----------
@@ -108,7 +111,7 @@ class BasePriors:
     sigma2_alpha: float = 2.0
     sigma2_beta: float | None = None
     sigma_sigma: float = 10.0  # Tobit/Probit only.
-    nu_lam: float = 1.0 / 30.0
+    nu: float = 4.0  # Student-t df when robust=True; LeSage's rval.
 
 
 @dataclass(frozen=True)
@@ -339,9 +342,6 @@ def priors_as_dict(priors: Any) -> dict[str, Any]:
 class PanelBasePriors:
     """Priors shared by every panel model.
 
-    Panel models do not currently expose Student-t robustification, so
-    ``nu_lam`` from :class:`BasePriors` is omitted.
-
     Attributes
     ----------
     beta_mu, beta_sigma
@@ -357,6 +357,9 @@ class PanelBasePriors:
         Half-normal scale on :math:`\\sigma`.  Retained for backward
         compatibility with callers that still pass it; unused by the
         Gaussian path, which uses ``sigma2_alpha`` / ``sigma2_beta``.
+    nu
+        Student-t degrees of freedom used when ``robust=True``.  Fixed
+        rather than sampled; see :class:`BasePriors`.
     """
 
     beta_mu: float | Any = None
@@ -364,6 +367,7 @@ class PanelBasePriors:
     sigma2_alpha: float = 2.0
     sigma2_beta: float | None = None
     sigma_sigma: float = 10.0
+    nu: float = 4.0  # Student-t df when robust=True; LeSage's rval.
 
 
 @dataclass(frozen=True)

@@ -80,7 +80,7 @@ def bernstein_rho(rho_min: float, rho_max: float) -> float:
     """Bernstein-ellipse parameter for ``log|I - \u03c1W|`` on ``[rho_min, rho_max]``.
 
     ``J(\u03c1) = \u03a3 log(1 - \u03c1\u03bb\u1d62)`` is analytic on the interval with logarithmic
-    singularities at ``\u03c1 = 1/\u03bb\u1d62``.  For row-standardised ``W`` the extreme
+    singularities at ``\u03c1 = 1/\u03bb\u1d62``.  For row-standardized ``W`` the extreme
     eigenvalues are ``\u03bb_max = 1`` (Perron) and ``\u03bb_min \u2248 -1``, so the nearest
     singularities sit at ``\u03c1 = \u00b11``.  Mapping the interval to ``[-1, 1]`` sends
     a singularity at ``s`` to ``t = (2s - a - b)/(b - a)``, and the Chebyshev
@@ -123,7 +123,7 @@ _CHEB_ERR_ALPHA = 0.92
 
 #: Default accuracy target, **relative** to the scale of ``J(\u03c1)`` itself, which
 #: is ``O(n)``.  An absolute target would be the wrong invariant: it would make
-#: the interpolant needlessly loose on small problems, where the factorisations
+#: the interpolant needlessly loose on small problems, where the factorizations
 #: are cheap anyway, and needlessly tight on large ones.  Because the fitted
 #: error also grows as ``n^0.92``, a relative target leaves the selected order
 #: nearly independent of ``n`` \u2014 matching the n-independence of the lookup table
@@ -169,7 +169,7 @@ def cheb_order_for_tolerance(
     Returns
     -------
     int
-        Number of Chebyshev nodes (= exact factorisations at setup).
+        Number of Chebyshev nodes (= exact factorizations at setup).
     """
     # Node cap.  ``BAYESPECON_LOGDET_NODE_CAP`` forces every interpolant to the
     # same ceiling, which is how a probe-matched comparison is set up: on a wide

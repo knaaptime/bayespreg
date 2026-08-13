@@ -48,7 +48,7 @@ def _make_precision(n: int, rho: float = 0.3, sigma2: float = 1.0):
     """
     rng = np.random.default_rng(42)
     W = sp.diags([1.0, 1.0], [-1, 1], shape=(n, n), format="csr")
-    W = W / 2.0  # row-standardise
+    W = W / 2.0  # row-standardize
 
     omega = rng.gamma(2.0, 1.0, size=n)
     W_sym = W + W.T

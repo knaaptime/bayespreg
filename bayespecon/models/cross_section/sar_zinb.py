@@ -15,7 +15,7 @@ reduced-form SAR-NB count equation via a zero-allocation block:
 
 Both equations are reduced-form: the spatial lag enters each linear
 predictor as a deterministic mean-propagator (no latent noise field), so
-the ``|I − λW|`` / ``|I − ρW|`` Jacobians cancel under marginalisation.
+the ``|I − λW|`` / ``|I − ρW|`` Jacobians cancel under marginalization.
 The logit link fixes σ² = 1 in the selection equation.  The Pólya–Gamma
 augmentation yields fully conjugate Gibbs updates for all blocks except
 ρ, λ, and α, which use 1-D adaptive slice sampling.  The NumPy and JAX
@@ -199,7 +199,7 @@ class SARZINB(SpatialModel):
 
     @cached_property
     def _sel_logdet_grad_numpy_vec_fn(self):
-        """Vectorised ``(λ_arr) -> g(λ)`` logdet-gradient evaluator for W_sel.
+        """Vectorized ``(λ_arr) -> g(λ)`` logdet-gradient evaluator for W_sel.
 
         Mirrors :attr:`SpatialModel._logdet_grad_numpy_vec_fn` on the
         selection-equation weights; ``method=None`` auto-resolves to the fast
@@ -252,8 +252,8 @@ class SARZINB(SpatialModel):
     def _initialize_from_ols(self, rng):
         """Warm-start the ZINB Gibbs sampler.
 
-        Uses profile-log-likelihood initialisation for both equations:
-        the selection equation is initialised from a spatial logit
+        Uses profile-log-likelihood initialization for both equations:
+        the selection equation is initialized from a spatial logit
         profile, and the count equation from a spatial NB profile on
         log(y+0.5).
         """
@@ -267,25 +267,15 @@ class SARZINB(SpatialModel):
         k = X.shape[1]
         p = Z.shape[1]
 
-        # --- Selection equation initialisation ---
-        # Profile log-likelihood on d (binary) using linear probability model
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_lam, _best_gamma, _best_ll_sel = 0.0, np.zeros(p), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_sel_csc
-                _Ztilde_g = sp.linalg.spsolve(_A_g, Z)
-                _gamma_g = np.linalg.lstsq(_Ztilde_g, d, rcond=None)[0]
-                _eta_g = _Ztilde_g @ _gamma_g
-                _sig2_g = float(np.mean((d - _eta_g) ** 2))
-                if _sig2_g > 1e-10:
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll_sel:
-                        _best_ll_sel = _ll_g
-                        _best_lam = _rho_g
-                        _best_gamma = _gamma_g.copy()
-            except Exception:
-                pass
+        # --- Selection equation initialization ---
+        # Profile log-likelihood on d (binary) using linear probability model.
+        # Cached sparse solver: A = I - λW shares its pattern across the grid.
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_lam, _best_gamma, _best_ll_sel = profile_loglik_rho_grid(d, Z, W_sel_csc)
 
         lam_init = float(
             np.clip(
@@ -298,8 +288,8 @@ class SARZINB(SpatialModel):
 
         # η^sel from the selection profile
         try:
-            _A_sel = sp.eye(n, format="csc") - lam_init * W_sel_csc
-            eta_sel_init = sp.linalg.spsolve(_A_sel, Z @ gamma_init)
+            _sel_solver = CachedSparseSolver([W_sel_csc], n)
+            eta_sel_init = _sel_solver.solve([-lam_init], Z @ gamma_init)
         except Exception:
             eta_sel_init = Z @ gamma_init
 
@@ -308,10 +298,11 @@ class SARZINB(SpatialModel):
 
         omega_sel_init = sample_polyagamma(np.ones(n), eta_sel_init, rng=rng)
 
-        # --- Count equation initialisation ---
+        # --- Count equation initialization ---
         # Profile log-likelihood on log(y+0.5) using ONLY positive
         # observations.  Structural zeros (d=0) should not influence
-        # the count equation initialisation.
+        # the count equation initialization.  The cached sparse solver
+        # reuses the (I - ρW) pattern across the grid.
         pos_mask = y > 0
         n_pos = int(np.sum(pos_mask))
         if n_pos > k:
@@ -323,11 +314,11 @@ class SARZINB(SpatialModel):
             _X_pos = X
             pos_mask = np.ones(n, dtype=bool)
             n_pos = n
+        _cnt_grid_solver = CachedSparseSolver([W_cnt_csc], n)
         _best_rho, _best_beta, _best_ll_cnt = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
+        for _rho_g in np.arange(0.05, 0.96, 0.05):
             try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_cnt_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, _X_pos)
+                _Xtilde_g = _cnt_grid_solver.solve([-float(_rho_g)], _X_pos)
                 _beta_g = np.linalg.lstsq(_Xtilde_g, _log_y, rcond=None)[0]
                 _eta_g = _Xtilde_g @ _beta_g
                 _sig2_g = float(np.mean((_log_y - _eta_g) ** 2))
@@ -351,8 +342,7 @@ class SARZINB(SpatialModel):
 
         # Estimate α from Pearson residuals on positive observations
         try:
-            _A_cnt = sp.eye(n, format="csc") - rho_init * W_cnt_csc
-            _Xtilde_init = sp.linalg.spsolve(_A_cnt, X)
+            _Xtilde_init = _cnt_grid_solver.solve([-rho_init], X)
             _eta_init = _Xtilde_init[pos_mask] @ beta_init
             _resid2 = float(np.mean((_log_y - _eta_init) ** 2))
             alpha_init = float(np.clip(1.0 / max(_resid2, 0.01), 0.5, 50.0))
@@ -371,7 +361,7 @@ class SARZINB(SpatialModel):
         # ω^cnt: start at 0.25 (uninformative)
         omega_cnt_init = 0.25 * np.ones(n, dtype=np.float64)
 
-        # z: initialise from data (z=1 for y>0, draw for y=0)
+        # z: initialize from data (z=1 for y>0, draw for y=0)
         z_init = np.ones(n, dtype=np.int8)
         zero_mask = y == 0
         if np.any(zero_mask):
@@ -526,12 +516,10 @@ class SARZINB(SpatialModel):
         W_cnt_csr = self._W_sparse.tocsr()
         W_cnt_csc = self._W_sparse.tocsc()
 
-        if self._W_eigs is not None:
-            W_eig_max = float(np.max(np.abs(self._W_eigs)))
-            W_eig_min = float(np.min(np.real(self._W_eigs)))
-        else:
-            W_eig_max = 1.0
-            W_eig_min = -1.0
+        # Spectrum bounds for the solve path.  Deliberately *not* from
+        # ``_W_eigs``: that densifies W for an O(n^3) eigendecomposition, and
+        # only bounds are needed here.  See ``_W_spectral_bounds``.
+        W_eig_max, W_eig_min = self._W_spectral_bounds
 
         W_cnt_sym, W_cnt_tW, cnt_pattern = _make_cholmod_pattern(W_cnt_csc, n)
         cnt_cholmod_pattern = cnt_pattern
@@ -540,7 +528,7 @@ class SARZINB(SpatialModel):
         # Same ReducedGibbsCache shape as the count; the λ slice uses the
         # direct-CG path (basis=None), so krylov_degree is unused here.  For
         # W_sel eigen bounds reuse the count's when the weights match, else use
-        # the row-standardised default [−1, 1] (safe for the CG SPD check).
+        # the row-standardized default [−1, 1] (safe for the CG SPD check).
         W_sel_csr = self._W_sel_sparse.tocsr()
         W_sel_csc = self._W_sel_sparse.tocsc()
         W_sel_sym, W_sel_tW, sel_pattern = _make_cholmod_pattern(W_sel_csc, n)
@@ -597,12 +585,10 @@ class SARZINB(SpatialModel):
         )
 
         # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        from ...samplers._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
         def _run_one_chain(chain_id, seed, progress_manager=None, chain_id_kw=None):
             chain_rng = np.random.default_rng(seed)
@@ -712,7 +698,7 @@ class SARZINB(SpatialModel):
             if self._is_sel_row_std:
                 mean_row_sum = 1.0 / (1.0 - lam_draws)
             else:
-                # The non-row-standardised total effect is a column-weighted
+                # The non-row-standardized total effect is a column-weighted
                 # bilinear form (1'S1), not a trace, so it keeps the
                 # eigenvector decomposition of W_sel.
                 from ...diagnostics.spatial_effects import _chunked_eig_means

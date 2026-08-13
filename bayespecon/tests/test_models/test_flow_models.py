@@ -23,7 +23,7 @@ class TestBarryPaceTraces:
 
         n = 10
         W = sp.random(n, n, density=0.3, format="csr", random_state=0, dtype=np.float64)
-        # Row-normalise
+        # Row-normalize
         row_sums = np.asarray(W.sum(axis=1)).ravel()
         row_sums[row_sums == 0] = 1
         W = sp.diags(1.0 / row_sums) @ W
@@ -466,7 +466,7 @@ class TestSparseFlowSolveOp:
         n = 4
         G = generate_flow_data(n=n, seed=0)["G"]
         W = G.sparse.astype(np.float64).tocsr()
-        # Row-standardise
+        # Row-standardize
         row_sums = np.asarray(W.sum(axis=1)).ravel()
         W = sp.diags(1.0 / row_sums) @ W
 

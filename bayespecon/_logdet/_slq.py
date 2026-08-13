@@ -1,6 +1,6 @@
 """Stochastic Lanczos Quadrature (SLQ) for log|I - ρW|.
 
-For row-standardised W from an **undirected graph** (rook, queen, distance-band),
+For row-standardized W from an **undirected graph** (rook, queen, distance-band),
 W = D⁻¹A where A is symmetric and D = diag(degrees).  W is diagonally similar
 to the symmetric matrix W_sym = D^{1/2} W D^{-1/2}, which has the **same
 eigenvalues** but real — enabling valid Gauss quadrature via Lanczos.
@@ -8,11 +8,11 @@ eigenvalues** but real — enabling valid Gauss quadrature via Lanczos.
 For directed W (non-symmetric sparsity pattern), falls back to Arnoldi with
 complex Ritz values.
 
-Algorithm (D-symmetrised Lanczos)
+Algorithm (D-symmetrized Lanczos)
 ---------------------------------
 1. Recover D from W's sparsity pattern (O(nnz) BFS).
 2. Form W_sym = D^{1/2} W D^{-1/2} as a LinearOperator (two O(n) scalings
-   + one O(nnz) sparse matvec — never materialised).
+   + one O(nnz) sparse matvec — never materialized).
 3. For each probe z: run k steps of Lanczos on W_sym from the unit start
    q₁ = z/‖z‖, build tridiagonal T_k, eigendecompose → (θ_i, v_i).  Canonical
    SLQ (Ubaru–Chen–Saad) weights: w_i = n · v_{1,i}².
@@ -61,14 +61,14 @@ class SLQPrecompute:
     Attributes
     ----------
     nodes : np.ndarray, shape (n_probes, k)
-        Gauss quadrature nodes (real for D-symmetrised, complex for Arnoldi).
+        Gauss quadrature nodes (real for D-symmetrized, complex for Arnoldi).
     weights : np.ndarray, shape (n_probes, k)
         Quadrature weights, ``n``-scaled (``Σᵢ weights = n`` per probe): real
         ``n · v₁ᵢ²`` for Lanczos, complex ``n · γᵢ`` (bilinear) for Arnoldi.
     n : int
         Matrix dimension.
     method : str
-        "lanczos" (D-symmetrised) or "arnoldi" (non-symmetric fallback).
+        "lanczos" (D-symmetrized) or "arnoldi" (non-symmetric fallback).
     cv_coeffs : np.ndarray or None
         Control-variate corrections ``m̂_j - tr(Wʲ)`` for ``j = 1 .. n_exact``,
         or ``None`` when the correction is disabled.  See
@@ -383,17 +383,17 @@ def _d_symmetrize_numba(W: sp.csr_matrix) -> sp.csc_matrix | None:
 def _recover_symmetrizing_diagonal(W: sp.csr_matrix) -> np.ndarray | None:
     """Recover D such that D^{1/2} W D^{-1/2} is symmetric.
 
-    For W = D⁻¹A (row-standardised, A symmetric), D[i]/D[j] = W[j,i]/W[i,j]
+    For W = D⁻¹A (row-standardized, A symmetric), D[i]/D[j] = W[j,i]/W[i,j]
     for each edge (i,j), so ``log D`` is a potential on the graph and is
     recovered by accumulating edge log-ratios along a spanning forest.
 
     The traversal is a BFS spanning forest from ``scipy.sparse.csgraph``,
     seeded at the lowest-index node of each connected component, and the
-    accumulation is done by pointer doubling — ``O(log depth)`` vectorised
+    accumulation is done by pointer doubling — ``O(log depth)`` vectorized
     passes rather than a Python loop over edges.
 
     Accumulating in log space, then centring each component before
-    exponentiating, also extends the range of graphs that can be symmetrised at
+    exponentiating, also extends the range of graphs that can be symmetrized at
     all: the multiplicative propagation it replaces overflowed once the edge
     ratios compounded past ``~1e308`` along a path, whereas the same graph is
     representable here because ``D`` is free up to a per-component scalar.  The
@@ -409,7 +409,7 @@ def _recover_symmetrizing_diagonal(W: sp.csr_matrix) -> np.ndarray | None:
     -------
     np.ndarray or None
         D (up to scalar multiple), or None if W has asymmetric sparsity
-        (directed graph — D-symmetrisation not applicable).
+        (directed graph — D-symmetrization not applicable).
     """
     from scipy.sparse.csgraph import breadth_first_order, connected_components
 
@@ -519,7 +519,7 @@ def _recover_symmetrizing_diagonal(W: sp.csr_matrix) -> np.ndarray | None:
     # representable range centred on 1.  Without it, a graph whose edge ratios
     # compound in one direction — a long chain, a steep density gradient —
     # overflows to ``inf`` at one end and underflows to ``0`` at the other, and
-    # both are rejected downstream as a failed symmetrisation.
+    # both are rejected downstream as a failed symmetrization.
     #
     # Via bincount rather than a mask per component: contiguity weights routinely
     # have many islands, and ``labels == c`` in a loop is O(n · n_comp).
@@ -731,7 +731,7 @@ def slq_logdet_precompute(
 ) -> SLQPrecompute:
     """Precompute SLQ quadrature rules for log|I - ρW|.
 
-    For undirected-graph W (symmetric sparsity), uses D-symmetrised Lanczos
+    For undirected-graph W (symmetric sparsity), uses D-symmetrized Lanczos
     with real eigenvalues and valid Gauss quadrature.  For directed W,
     falls back to Arnoldi with complex Ritz values.
 
@@ -776,11 +776,11 @@ def slq_logdet_precompute(
         n = W_arr.shape[0]
         W_sp = sp.csr_matrix(W_arr)
 
-    # Try D-symmetrisation
+    # Try D-symmetrization
     D = _recover_symmetrizing_diagonal(W_sp)
 
     if D is not None:
-        # D-symmetrised batched Lanczos (real eigenvalues, valid Gauss quadrature)
+        # D-symmetrized batched Lanczos (real eigenvalues, valid Gauss quadrature)
         # Use the sparse matrix directly for batched matvec (LinearOperator doesn't
         # support matmat efficiently).
         sqrt_D = np.sqrt(D)

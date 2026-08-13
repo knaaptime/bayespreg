@@ -69,7 +69,7 @@ class SARProbit(SharedSpatialMethods):
         :class:`scipy.sparse` matrix.  The legacy :class:`libpysal.weights.W`
         object is **not** accepted directly; pass ``w.sparse`` or convert with
         ``libpysal.graph.Graph.from_W(w)``.
-        W should be row-standardised; a :class:`UserWarning` is raised if not.
+        W should be row-standardized; a :class:`UserWarning` is raised if not.
     region_col : str, optional
         Region identifier column in ``data`` (formula mode).
     region_ids : array-like, optional
@@ -180,18 +180,14 @@ class SARProbit(SharedSpatialMethods):
 
     @staticmethod
     def _as_dense_region_W(W: Union[Graph, Any, np.ndarray]) -> np.ndarray:
-        import warnings
-
         import scipy.sparse as sp
+
+        from .._base import _check_row_standardization
 
         if isinstance(W, Graph):
             W_csr = W.sparse.tocsr().astype(float)
-            transform = getattr(W, "transformation", None)
-            row_std = transform in ("r", "R")
         elif sp.issparse(W):
             W_csr = W.tocsr().astype(float)
-            row_sums = np.asarray(W_csr.sum(axis=1)).ravel()
-            row_std = bool(np.allclose(row_sums, 1.0, atol=1e-6))
         elif hasattr(W, "sparse") and hasattr(W, "transform"):
             raise TypeError(
                 "W appears to be a legacy libpysal.weights.W object. "
@@ -205,17 +201,7 @@ class SARProbit(SharedSpatialMethods):
             )
         if W_csr.ndim != 2 or W_csr.shape[0] != W_csr.shape[1]:
             raise ValueError("W must be a square region-level matrix.")
-        if not row_std:
-            warnings.warn(
-                "W does not appear to be row-standardised (row sums \u2260 1). "
-                "Most spatial models assume W is row-standardised; results may be "
-                "unreliable otherwise. For a scipy sparse matrix normalise rows "
-                "manually (divide each row by its sum). To use a libpysal.graph.Graph "
-                "set its transformation attribute: "
-                "graph = graph.transform('r').",
-                UserWarning,
-                stacklevel=3,
-            )
+        _check_row_standardization(W_csr, stacklevel=3)
         return W_csr.toarray()
 
     @staticmethod
@@ -438,7 +424,7 @@ class SARProbit(SharedSpatialMethods):
         indirect_samples = np.zeros_like(direct_samples)
         total_samples = direct_samples.copy()
 
-        def _summarise(samples: np.ndarray) -> dict[str, np.ndarray]:
+        def _summarize(samples: np.ndarray) -> dict[str, np.ndarray]:
             return {
                 "mean": np.mean(samples, axis=0),
                 "ci_lower": np.percentile(samples, 2.5, axis=0),
@@ -450,9 +436,9 @@ class SARProbit(SharedSpatialMethods):
                 ),
             }
 
-        d = _summarise(direct_samples)
-        i = _summarise(indirect_samples)
-        t = _summarise(total_samples)
+        d = _summarize(direct_samples)
+        i = _summarize(indirect_samples)
+        t = _summarize(total_samples)
 
         df = pd.DataFrame(
             {

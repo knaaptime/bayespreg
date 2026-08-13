@@ -311,28 +311,10 @@ def test_jax_auto_prefers_sparsax_when_available(monkeypatch):
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
     monkeypatch.setattr("bayespecon._jax_dispatch._sparsax_available", lambda: True)
-    monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
 
     _select_jax_sparse_backend.cache_clear()
     assert _select_jax_sparse_backend() == "sparsax"
     _select_jax_sparse_backend.cache_clear()
-
-
-def test_jax_auto_falls_to_callback_when_only_umfpack_available(monkeypatch):
-    from bayespecon._jax_dispatch import _select_jax_sparse_backend
-
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
-    monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
-    monkeypatch.setattr("bayespecon._jax_dispatch._sparsax_available", lambda: False)
-    monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
-
-    _select_jax_sparse_backend.cache_clear()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        backend = _select_jax_sparse_backend()
-    assert backend == "callback"
-    msgs = [str(w.message) for w in caught]
-    assert any("callback+umfpack" in m for m in msgs)
 
 
 def test_jax_auto_falls_to_callback_scipy_when_no_optional_backends(monkeypatch):
@@ -341,7 +323,6 @@ def test_jax_auto_falls_to_callback_scipy_when_no_optional_backends(monkeypatch)
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
     monkeypatch.setattr("bayespecon._jax_dispatch._sparsax_available", lambda: False)
-    monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: False)
 
     _select_jax_sparse_backend.cache_clear()
     with warnings.catch_warnings(record=True) as caught:
@@ -350,7 +331,7 @@ def test_jax_auto_falls_to_callback_scipy_when_no_optional_backends(monkeypatch)
     assert backend == "callback"
     msgs = [str(w.message) for w in caught]
     assert any("callback+scipy" in m for m in msgs)
-    assert any("scikit-sparse" in m for m in msgs)
+    assert any("sparsax" in m for m in msgs)
 
 
 # ---------------------------------------------------------------------------
@@ -552,7 +533,6 @@ def test_jax_sar_solver_auto_preserves_existing_backend(monkeypatch, sar_env_res
     monkeypatch.delenv("BAYESPECON_JAX_SAR_SOLVER", raising=False)
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_BACKEND", "auto")
     monkeypatch.setenv("BAYESPECON_JAX_SPARSE_STRICT", "0")
-    monkeypatch.setattr("bayespecon._jax_dispatch._umfpack_available", lambda: True)
 
     _reset_jax_dispatch_caches()
     # _select_jax_sar_solver returns "auto" when no explicit solver is set;

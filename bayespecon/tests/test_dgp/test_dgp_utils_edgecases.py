@@ -103,7 +103,7 @@ class TestRookGridWeights:
             rook_grid_weights(0)
 
     def test_n1_grid_raises(self):
-        """n_side=1 is degenerate (no rook neighbours possible)."""
+        """n_side=1 is degenerate (no rook neighbors possible)."""
         with pytest.raises(ValueError, match="n_side=1"):
             rook_grid_weights(1)
 

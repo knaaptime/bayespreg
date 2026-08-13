@@ -1,13 +1,13 @@
 """Tests for ``_recover_symmetrizing_diagonal``.
 
 The routine recovers ``D`` with ``D^{1/2} W D^{-1/2}`` symmetric, which is what
-lets ``cheb_cholesky`` factorise a row-standardised undirected ``W``.  It is
+lets ``cheb_cholesky`` factorize a row-standardized undirected ``W``.  It is
 also the routing predicate's applicability test (``_is_symmetric_W``), so an
 error here silently sends a Cholesky-capable problem down the LU path — or, far
 worse, lets a wrong ``W_sym`` through to CHOLMOD, which reads one triangle and
 would return a wrong log-determinant without complaint.
 
-The reference implementation below is the Python BFS the vectorised version
+The reference implementation below is the Python BFS the vectorized version
 replaced.  It is kept here, rather than deleted with the original, precisely so
 the replacement has something independent to be checked against: it walks the
 graph edge by edge with scalar CSR lookups and shares no code with the
@@ -27,7 +27,7 @@ from bayespecon._logdet._slq import _recover_symmetrizing_diagonal
 
 
 def _reference_bfs(W: sp.csr_matrix) -> np.ndarray | None:
-    """Original scalar-indexing BFS; independent check on the vectorised path."""
+    """Original scalar-indexing BFS; independent check on the vectorized path."""
     n = W.shape[0]
     pattern = (W != 0).tocsr()
     if (pattern != pattern.T.tocsr()).nnz > 0:
@@ -59,7 +59,7 @@ def _reference_bfs(W: sp.csr_matrix) -> np.ndarray | None:
     return D
 
 
-def _normalise_per_component(W: sp.csr_matrix, D: np.ndarray) -> np.ndarray:
+def _normalize_per_component(W: sp.csr_matrix, D: np.ndarray) -> np.ndarray:
     """``D`` is defined only up to a scalar per component; pin the first entry."""
     _, labels = connected_components((W != 0).astype(float), directed=False)
     out = D.astype(np.float64).copy()
@@ -74,7 +74,7 @@ def _normalise_per_component(W: sp.csr_matrix, D: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _row_standardise(A: sp.csr_matrix) -> sp.csr_matrix:
+def _row_standardize(A: sp.csr_matrix) -> sp.csr_matrix:
     deg = np.asarray(A.sum(axis=1)).ravel()
     deg[deg == 0] = 1.0
     return sp.csr_matrix(sp.diags(1.0 / deg) @ A)
@@ -103,7 +103,7 @@ def _lattice(side: int, queen: bool = False, weighted: bool = False, seed: int =
         A = sp.csr_matrix((A + A.T) / 2.0)  # symmetric kernel weights
     else:
         A = sp.coo_matrix((np.ones(len(rows)), (rows, cols)), shape=(n, n)).tocsr()
-    return _row_standardise(A)
+    return _row_standardize(A)
 
 
 def _directed(n: int = 25, k: int = 3, seed: int = 0):
@@ -115,7 +115,7 @@ def _directed(n: int = 25, k: int = 3, seed: int = 0):
         (np.ones(int(keep.sum())), (rows[keep], cols[keep])), shape=(n, n)
     ).tocsr()
     A.data[:] = 1.0
-    return _row_standardise(A)
+    return _row_standardize(A)
 
 
 def _with_isolate(side: int = 6):
@@ -144,8 +144,8 @@ class TestAgreesWithReferenceBFS:
         want = _reference_bfs(W)
         assert got is not None and want is not None
         np.testing.assert_allclose(
-            _normalise_per_component(W, got),
-            _normalise_per_component(W, want),
+            _normalize_per_component(W, got),
+            _normalize_per_component(W, want),
             rtol=1e-10,
             atol=0.0,
         )
@@ -161,11 +161,11 @@ class TestAgreesWithReferenceBFS:
         assert out is not None and out.size == 0
 
 
-class TestSymmetrisesInPractice:
+class TestSymmetrizesInPractice:
     """The contract that actually matters downstream."""
 
     @pytest.mark.parametrize("label", sorted(CASES))
-    def test_D_symmetrises_W(self, label):
+    def test_D_symmetrizes_W(self, label):
         W = sp.csr_matrix(CASES[label])
         D = _recover_symmetrizing_diagonal(W)
         assert D is not None

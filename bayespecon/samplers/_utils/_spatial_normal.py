@@ -1,10 +1,10 @@
 """Sample from a multivariate normal with sparse spatial precision.
 
 Draws x ~ N(m, Σ) where Σ⁻¹ = P (sparse SPD) via sparse Cholesky
-factorisation, conjugate gradient (CG) iterative solve, or Chebyshev
+factorization, conjugate gradient (CG) iterative solve, or Chebyshev
 polynomial approximation.
 
-**Factorisation path** (default for moderate n):
+**Factorization path** (default for moderate n):
     Uses CHOLMOD (``scikit-sparse``), which is 5–9× faster than
     ``scipy.sparse.linalg.splu`` for SPD matrices.  CHOLMOD applies a
     fill-reducing permutation P_perm such that
@@ -20,7 +20,7 @@ polynomial approximation.
 **Iterative path** (for large n with high fill-in):
     Uses preconditioned CG for the mean solve and Lanczos-based
     stochastic log-determinant estimation.  Avoids the O(nnz^{1.5})
-    factorisation cost entirely.
+    factorization cost entirely.
 
 **JAX dense path** (for n ≤ ~5000 with JAX installed):
     Uses JAX dense matvec + vmap over Lanczos probes and Chebyshev
@@ -38,16 +38,16 @@ import scipy.sparse.linalg as spla
 from sksparse.cholmod import cho_factor as _cholmod_cho_factor
 
 # ---------------------------------------------------------------------------
-# CHOLMOD factorisation wrapper
+# CHOLMOD factorization wrapper
 # ---------------------------------------------------------------------------
 
 
 class CholmodFactor:
-    """Wrapper around a CHOLMOD factorisation for a fixed sparsity pattern.
+    """Wrapper around a CHOLMOD factorization for a fixed sparsity pattern.
 
     Stores the symbolic analysis so that ``factorize`` only does the
-    numeric factorisation when the matrix values change but the
-    sparsity pattern stays the same.  This is the key optimisation
+    numeric factorization when the matrix values change but the
+    sparsity pattern stays the same.  This is the key optimization
     for the ρ block in the Gibbs sampler, where P_η changes with each
     candidate ρ but always has the same non-zero structure.
 
@@ -145,7 +145,7 @@ class SpatialNormalDraw(NamedTuple):
     x : ndarray of shape (n,)
         The drawn sample.
     factor : CholmodFactor
-        The factorisation of the precision matrix.  Can be reused
+        The factorization of the precision matrix.  Can be reused
         for subsequent solves when the precision matrix has not changed.
     """
 
@@ -181,15 +181,15 @@ def sample_spatial_normal(
     rng : numpy.random.Generator, optional
         Random state. If None, a fresh generator is created.
     cached_factor : CholmodFactor, optional
-        Pre-computed factorisation of precision. If None, computed
-        fresh. Passing a cached factorisation saves the factorisation
+        Pre-computed factorization of precision. If None, computed
+        fresh. Passing a cached factorization saves the factorization
         cost when P has not changed between calls.
 
     Returns
     -------
     SpatialNormalDraw
         Named tuple with fields ``x`` (the draw) and ``factor``
-        (the factorisation, for potential reuse).
+        (the factorization, for potential reuse).
 
     Notes
     -----
@@ -262,7 +262,7 @@ def lanczos_logdet(
     The cost is O(n_probes * lanczos_deg * nnz) where nnz is the
     number of non-zeros in P.  For typical spatial precision matrices
     with n > 5000, this can be significantly faster than CHOLMOD
-    factorisation when fill-in is high.
+    factorization when fill-in is high.
 
     The estimator is unbiased in the limit of infinite probes and
     Lanczos depth.  With n_probes=10 and lanczos_deg=30, the
@@ -335,7 +335,7 @@ def lanczos_logdet(
             Q[:, i] = q_new
             r = P_op @ q_new
             alpha_vals[i] = float(q_new @ r)
-            # Full reorthogonalisation (one pass)
+            # Full reorthogonalization (one pass)
             r = r - alpha_vals[i] * q_new - beta_vals[i - 1] * Q[:, i - 1]
             # Modified Gram-Schmidt against all previous vectors
             for k in range(i):
@@ -452,6 +452,349 @@ def cg_solve(
 
 
 # ---------------------------------------------------------------------------
+# Shift-invert Krylov basis for the precision matrix P(ρ)
+# ---------------------------------------------------------------------------
+
+
+# Safety factor applied to the estimated radius of convergence.
+_SERIES_RADIUS_SAFETY = 0.6
+
+
+def _series_radius(V_stack, safety: float = _SERIES_RADIUS_SAFETY) -> float:
+    r"""Estimate the usable ``|Δρ|`` from the Taylor coefficients themselves.
+
+    The series :math:`\sum_j \Delta\rho^j U_j` converges inside
+    :math:`|\Delta\rho| < R` with :math:`R^{-1} = \limsup_j \|U_j\|^{1/j}`
+    (Cauchy–Hadamard), so the coefficients already on the basis reveal the
+    radius at no extra cost.
+
+    The **root** test is used rather than the ratio ``‖U_j‖/‖U_{j+1}‖``: on
+    real problems consecutive norms oscillate hard (ratios seen swinging
+    between 0.1 and 1.9 within one basis), so any single ratio — the last
+    pair especially — is meaningless.  Taking the minimum over ``j`` of
+    :math:`(\|U_0\|/\|U_j\|)^{1/j}` is both stable and conservative.
+
+    This matters because the precision series' radius depends on ``ω`` as
+    well as ``ρ_c`` — ``P = diag(ω) + AᵀA/σ²`` approaches the singular
+    ``AᵀA`` as ``ω → 0``, pulling the nearest singularity toward the real
+    axis.  A fixed ``dmax`` cannot be safe across that range: at ``ω=0.02,
+    ρ_c=0.95`` a radius of 0.4 gives a relative solve error of 2e+04, while
+    the estimate below returns 0.097 and holds the error at 1e-03.
+    """
+    norms = np.array(
+        [float(np.linalg.norm(V_stack[j])) for j in range(V_stack.shape[0])]
+    )
+    if norms.size < 2:
+        return float("inf")
+    n0 = max(norms[0], 1e-300)
+    j = np.arange(1, norms.size)
+    radii = (n0 / np.maximum(norms[1:], 1e-300)) ** (1.0 / j)
+    return float(safety * np.min(radii))
+
+
+def _chebyshev_nodes(dmax: float, n_nodes: int) -> np.ndarray:
+    """``n_nodes`` Chebyshev points of the first kind on ``[-dmax, dmax]``."""
+    k = np.arange(n_nodes)
+    return dmax * np.cos((2.0 * k + 1.0) * np.pi / (2.0 * n_nodes))
+
+
+def _fit_logdet_poly(logdet_at, dmax: float, n_nodes: int) -> np.ndarray:
+    """Interpolate ``Δρ -> log|P(ρ_c+Δρ)|`` through exact values at Chebyshev nodes.
+
+    Returns coefficients in ascending powers of ``Δρ``.  Chebyshev nodes keep
+    the Vandermonde system well conditioned and spread the interpolation error
+    evenly across the radius instead of piling it up at the ends.
+    """
+    nodes = _chebyshev_nodes(dmax, n_nodes)
+    vals = np.array([float(logdet_at(float(d))) for d in nodes], dtype=np.float64)
+    V = np.vander(nodes, n_nodes, increasing=True)
+    return np.linalg.solve(V, vals)
+
+
+class KrylovPrecisionBasis(NamedTuple):
+    """Precomputed shift-invert Krylov basis for the ρ-dependent precision.
+
+    The structural-form SAR/SEM Gibbs samplers slice over ρ against the
+    **precision**
+
+    .. math::
+
+        P(\\rho) = \\mathrm{base} - \\rho\\,G_1 + \\rho^2 G_2,
+
+    where ``base = I/σ² + diag(ω)`` (fixed within a slice step), ``G_1 =
+    (W+W^T)/σ²``, and ``G_2 = W^T W/σ²``.  Re-centering about ``ρ_c`` is
+    **exact** — no linearization:
+
+    .. math::
+
+        P(\\rho_c + \\Delta\\rho) = P_c - \\Delta\\rho\\, G
+        + \\Delta\\rho^2 G_2, \\qquad
+        G = G_1 - 2\\rho_c G_2 = \\partial P/\\partial \\rho\\big|_{\\rho_c}.
+
+    Matching powers of ``Δρ`` in ``P(ρ) Σ_j Δρ^j U_j = rhs`` gives the
+    three-term recurrence
+
+    .. math::
+
+        U_0 = P_c^{-1}\\mathrm{rhs}, \\quad U_1 = P_c^{-1} G U_0, \\quad
+        U_j = P_c^{-1}\\left(G U_{j-1} - G_2 U_{j-2}\\right),\\; j \\ge 2,
+
+    so factorizing ``P_c`` **once** lets every slice candidate evaluate
+    ``P(\\rho)^{-1}\\mathrm{rhs}`` via a Horner sum whose only error is
+    Taylor truncation at degree ``m``.
+
+    ``log|P(ρ)|`` rides along on the same factorization.  Because a
+    factorization makes ``log|P|`` available *exactly* at any ``ρ``, the
+    basis stores a polynomial interpolated through exact values at
+    Chebyshev nodes over ``[-dmax, dmax]`` rather than a truncated trace
+    expansion — deterministic in ``ρ`` (which slice sampling requires),
+    free per candidate, and accurate across the whole radius.  The
+    factorization-free CG path falls back to a second-order trace
+    expansion with probes frozen at build time.
+
+    Attributes
+    ----------
+    rho_basis : float
+        Center ``ρ_c`` at which ``P_c`` was factored.
+    V_stack : ndarray, shape (m+1, n, k_rhs)
+        Taylor coefficients ``U_j`` of ``P(ρ)⁻¹rhs`` about ``ρ_c``.
+    degree : int
+        Krylov degree ``m`` (correction terms beyond ``V_0``).
+    logdet_Pc : float
+        ``log|P_c|`` — the logdet at the center.
+    G_matvec : callable (n,) -> (n,)
+        Cached ``G = G1 − 2ρ_c G2`` matvec driver.
+    solve_at_c : callable (n, k) -> (n, k)
+        Cached solver ``P_c⁻¹ rhs`` (the factored CHOLMOD factor or a
+        closure over CG).
+    logdet_coefs : ndarray, shape (n_nodes,)
+        Coefficients of ``Δρ -> log|P(ρ_c+Δρ)|`` in ascending powers of
+        ``Δρ``.
+    safe_dmax : float
+        Largest ``|Δρ|`` the series is trustworthy over at this center,
+        from :func:`_series_radius`.  Consumers clamp their configured
+        ``krylov_dmax`` to this and fall back to a direct solve beyond it.
+    """
+
+    rho_basis: float
+    V_stack: np.ndarray
+    degree: int
+    logdet_Pc: float
+    G_matvec: object  # callable (n,) -> (n,)
+    solve_at_c: object  # callable (n, k) -> (n, k)
+    logdet_coefs: np.ndarray = np.zeros(1)
+    safe_dmax: float = 0.0
+
+
+def build_precision_krylov_basis(
+    rho_c: float,
+    base: sp.spmatrix,
+    G1: sp.spmatrix,
+    G2: sp.spmatrix,
+    rhs: np.ndarray,
+    *,
+    degree: int = 12,
+    cholmod_factor: CholmodFactor | None = None,
+    n_probes: int = 10,
+    lanczos_deg: int = 30,
+    rng: np.random.Generator | None = None,
+    sigma2: float = 1.0,
+    dmax: float = 0.4,
+    logdet_nodes: int = 4,
+) -> KrylovPrecisionBasis:
+    """Build a shift-invert Krylov basis for ``P(ρ) = base − ρG1 + ρ²G2``.
+
+    Parameters
+    ----------
+    rho_c : float
+        Center ``ρ_c`` at which ``P_c = P(ρ_c)`` is factored.
+    base, G1, G2 : sparse matrices
+        Components of the precision: ``P(ρ) = base − ρ·G1 + ρ²·G2``.
+        For SAR (σ²=1): ``base = I + diag(ω)``, ``G1 = W+W^T``,
+        ``G2 = W^T W``.  For σ²≠1, divide ``G1``, ``G2`` and the ``I``
+        term of ``base`` by ``σ²``.
+    rhs : ndarray, shape (n, k_rhs)
+        Right-hand side(s) the slice sampler will solve for at each
+        candidate ρ.  Stored as the seed ``V_0 = P_c⁻¹ rhs``.
+    degree : int, default 12
+        Krylov degree ``m``.
+    cholmod_factor : CholmodFactor or None
+        Pre-built CHOLMOD factor with the sparsity pattern of ``P``.
+        When provided, ``P_c`` is factored via CHOLMOD (fast for
+        moderate n) and ``logdet_Pc`` comes from CHOLMOD.  When
+        ``None``, a Lanczos run estimates ``log|P_c|`` and CG is used
+        for the solves (no factorization).
+    n_probes, lanczos_deg : int
+        Lanczos settings for the ``log|P_c|`` estimate (CG path only).
+    rng : numpy.random.Generator, optional
+        RNG for the Lanczos probes (CG path only).
+    sigma2 : float, default 1.0
+        Error variance — only used to scale ``G1``, ``G2`` and the
+        identity term of ``base`` when the caller has not already done
+        so.  When the caller passes already-scaled matrices, leave at
+        1.0.
+    dmax : float, default 0.4
+        Radius ``|Δρ|`` the caller will evaluate over.  The logdet
+        interpolant is fitted on ``[-dmax, dmax]``, so this must match the
+        caller's ``krylov_dmax``.
+    logdet_nodes : int, default 4
+        Number of Chebyshev nodes (hence exact refactorizations) used to fit
+        the logdet interpolant.  Four keeps the interpolation error well
+        under a nat across the radius while holding the build to roughly the
+        cost of five direct candidate evaluations.  Ignored on the CG path.
+
+    Returns
+    -------
+    KrylovPrecisionBasis
+    """
+    n = base.shape[0]
+    m = degree
+    k_rhs = rhs.shape[1] if rhs.ndim > 1 else 1
+    if rhs.ndim == 1:
+        rhs = rhs.reshape(n, 1)
+
+    # --- Assemble and factor P_c = base − ρ_c G1 + ρ_c² G2 ---
+    P_c = (base - rho_c * G1 + rho_c**2 * G2).tocsc()
+
+    # Derivative operator G = ∂P/∂ρ = G1 − 2ρ_c G2 (the matvec driver)
+    G_csr = (G1 - 2.0 * rho_c * G2).tocsr()
+    G2_csr = G2.tocsr()
+
+    def _G_matvec(v):
+        return G_csr @ v
+
+    V_stack = np.empty((m + 1, n, k_rhs), dtype=np.float64)
+
+    if cholmod_factor is not None:
+        cholmod_factor.factorize(P_c)
+        logdet_Pc = cholmod_factor.logdet()
+        _solve_at_c = cholmod_factor.solve
+    else:
+        # CG path: no factorization.  Use Lanczos once for log|P_c|.
+        def _solve_at_c(r):
+            return iterative_solve(P_c, r, lambda_min=1e-3, lambda_max=1e6)
+
+        logdet_Pc = lanczos_logdet(
+            P_c, n_probes=n_probes, lanczos_deg=lanczos_deg, rng=rng
+        )
+
+    # --- Exact Taylor coefficients of P(ρ_c + Δρ)⁻¹ rhs ---------------------
+    # P(ρ_c+Δρ) = P_c − Δρ·G + Δρ²·G2 *exactly* (the quadratic term is not a
+    # remainder — it is the whole ρ² part re-centered).  Matching powers of Δρ
+    # in P(ρ)·Σ_j Δρ^j U_j = rhs gives the three-term recurrence
+    #     U_0 = P_c⁻¹ rhs
+    #     U_1 = P_c⁻¹ (G U_0)
+    #     U_j = P_c⁻¹ (G U_{j-1} − G2 U_{j-2}),   j ≥ 2
+    # which costs exactly what the old linearized two-term recurrence did but
+    # carries no model error — only Taylor truncation at degree m.
+    V_stack[0] = _solve_at_c(rhs)
+    if m >= 1:
+        V_stack[1] = _solve_at_c(G_csr @ V_stack[0])
+    for j in range(2, m + 1):
+        V_stack[j] = _solve_at_c(G_csr @ V_stack[j - 1] - G2_csr @ V_stack[j - 2])
+
+    # --- log|P(ρ)| across the radius ---------------------------------------
+    # With a factorization in hand, log|P| is available *exactly* at any ρ for
+    # the price of one refactor.  Interpolating a handful of exact values on
+    # Chebyshev nodes over [−dmax, dmax] beats any truncated trace expansion:
+    # it is deterministic (no Hutchinson probes, so the slice sampler's
+    # shrinkage invariant holds), costs nothing per candidate, and stays
+    # accurate over the whole radius rather than only near the center.
+    # Clamp the requested radius to what the coefficients say is usable, then
+    # fit the logdet over the radius we will actually evaluate on.
+    safe_dmax = min(float(dmax), _series_radius(V_stack))
+
+    if cholmod_factor is not None and safe_dmax > 0.0:
+
+        def _logdet_at(d):
+            Pd = (base - (rho_c + d) * G1 + (rho_c + d) ** 2 * G2).tocsc()
+            cholmod_factor.factorize(Pd)
+            return cholmod_factor.logdet()
+
+        logdet_coefs = _fit_logdet_poly(_logdet_at, safe_dmax, logdet_nodes)
+        # Leave the shared factor holding P_c again so ``solve_at_c`` stays valid.
+        cholmod_factor.factorize(P_c)
+    else:
+        # CG path: no factorization to exploit, so fall back to the
+        # second-order trace expansion,
+        #   log|P(ρ)| ≈ log|P_c| − Δρ·tr(A) + Δρ²·[tr(B) − ½tr(A²)],
+        # with A = P_c⁻¹G, B = P_c⁻¹G2.  The traces do not depend on ρ, so they
+        # are estimated once here with shared probes and frozen onto the basis.
+        _rng = rng if rng is not None else np.random.default_rng()
+        n_tr = max(1, int(n_probes))
+        Z = _rng.standard_normal((n, n_tr))
+        U1 = _solve_at_c(G_csr @ Z)  # A Z
+        U2 = _solve_at_c(G_csr @ U1)  # A² Z
+        Vb = _solve_at_c(G2_csr @ Z)  # B Z
+        tr_A = float(np.einsum("ij,ij->", Z, U1) / n_tr)
+        tr_A2 = float(np.einsum("ij,ij->", Z, U2) / n_tr)
+        tr_B = float(np.einsum("ij,ij->", Z, Vb) / n_tr)
+        logdet_coefs = np.array([logdet_Pc, -tr_A, tr_B - 0.5 * tr_A2])
+
+    return KrylovPrecisionBasis(
+        rho_basis=rho_c,
+        V_stack=V_stack,
+        degree=m,
+        logdet_Pc=logdet_Pc,
+        G_matvec=_G_matvec,
+        solve_at_c=_solve_at_c,
+        logdet_coefs=logdet_coefs,
+        safe_dmax=safe_dmax,
+    )
+
+
+def eval_precision_solve_from_basis(
+    basis: KrylovPrecisionBasis,
+    drho: float,
+) -> np.ndarray:
+    """Evaluate ``P(ρ_c + Δρ)⁻¹ rhs`` via the Horner recurrence.
+
+    Returns an array shaped like ``basis.V_stack[0]``: ``(n, k_rhs)``.
+    """
+    result = basis.V_stack[basis.degree].copy()
+    for j in range(basis.degree - 1, -1, -1):
+        result = basis.V_stack[j] + drho * result
+    return result
+
+
+def eval_precision_logdet_from_basis(
+    basis: KrylovPrecisionBasis,
+    drho: float,
+    *,
+    P_at_rho: sp.spmatrix | None = None,
+    cholmod_factor: CholmodFactor | None = None,
+    n_probes: int = 10,
+    lanczos_deg: int = 30,
+    rng: np.random.Generator | None = None,
+) -> float:
+    """Evaluate ``log|P(ρ_c + Δρ)|`` from the basis's cached interpolant.
+
+    Horner evaluation of the polynomial fitted by
+    :func:`build_precision_krylov_basis` — no solves and no fresh probes,
+    so the value is a deterministic function of ``ρ``, which the slice
+    sampler's shrinkage loop requires.
+
+    Parameters
+    ----------
+    basis : KrylovPrecisionBasis
+    drho : float
+        Offset ``Δρ = ρ − ρ_c``.
+    P_at_rho : sparse matrix, optional
+        Unused — kept for API symmetry with the solve path.
+    cholmod_factor : CholmodFactor, optional
+        Unused — the basis already holds the factored solver.
+    n_probes, lanczos_deg, rng :
+        Unused — retained for backward compatibility.  Probe count is set
+        at build time via :func:`build_precision_krylov_basis`.
+    """
+    coefs = basis.logdet_coefs
+    acc = coefs[-1]
+    for j in range(len(coefs) - 2, -1, -1):
+        acc = coefs[j] + drho * acc
+    return float(acc)
+
+
+# ---------------------------------------------------------------------------
 # Chebyshev-accelerated iterative solve
 # ---------------------------------------------------------------------------
 
@@ -470,7 +813,7 @@ def iterative_solve(
     For single-RHS ``(n,)``, calls :func:`scipy.sparse.linalg.cg`
     directly.  For multi-RHS ``(n, k)``, loops over columns — each
     column is an independent CG solve.  This avoids the O(nnz^{1.5})
-    factorisation cost entirely.
+    factorization cost entirely.
 
     Convergence rate (per column):
 
@@ -517,7 +860,7 @@ def iterative_solve(
     semi-iteration because it discovers eigenvalue information
     adaptively.
 
-    For :math:`A_\rho = I - \rho W` with row-standardised :math:`W`:
+    For :math:`A_\rho = I - \rho W` with row-standardized :math:`W`:
 
     .. math::
 
@@ -702,7 +1045,7 @@ def chebyshev_sample(
 ) -> SpatialNormalDraw:
     """Draw from N(m, P⁻¹) via Chebyshev polynomial approximation of P⁻¹ᐟ².
 
-    Avoids the O(nnz^{1.5}) sparse factorisation cost by:
+    Avoids the O(nnz^{1.5}) sparse factorization cost by:
     1. Computing the conditional mean m = P⁻¹ rhs via CG.
     2. Approximating P⁻¹ᐟ² z (z ~ N(0, I)) via a Chebyshev polynomial
        of P, evaluated via Clenshaw's recurrence.
@@ -738,7 +1081,7 @@ def chebyshev_sample(
     -------
     SpatialNormalDraw
         Named tuple with fields ``x`` (the draw) and ``factor``
-        (None — no factorisation is available for reuse).
+        (None — no factorization is available for reuse).
 
     Notes
     -----
@@ -883,7 +1226,7 @@ def _jax_lanczos_probe(P_dense, z_raw, lanczos_deg):
 
     Notes
     -----
-    Reorthogonalisation uses the full Q matrix (n × lanczos_deg)
+    Reorthogonalization uses the full Q matrix (n × lanczos_deg)
     rather than a dynamic slice Q[:, :i], because JAX's lax.scan
     requires static slice sizes.  Columns beyond the current iteration
     are zero, so projecting them out has no effect.
@@ -917,7 +1260,7 @@ def _jax_lanczos_probe(P_dense, z_raw, lanczos_deg):
         alpha = jnp.dot(q_new, r)
         # Three-term recurrence
         r = r - alpha * q_new - beta * Q[:, i - 1]
-        # Full reorthogonalisation against all Q columns.
+        # Full reorthogonalization against all Q columns.
         # Columns beyond i are zero, so this is equivalent to
         # projecting out Q[:, :i+1] but with a static slice size.
         r = r - Q @ (Q.T @ r)
@@ -979,7 +1322,7 @@ def jax_lanczos_logdet(
 
     The vmap over probes batches all ``n_probes`` Lanczos iterations
     into a single XLA kernel, eliminating Python-loop overhead and
-    enabling XLA fusion across the matvec + orthogonalisation steps.
+    enabling XLA fusion across the matvec + orthogonalization steps.
 
     """
     _check_jax_available()
@@ -1110,7 +1453,7 @@ def jax_chebyshev_sample(
     -------
     SpatialNormalDraw
         Named tuple with ``x`` (the first draw, shape (n,)) and
-        ``factor=None`` (no factorisation available for reuse).
+        ``factor=None`` (no factorization available for reuse).
 
     Notes
     -----
@@ -1389,3 +1732,203 @@ def _jax_log_density_core_exact(
     logdet_W = logdet_jax(rho)
 
     return logdet_W - 0.5 * log_det_P + 0.5 * quad
+
+
+# ---------------------------------------------------------------------------
+# JAX-native shift-invert Krylov basis for the precision P(ρ)  (sparsax)
+# ---------------------------------------------------------------------------
+
+
+def _sparsax_factor_ops_available() -> bool:
+    """Return ``True`` when sparsax exposes the factor-reuse primitives."""
+    try:
+        import sparsax
+
+        return (
+            hasattr(sparsax, "factor")
+            and hasattr(sparsax, "solve_factor")
+            and hasattr(sparsax, "logdet_factor")
+        )
+    except ImportError:
+        return False
+
+
+def build_precision_krylov_basis_jax(
+    Ai,
+    Aj,
+    Ax_c,
+    G_vals,
+    G2_vals,
+    rhs_seed,
+    *,
+    n: int,
+    degree: int = 12,
+    dmax: float = 0.4,
+    logdet_nodes: int = 4,
+):
+    """Build a JAX-native shift-invert Krylov basis for ``P(ρ_c)`` via sparsax.
+
+    The JAX analog of :func:`build_precision_krylov_basis`.  Factors ``P_c``
+    **once** via :func:`sparsax.factor`, then runs the exact three-term
+    coefficient recurrence ``U_j = P_c⁻¹(G U_{j-1} − G2 U_{j-2})`` as a
+    :func:`jax.lax.scan` of :func:`sparsax.solve_factor` calls against the
+    held factor — zero refactors across the recurrence.
+
+    Parameters
+    ----------
+    Ai, Aj : int32 arrays, shape (nnz,)
+        COO pattern (upper triangle).
+    Ax_c : float64 array, shape (nnz,)
+        COO values of ``P_c = P(ρ_c)``.
+    G_vals : float64 array, shape (nnz,)
+        COO values of ``G = G1 − 2ρ_c G2`` (the ρ-derivative of P), at the
+        same pattern positions as ``Ax_c``.
+    G2_vals : float64 array, shape (nnz,)
+        COO values of ``G2 = WᵀW/σ²`` at the same pattern positions.  This is
+        the exact ``Δρ²`` term of the re-centered precision; omitting it would
+        leave a model error that no Krylov degree can remove.
+    rhs_seed : float64 array, shape (n, k_rhs)
+        Right-hand side(s) the slice sampler will solve for.  Seed with the
+        ρ-*independent* columns (e.g. ``[κ, X, WtX]``) so the ρ-dependent RHS
+        is reconstructed as a linear combination of Horner evaluations.
+    n : int
+        Matrix dimension (static Python int).
+    degree : int, default 12
+        Krylov degree ``m``.
+    dmax : float, default 0.4
+        Requested evaluation radius.  The returned ``safe_dmax`` is this
+        clamped to what the series can actually support.
+    logdet_nodes : int, default 4
+        Chebyshev nodes (hence exact factorizations) behind the logdet
+        interpolant.
+
+    Returns
+    -------
+    token : sparsax Factor
+        The held numeric factor.
+    V_stack : float64 array, shape (m+1, n, k_rhs)
+        Taylor coefficients ``U_j`` of ``P(ρ)⁻¹rhs_seed`` about ``ρ_c``.
+    logdet_coefs : float64 array, shape (logdet_nodes,)
+        ``Δρ -> log|P(ρ_c+Δρ)|`` in ascending powers of ``Δρ``.
+    safe_dmax : float64 scalar
+        Largest usable ``|Δρ|``; candidates beyond it must take a direct
+        solve.
+
+    Notes
+    -----
+    Requires ``sparsax`` with the factor-reuse primitives (``factor``,
+    ``solve_factor``, ``logdet_factor``).  Use
+    :func:`_sparsax_factor_ops_available` to gate.
+
+    The whole function is ``jax.jit``-compatible and ``vmap``-able over
+    ``Ax_c`` (one factor per batch element).  Every solve is issued against a
+    single factor — ``sparsax.factorization_count()`` increments by exactly 1.
+    """
+    import jax
+    import jax.numpy as jnp
+    import sparsax
+
+    token = sparsax.factor(Ai, Aj, Ax_c, n)
+    V0 = sparsax.solve_factor(token, rhs_seed)
+
+    def _spmv(vals, V):
+        """Symmetric COO matvec against a single stored triangle.
+
+        ``G`` and ``G2`` are symmetric (``W+Wᵀ`` and ``WᵀW``) and the pattern
+        stores each off-diagonal entry **once**, in the upper triangle, since
+        that is what sparsax reads.  A plain scatter over the stored entries
+        would therefore compute only half the product; every off-diagonal
+        value has to be applied in both directions.
+        """
+        out = jnp.zeros((n, V.shape[1]), dtype=V.dtype)
+        out = out.at[Ai].add(vals[:, None] * V[Aj])
+        off_diag = (Ai != Aj)[:, None]
+        return out.at[Aj].add(jnp.where(off_diag, vals[:, None] * V[Ai], 0.0))
+
+    # Exact Taylor coefficients of P(ρ_c+Δρ)⁻¹rhs.  Because
+    # P(ρ_c+Δρ) = P_c − Δρ·G + Δρ²·G2 exactly, the coefficients satisfy the
+    # three-term recurrence U_j = P_c⁻¹(G U_{j-1} − G2 U_{j-2}); dropping the
+    # G2 term would leave a model error no degree could remove.  scan carries
+    # (U_{j-1}, U_{j-2}) and avoids dynamic-index reads that break under
+    # eqx.filter_jit + vmap.
+    V1 = sparsax.solve_factor(token, _spmv(G_vals, V0))
+
+    def _scan_step(carry, _):
+        V_prev, V_prev2 = carry
+        V_new = sparsax.solve_factor(
+            token, _spmv(G_vals, V_prev) - _spmv(G2_vals, V_prev2)
+        )
+        return (V_new, V_prev), V_new
+
+    # V_0, V_1 are seeded; scan produces V_2..V_m as the collected outputs.
+    _, V_tail = jax.lax.scan(_scan_step, (V1, V0), xs=None, length=max(degree - 1, 0))
+    if degree == 0:
+        V_stack = V0[None]
+    elif degree == 1:
+        V_stack = jnp.stack([V0, V1], axis=0)
+    else:
+        V_stack = jnp.concatenate([V0[None], V1[None], V_tail], axis=0)
+
+    # Usable radius, read off the coefficients themselves (root test — see
+    # the numpy :func:`_series_radius` for why the ratio test is unusable).
+    norms = jnp.sqrt(jnp.sum(V_stack.reshape(V_stack.shape[0], -1) ** 2, axis=1))
+    n0 = jnp.maximum(norms[0], 1e-300)
+    jj = jnp.arange(1, norms.shape[0], dtype=jnp.float64)
+    safe_dmax = jnp.minimum(
+        jnp.float64(dmax),
+        _SERIES_RADIUS_SAFETY
+        * jnp.min((n0 / jnp.maximum(norms[1:], 1e-300)) ** (1.0 / jj)),
+    )
+
+    # log|P(ρ)| by interpolation through *exact* node values.  P(ρ_c+Δρ)
+    # shares P_c's pattern — its COO values are just Ax_c − Δρ·G + Δρ²·G2 — so
+    # each node is one exact factorization: nothing stochastic, and accurate
+    # across the whole radius.
+    #
+    # A `selinv`-based expansion was tried instead, to get the logdet off the
+    # single held factor at zero extra factorizations.  It is *correct* (tr(A)
+    # and tr(B) come out exact) but far slower: at n=900 the selected inverse
+    # costs 3.99 ms against 0.37 ms for a factorization and 0.34 ms for an
+    # entire direct candidate — ~12 candidates' worth of work to avoid 4
+    # factorizations.  Nodes win on both cost and accuracy (0.03 vs 0.23 nats).
+    cos_factors = jnp.asarray(_chebyshev_nodes(1.0, logdet_nodes), dtype=jnp.float64)
+    nodes = safe_dmax * cos_factors
+
+    def _node_logdet(d):
+        return sparsax.logdet(Ai, Aj, Ax_c - d * G_vals + d * d * G2_vals, n)
+
+    node_vals = jnp.stack([_node_logdet(nodes[i]) for i in range(logdet_nodes)])
+    vander = jnp.vander(nodes, logdet_nodes, increasing=True)
+    logdet_coefs = jnp.linalg.solve(vander, node_vals)
+
+    return token, V_stack, logdet_coefs, safe_dmax
+
+
+def eval_precision_solve_from_basis_jax(V_stack, drho):
+    """Evaluate ``P(ρ_c + Δρ)⁻¹ rhs`` via the Horner recurrence (pure JAX)."""
+
+    degree = V_stack.shape[0] - 1
+    result = V_stack[degree]
+    for j in range(degree - 1, -1, -1):
+        result = V_stack[j] + drho * result
+    return result
+
+
+def eval_precision_logdet_from_basis_jax(logdet_coefs, drho):
+    """Evaluate ``log|P(ρ_c + Δρ)|`` from the basis's cached interpolant.
+
+    Horner over the coefficients fitted by
+    :func:`build_precision_krylov_basis_jax` through exact node logdets — no
+    solves, no probes, and deterministic in ρ as slice sampling requires.
+
+    Parameters
+    ----------
+    logdet_coefs : float64 array
+        Ascending-power coefficients from the build.
+    drho : float64 scalar
+        Offset ``Δρ = ρ − ρ_c``.
+    """
+    acc = logdet_coefs[-1]
+    for j in range(logdet_coefs.shape[0] - 2, -1, -1):
+        acc = logdet_coefs[j] + drho * acc
+    return acc

@@ -5,10 +5,10 @@ cross-section and panel models — the spatial lag and the non-eigenvalue ``W``
 operand handed to the log-determinant factory — behind one small interface so
 the two model base classes (:class:`SpatialModel`, :class:`SpatialPanelModel`)
 can share a single implementation of the surrounding methods and, eventually,
-collapse into one class parameterised by its structure.
+collapse into one class parameterized by its structure.
 
 Only the concerns that are genuinely structure-dependent live here; everything
-behaviour-identical across structures stays in
+behavior-identical across structures stays in
 :class:`bayespecon.models._base._shared.SharedSpatialMethods`.
 """
 
@@ -44,7 +44,7 @@ class CrossSectionStructure(SpatialStructure):
     """Cross-section: a single ``N×N`` weights matrix ``W``.
 
     The lag is the plain ``W @ x`` product and the logdet factory receives the
-    dense ``W`` (mirrors the historical cross-section behaviour).
+    dense ``W`` (mirrors the historical cross-section behavior).
     """
 
     def __init__(self, W_sparse):
@@ -55,7 +55,7 @@ class CrossSectionStructure(SpatialStructure):
         return np.asarray(self._W_sparse @ x, dtype=np.float64)
 
     def logdet_W_operand(self):
-        return self._W_sparse.toarray().astype(np.float64)
+        return self._W_sparse
 
     def W_pt_sparse(self):
         if self._W_pt_cache is None:
@@ -164,6 +164,10 @@ class PanelStructure(SpatialStructure):
 
             W = self._W_sparse
             if W.shape[0] == self._N:
+                # Ensure int64 indices to prevent overflow in scipy kron
+                W = sp.csr_matrix(W, dtype=np.float64)
+                W.indices = W.indices.astype(np.int64)
+                W.indptr = W.indptr.astype(np.int64)
                 # Force ``csr_matrix`` (not ``csr_array``) so the result is
                 # accepted by :mod:`pytensor.sparse`, which currently only
                 # supports the legacy ``scipy.sparse`` matrix API.

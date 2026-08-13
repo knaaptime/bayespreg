@@ -160,7 +160,7 @@ def kron_logdet_A(
 ) -> float:
     r"""Compute :math:`\log|A|` for the separable flow model.
 
-    Under the Kronecker factorisation
+    Under the Kronecker factorization
     :math:`A = L_o \otimes L_d` where :math:`L_k = I_n - \rho_k W`:
 
     .. math::

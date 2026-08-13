@@ -14,7 +14,7 @@ from .._config import settings as _settings
 
 # Module-level counter ensures every Op instance gets a unique id so that
 # pytensor does not incorrectly merge two distinct Op instances during graph
-# optimisation (relevant when multiple flow models exist in one Python session).
+# optimization (relevant when multiple flow models exist in one Python session).
 _op_id_counter = itertools.count()
 
 

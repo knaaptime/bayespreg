@@ -51,12 +51,12 @@ def row_standardize(W: np.ndarray) -> np.ndarray:
     Notes
     -----
     Rows whose sum is exactly ``0`` (typically *isolates* — units with
-    no neighbours) are returned untouched: dividing by zero would
+    no neighbors) are returned untouched: dividing by zero would
     introduce ``NaN`` entries that propagate through every subsequent
     spatial product.  This means the returned matrix is row-stochastic
     on the **non-isolated** rows only; the isolate rows remain rows of
     zeros.  Downstream consumers that rely on every eigenvalue of the
-    row-standardised weight matrix being ``≤ 1`` (e.g. the SAR stability
+    row-standardized weight matrix being ``≤ 1`` (e.g. the SAR stability
     domain ``ρ ∈ (-1, 1)``) should drop or reconnect isolates beforehand
     rather than rely on this routine to do so.
     """
@@ -118,8 +118,8 @@ def rook_grid_weights(n_side: int) -> tuple[np.ndarray, Graph]:
 
     Notes
     -----
-    The Graph is built directly from COO neighbour lists (O(N) cost)
-    and the dense matrix is materialised only on demand via
+    The Graph is built directly from COO neighbor lists (O(N) cost)
+    and the dense matrix is materialized only on demand via
     ``Graph.sparse.toarray()``.  For large grids this avoids the
     O(N²) memory and Python-loop overhead of the old dense-first path.
     """
@@ -128,8 +128,7 @@ def rook_grid_weights(n_side: int) -> tuple[np.ndarray, Graph]:
         raise ValueError("n must be a positive integer when generating a default grid.")
     if n_side == 1:
         raise ValueError(
-            "n_side=1 is degenerate: a 1×1 grid has no rook neighbours. "
-            "Use n_side >= 2."
+            "n_side=1 is degenerate: a 1×1 grid has no rook neighbors. Use n_side >= 2."
         )
 
     n_side * n_side
@@ -628,11 +627,11 @@ def _resolve_flow_geometry(
 ) -> tuple[int, Graph, Any]:
     """Resolve ``(n, G, gdf)`` for flow DGPs from any combination of inputs.
 
-    The flow DGPs need a row-standardised spatial graph *G* (size ``n``)
+    The flow DGPs need a row-standardized spatial graph *G* (size ``n``)
     and a point GeoDataFrame *gdf* (length ``n``) to derive a pairwise
     distance matrix.  Either, both, or neither of *G* and *gdf* may be
     supplied.  When *G* is missing it is constructed from *gdf* using
-    KNN contiguity (``k = knn_k``) and row-standardised.  When *gdf* is
+    KNN contiguity (``k = knn_k``) and row-standardized.  When *gdf* is
     missing a synthetic point grid is generated via
     :func:`synth_point_geodataframe`.
 
@@ -643,13 +642,13 @@ def _resolve_flow_geometry(
         provided (the size is taken from those objects).  When neither
         is supplied, falls back to *default_n*.
     G : libpysal.graph.Graph, optional
-        Pre-built spatial graph.  If supplied it is row-standardised on
+        Pre-built spatial graph.  If supplied it is row-standardized on
         the way out (idempotent for already row-standard graphs).
     gdf : geopandas.GeoDataFrame, optional
         Point or polygon geometry.  Used both to build *G* (when
         missing) and to compute distances downstream.
     knn_k : int, default 4
-        Number of nearest neighbours used when building *G* from *gdf*.
+        Number of nearest neighbors used when building *G* from *gdf*.
     default_n : int, default 25
         Number of units used when neither *G* nor *gdf* is provided.
 
@@ -658,7 +657,7 @@ def _resolve_flow_geometry(
     n_actual : int
         Resolved number of spatial units.
     G : libpysal.graph.Graph
-        Row-standardised graph on *n_actual* units.
+        Row-standardized graph on *n_actual* units.
     gdf : geopandas.GeoDataFrame
         Geometry source on *n_actual* units (synthesized when not
         supplied).
@@ -690,7 +689,7 @@ def _resolve_flow_geometry(
     if n is not None and int(n) != n_actual:
         raise ValueError(f"n={n} disagrees with resolved geometry size {n_actual}.")
 
-    # Ensure G is row-standardised
+    # Ensure G is row-standardized
     G = G.transform("r")
     return n_actual, G, gdf
 
@@ -728,7 +727,7 @@ def _maybe_geodataframe(
     """Assemble a panel DGP output dict, optionally as a (Geo)DataFrame.
 
     Returns the plain long-format dict unless ``create_gdf``, an input ``gdf``,
-    or ``wide`` is requested, in which case the output is materialised via
+    or ``wide`` is requested, in which case the output is materialized via
     :func:`make_panel_output_geodataframe`.  Shared by the panel FE and dynamic
     DGP families.
     """

@@ -4,7 +4,7 @@ Orchestrates the 9-block Gibbs sweep:
 
   Selection equation (reduced-form SAR-logit):
     1. ω^sel | η^sel          (PG augmentation, h = 1; η^sel = (I−λW)⁻¹Zγ)
-    2. λ     | γ, ω^sel, z    (β-marginalised 1-D slice; Jacobian cancels)
+    2. λ     | γ, ω^sel, z    (β-marginalized 1-D slice; Jacobian cancels)
     3. γ     | ω^sel, λ, z    (conjugate normal via Z̃ = A_λ^{-1} Z)
 
   Zero allocation:
@@ -13,13 +13,13 @@ Orchestrates the 9-block Gibbs sweep:
   Count equation (reduced-form SAR-NB):
     5. ω^cnt | η^cnt, α, y, z  (PG augmentation, z-masked)
     6. β     | ω^cnt, ρ, α, y, z  (conjugate normal via X̃ = A_ρ^{-1} X)
-    7. ρ     | ω^cnt, α, y, z  (β-marginalised 1-D slice, z-masked)
+    7. ρ     | ω^cnt, α, y, z  (β-marginalized 1-D slice, z-masked)
     8. α     | y, η^cnt, z     (1-D slice on log(α))
 
 **Both** equations are reduced-form: the selection is the reduced-form
 SAR-logit from :mod:`bayespecon.samplers.logit_reduced._core` (spatial lag on
 the linear predictor, no latent field — the ``|I−λW|`` Jacobian cancels when γ
-is marginalised out), and the count is the reduced-form SAR-NB from
+is marginalized out), and the count is the reduced-form SAR-NB from
 :mod:`bayespecon.samplers.negbin_reduced._core`.  This matches the JAX backend
 (:mod:`bayespecon.samplers.zinb._jax`) block-for-block, so both backends fit the
 *same* model.  The zero-allocation block (4) is the only genuinely new content.
@@ -63,8 +63,8 @@ from ..negbin_reduced._core import (
     ReducedGibbsCache,
     ReducedGibbsPriors,
     ReducedGibbsState,
-    _CholmodNormalEqSolver,
     _make_solver,
+    make_sar_solver,
 )
 from ..negbin_reduced._core import (
     _sample_beta as _sample_beta_cnt,
@@ -339,7 +339,7 @@ def run_zinb_chain(
             and rg_cache.W_sym is not None
             and rg_cache.WtW is not None
         ):
-            return _CholmodNormalEqSolver(
+            return make_sar_solver(
                 cholmod_factor=CholmodFactor(rg_cache.cholmod_pattern),
                 W_csc=rg_cache.W_csc,
                 W_sym=rg_cache.W_sym,
@@ -352,7 +352,7 @@ def run_zinb_chain(
     cholmod_solver = _build_cholmod_solver(cnt_cache)
     sel_cholmod_solver = _build_cholmod_solver(sel_cache)
 
-    # Detect intercept columns for the δ₀ = β₀/(1−ρ) reparameterisation.
+    # Detect intercept columns for the δ₀ = β₀/(1−ρ) reparameterization.
     intercept_col = -1
     for _j in range(k):
         if np.all(X[:, _j] == 1.0):
@@ -372,7 +372,7 @@ def run_zinb_chain(
         #
         # Reduced form: η^sel = (I − λW_sel)⁻¹ Zγ (deterministic, no latent
         # field).  Mirrors the JAX backend and the reduced-NB count blocks:
-        # ω^sel = PG(1, η^sel); λ is a β-marginalised slice (Jacobian cancels);
+        # ω^sel = PG(1, η^sel); λ is a β-marginalized slice (Jacobian cancels);
         # γ is conjugate given Z̃ = A_λ^{-1} Z.
         z_float = state.z.astype(np.float64)
 
@@ -391,7 +391,7 @@ def run_zinb_chain(
         sel_state.rho = state.lam
         sel_state.beta = state.gamma
 
-        # Block 2: λ | γ, ω^sel, z   (β-marginalised 1-D slice, response z)
+        # Block 2: λ | γ, ω^sel, z   (β-marginalized 1-D slice, response z)
         state.lam, _ = _sample_lam(
             sel_state,
             sel_cache,
@@ -573,7 +573,7 @@ def run_zinb_chain(
                 pi_mean_samples[idx] = float(np.mean(_expit(state.eta_sel)))
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     return {
         "lam": lam_samples,

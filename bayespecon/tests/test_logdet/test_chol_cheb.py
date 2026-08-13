@@ -39,11 +39,11 @@ def small_eigs(small_W):
 
 
 # ---------------------------------------------------------------------------
-# D-symmetrisation
+# D-symmetrization
 # ---------------------------------------------------------------------------
 
 
-class TestDSymmetrise:
+class TestDSymmetrize:
     def test_symmetric(self, small_W):
         """W_sym should be symmetric."""
         W_sym = _d_symmetrize(small_W)
@@ -58,7 +58,7 @@ class TestDSymmetrise:
         assert np.allclose(eigs_W, eigs_sym, atol=1e-10)
 
     def test_spectrum_in_unit_circle(self, small_W):
-        """Row-standardised W should have eigenvalues in [-1, 1]."""
+        """Row-standardized W should have eigenvalues in [-1, 1]."""
         eigs = np.linalg.eigvals(small_W.toarray()).real
         assert np.all(np.abs(eigs) <= 1.0 + 1e-10)
 
@@ -328,11 +328,11 @@ class TestFactory:
 
 
 class TestCholChebContext:
-    """A context reuses D-symmetrisation and CHOLMOD's symbolic analysis.
+    """A context reuses D-symmetrization and CHOLMOD's symbolic analysis.
 
     This is what makes a warmup-adaptive refit affordable: fitting a second
     interpolant on a narrower interval must cost only its numeric
-    factorisations, not another full setup.
+    factorizations, not another full setup.
     """
 
     def test_matches_one_shot_precompute_exactly(self, small_W):
@@ -493,7 +493,7 @@ class TestLUCheb:
 
         assert "lu_cheb" in REFITTABLE_METHODS
 
-    def test_jax_param_fn_shares_the_chebyshev_parameterisation(self):
+    def test_jax_param_fn_shares_the_chebyshev_parameterization(self):
         from bayespecon._logdet._jax import make_logdet_jax_param_fn
 
         assert make_logdet_jax_param_fn("lu_cheb") is not None

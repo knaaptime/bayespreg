@@ -224,7 +224,7 @@ class TestRefitter:
 
 
 # ---------------------------------------------------------------------------
-# JAX parameterisation
+# JAX parameterization
 # ---------------------------------------------------------------------------
 
 jax = pytest.importorskip("jax")
@@ -331,5 +331,5 @@ class TestJaxParams:
         fn = make_logdet_jax_param_fn("cheb_cholesky")
         g = jax.grad(lambda rho: fn(rho, params))(0.6)
         assert np.isfinite(float(g))
-        # dJ/dρ = -tr(W(I-ρW)^{-1}) < 0 for ρ > 0 on a row-standardised W
+        # dJ/dρ = -tr(W(I-ρW)^{-1}) < 0 for ρ > 0 on a row-standardized W
         assert float(g) < 0.0

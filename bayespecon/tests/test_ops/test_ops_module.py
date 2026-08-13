@@ -24,12 +24,12 @@ from pytensor.gradient import verify_grad
 
 
 def _ring_W(n: int) -> sp.csr_matrix:
-    """Row-standardised ring-contiguity weight matrix (n × n)."""
+    """Row-standardized ring-contiguity weight matrix (n × n)."""
     row = np.concatenate([np.arange(n), np.arange(n)])
     col = np.concatenate([(np.arange(n) - 1) % n, (np.arange(n) + 1) % n])
     data = np.ones(2 * n, dtype=np.float64)
     W = sp.csr_matrix((data, (row, col)), shape=(n, n))
-    # row-standardise
+    # row-standardize
     d = np.array(W.sum(axis=1)).ravel()
     W = sp.diags(1.0 / d) @ W
     return W.tocsr()
@@ -462,29 +462,29 @@ class TestSparseSARSolveOp:
 
 
 class TestOptionalSparseBackends:
-    def test_selects_umfpack_when_requested_and_installed(self, monkeypatch):
-        pytest.importorskip("sksparse.umfpack")
+    def test_selects_klu_when_requested_and_installed(self, monkeypatch):
+        pytest.importorskip("sksparse.klu")
         from bayespecon._ops import _select_sparse_backend
 
-        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "umfpack")
+        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "klu")
         monkeypatch.setenv("BAYESPECON_SPARSE_STRICT", "1")
         _select_sparse_backend.cache_clear()
-        assert _select_sparse_backend() == "umfpack"
+        assert _select_sparse_backend() == "klu"
 
-    def test_sparse_vector_solver_routes_to_umfpack_backend(self, monkeypatch):
-        pytest.importorskip("sksparse.umfpack")
+    def test_sparse_vector_solver_routes_to_klu_backend(self, monkeypatch):
+        pytest.importorskip("sksparse.klu")
         from bayespecon import _ops as ops_mod
 
-        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "umfpack")
+        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "klu")
         monkeypatch.setenv("BAYESPECON_SPARSE_STRICT", "1")
         monkeypatch.setenv("BAYESPECON_KRON_DENSE_MAX", "0")
         ops_mod._select_sparse_backend.cache_clear()
 
-        called = {"umfpack": 0}
+        called = {"klu": 0}
 
         def _fake_sparse_factor(A_csc, backend):
-            called["umfpack"] += 1
-            assert backend == "umfpack"
+            called["klu"] += 1
+            assert backend == "klu"
             A_dense = A_csc.toarray()
 
             class _F:
@@ -500,24 +500,24 @@ class TestOptionalSparseBackends:
         got = ops_mod._solve_sparse_vector(A, rhs)
         ref = np.linalg.solve(A.toarray(), rhs)
 
-        assert called["umfpack"] >= 1
+        assert called["klu"] >= 1
         np.testing.assert_allclose(got, ref, atol=1e-12)
 
-    def test_sparse_flow_solver_routes_to_umfpack_backend(self, monkeypatch):
-        pytest.importorskip("sksparse.umfpack")
+    def test_sparse_flow_solver_routes_to_klu_backend(self, monkeypatch):
+        pytest.importorskip("sksparse.klu")
         from bayespecon import _ops as ops_mod
         from bayespecon._ops import SparseFlowSolveOp
 
-        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "umfpack")
+        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "klu")
         monkeypatch.setenv("BAYESPECON_SPARSE_STRICT", "1")
         monkeypatch.setenv("BAYESPECON_KRON_DENSE_MAX", "0")
         ops_mod._select_sparse_backend.cache_clear()
 
-        called = {"umfpack": 0}
+        called = {"klu": 0}
 
         def _fake_sparse_factor(A_csc, backend):
-            called["umfpack"] += 1
-            assert backend == "umfpack"
+            called["klu"] += 1
+            assert backend == "klu"
             A_dense = A_csc.toarray()
 
             class _F:
@@ -542,23 +542,23 @@ class TestOptionalSparseBackends:
         got = f(0.2, -0.1, 0.05, b)
         ref = _unrestricted_ref(0.2, -0.1, 0.05, W, b)
 
-        assert called["umfpack"] >= 1
+        assert called["klu"] >= 1
         np.testing.assert_allclose(got, ref, atol=1e-10)
 
-    def test_sparse_flow_matrix_solver_routes_to_umfpack_backend(self, monkeypatch):
-        pytest.importorskip("sksparse.umfpack")
+    def test_sparse_flow_matrix_solver_routes_to_klu_backend(self, monkeypatch):
+        pytest.importorskip("sksparse.klu")
         from bayespecon import _ops as ops_mod
         from bayespecon._ops import SparseFlowSolveMatrixOp
 
-        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "umfpack")
+        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "klu")
         monkeypatch.setenv("BAYESPECON_SPARSE_STRICT", "1")
         ops_mod._select_sparse_backend.cache_clear()
 
-        called = {"umfpack": 0}
+        called = {"klu": 0}
 
         def _fake_sparse_factor(A_csc, backend):
-            called["umfpack"] += 1
-            assert backend == "umfpack"
+            called["klu"] += 1
+            assert backend == "klu"
             A_dense = A_csc.toarray()
 
             class _F:
@@ -583,24 +583,24 @@ class TestOptionalSparseBackends:
         got = f(0.15, 0.1, -0.05, B)
         ref = _unrestricted_ref_matrix(0.15, 0.1, -0.05, W, B)
 
-        # sksparse UMFPACK factorises once and batch-solves the T columns.
-        assert called["umfpack"] >= 1
+        # sksparse KLU factorizes once and batch-solves the T columns.
+        assert called["klu"] >= 1
         np.testing.assert_allclose(got, ref, atol=1e-10)
 
-    def test_sparse_sar_forward_reuses_umfpack_factorization(self, monkeypatch):
-        pytest.importorskip("sksparse.umfpack")
+    def test_sparse_sar_forward_reuses_klu_factorization(self, monkeypatch):
+        pytest.importorskip("sksparse.klu")
         from bayespecon import _ops as ops_mod
         from bayespecon._ops import SparseSARSolveOp
 
-        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "umfpack")
+        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "klu")
         monkeypatch.setenv("BAYESPECON_SPARSE_STRICT", "1")
         monkeypatch.setenv("BAYESPECON_KRON_DENSE_MAX", "0")
         ops_mod._select_sparse_backend.cache_clear()
 
-        called = {"umfpack": 0}
+        called = {"klu": 0}
 
         def _fake_sparse_factor(A_csc, backend):
-            called["umfpack"] += 1
+            called["klu"] += 1
             A_dense = A_csc.toarray()
 
             class _F:
@@ -619,23 +619,23 @@ class TestOptionalSparseBackends:
         got1 = op._solve_forward(0.25, b)
         got2 = op._solve_forward(0.25, b)
 
-        assert called["umfpack"] == 1
+        assert called["klu"] == 1
         np.testing.assert_allclose(got1, got2, atol=1e-12)
 
-    def test_sparse_sar_adjoint_reuses_umfpack_factorization(self, monkeypatch):
-        pytest.importorskip("sksparse.umfpack")
+    def test_sparse_sar_adjoint_reuses_klu_factorization(self, monkeypatch):
+        pytest.importorskip("sksparse.klu")
         from bayespecon import _ops as ops_mod
         from bayespecon._ops import _SparseSARVJPOp
 
-        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "umfpack")
+        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "klu")
         monkeypatch.setenv("BAYESPECON_SPARSE_STRICT", "1")
         monkeypatch.setenv("BAYESPECON_KRON_DENSE_MAX", "0")
         ops_mod._select_sparse_backend.cache_clear()
 
-        called = {"umfpack": 0}
+        called = {"klu": 0}
 
         def _fake_sparse_factor(A_csc, backend):
-            called["umfpack"] += 1
+            called["klu"] += 1
             A_dense = A_csc.toarray()
 
             class _F:
@@ -654,7 +654,7 @@ class TestOptionalSparseBackends:
         got1 = op._solve_adjoint(0.25, g)
         got2 = op._solve_adjoint(0.25, g)
 
-        assert called["umfpack"] == 1
+        assert called["klu"] == 1
         np.testing.assert_allclose(got1, got2, atol=1e-12)
 
 
@@ -693,21 +693,21 @@ class TestFlowSparseLUCache:
         assert calls["splu"] == 1
 
     @staticmethod
-    def _counting_umf_env(monkeypatch):
-        """Force the umfpack sparse path and return a factor-call counter."""
-        pytest.importorskip("sksparse.umfpack")
+    def _counting_klu_env(monkeypatch):
+        """Force the KLU sparse path and return a factor-call counter."""
+        pytest.importorskip("sksparse.klu")
         from bayespecon import _ops as ops_mod
 
-        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "umfpack")
+        monkeypatch.setenv("BAYESPECON_SPARSE_BACKEND", "klu")
         monkeypatch.setenv("BAYESPECON_SPARSE_STRICT", "1")
         monkeypatch.setenv("BAYESPECON_KRON_DENSE_MAX", "0")
         ops_mod._select_sparse_backend.cache_clear()
 
-        called = {"umfpack": 0}
+        called = {"klu": 0}
 
         def _fake_sparse_factor(A_csc, backend):
-            called["umfpack"] += 1
-            assert backend == "umfpack"
+            called["klu"] += 1
+            assert backend == "klu"
             A_dense = A_csc.toarray()
 
             class _F:
@@ -719,10 +719,10 @@ class TestFlowSparseLUCache:
         monkeypatch.setattr(ops_mod._backend, "_sparse_factor", _fake_sparse_factor)
         return called
 
-    def test_sparse_flow_forward_reuses_umfpack_factorization(self, monkeypatch):
+    def test_sparse_flow_forward_reuses_klu_factorization(self, monkeypatch):
         from bayespecon._ops import SparseFlowSolveOp
 
-        called = self._counting_umf_env(monkeypatch)
+        called = self._counting_klu_env(monkeypatch)
         n = 3
         W = _ring_W(n)
         Wd, Wo, Ww = _flow_weight_mats(W)
@@ -732,13 +732,13 @@ class TestFlowSparseLUCache:
         got1 = op._solve_forward(0.2, -0.1, 0.05, b)
         got2 = op._solve_forward(0.2, -0.1, 0.05, b)
 
-        assert called["umfpack"] == 1
+        assert called["klu"] == 1
         np.testing.assert_allclose(got1, got2, atol=1e-12)
 
-    def test_sparse_flow_adjoint_reuses_umfpack_factorization(self, monkeypatch):
+    def test_sparse_flow_adjoint_reuses_klu_factorization(self, monkeypatch):
         from bayespecon._ops import SparseFlowSolveOp
 
-        called = self._counting_umf_env(monkeypatch)
+        called = self._counting_klu_env(monkeypatch)
         n = 3
         W = _ring_W(n)
         Wd, Wo, Ww = _flow_weight_mats(W)
@@ -748,13 +748,13 @@ class TestFlowSparseLUCache:
         got1 = op._vjp_op._solve_adjoint(0.2, -0.1, 0.05, g)
         got2 = op._vjp_op._solve_adjoint(0.2, -0.1, 0.05, g)
 
-        assert called["umfpack"] == 1
+        assert called["klu"] == 1
         np.testing.assert_allclose(got1, got2, atol=1e-12)
 
-    def test_sparse_flow_matrix_reuses_umfpack_factorization(self, monkeypatch):
+    def test_sparse_flow_matrix_reuses_klu_factorization(self, monkeypatch):
         from bayespecon._ops import SparseFlowSolveMatrixOp
 
-        called = self._counting_umf_env(monkeypatch)
+        called = self._counting_klu_env(monkeypatch)
         n, T = 3, 2
         W = _ring_W(n)
         Wd, Wo, Ww = _flow_weight_mats(W)
@@ -766,9 +766,9 @@ class TestFlowSparseLUCache:
         v1 = op._vjp_op._solve_adjoint_matrix(0.15, 0.1, -0.05, B)
         v2 = op._vjp_op._solve_adjoint_matrix(0.15, 0.1, -0.05, B)
 
-        # One factorisation each for the forward and the adjoint system,
+        # One factorization each for the forward and the adjoint system,
         # reused across the repeat call at the same rhos.
-        assert called["umfpack"] == 2
+        assert called["klu"] == 2
         np.testing.assert_allclose(got1, got2, atol=1e-12)
         np.testing.assert_allclose(v1, v2, atol=1e-12)
 

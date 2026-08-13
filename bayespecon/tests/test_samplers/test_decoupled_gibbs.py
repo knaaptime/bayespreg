@@ -1,6 +1,6 @@
 """Unit tests for decoupled Gibbs path: Lanczos logdet and CG solve.
 
-Tests the iterative (factorisation-free) path for the ρ slice sampler
+Tests the iterative (factorization-free) path for the ρ slice sampler
 in the Pólya–Gamma Gibbs sampler.  Compares Lanczos logdet and CG solve
 against exact CHOLMOD/splu results for small test matrices.
 """
@@ -29,12 +29,12 @@ def _make_precision(n: int, rho: float = 0.3, sigma2: float = 1.0) -> sp.csr_mat
 
     P = I/σ² + diag(ω) - ρ(W+W^T)/σ² + ρ²W^TW/σ²
 
-    Uses a small row-standardised contiguity W and random ω.
+    Uses a small row-standardized contiguity W and random ω.
     """
     rng = np.random.default_rng(42)
     # Simple tridiagonal W (1-D contiguity analogue)
     W = sp.diags([1.0, 1.0], [-1, 1], shape=(n, n), format="csr")
-    W = W / 2.0  # row-standardise (each row sums to 1, except boundaries)
+    W = W / 2.0  # row-standardize (each row sums to 1, except boundaries)
 
     omega = rng.gamma(2.0, 1.0, size=n)  # positive ω
     W_sym = W + W.T
@@ -238,8 +238,8 @@ class TestCGSolve:
 class TestDecoupledRhoSlice:
     """Integration tests for the decoupled path in _sample_rho context."""
 
-    def test_log_density_matches_factorisation(self):
-        """Decoupled log-density should match factorisation-based result."""
+    def test_log_density_matches_factorization(self):
+        """Decoupled log-density should match factorization-based result."""
         n = 30
         rho = 0.3
         sigma2 = 1.0
@@ -345,7 +345,7 @@ class TestChebyshevSample:
         assert rel_err < 0.35, f"Covariance error: {rel_err:.4f}"
 
     def test_factor_is_none(self):
-        """Chebyshev sampler should return factor=None (no factorisation)."""
+        """Chebyshev sampler should return factor=None (no factorization)."""
         n = 10
         P = _make_precision(n, rho=0.3)
         rng = np.random.default_rng(42)

@@ -6,7 +6,7 @@ Orchestrates the 4-block Gibbs sweep:
   3. β | η, ρ      (conjugate normal, σ² = 1)
   4. ρ | β, ω, y   (collapsed 1-D slice, η integrated out)
 
-The structural form parameterises the latent log-odds as
+The structural form parameterizes the latent log-odds as
 ``η = ρ W η + X β + ν`` with ``ν ~ N(0, I)``, and augments the
 logistic likelihood with Pólya–Gamma auxiliary variables to obtain
 fully conjugate Gibbs updates for η and β.
@@ -53,7 +53,11 @@ from .._utils._slice import (
 )
 from .._utils._spatial_normal import (
     CholmodFactor,
+    KrylovPrecisionBasis,
+    build_precision_krylov_basis,
     cg_solve,
+    eval_precision_logdet_from_basis,
+    eval_precision_solve_from_basis,
     lanczos_logdet,
     sample_spatial_normal,
 )
@@ -121,6 +125,15 @@ class LogitGibbsCache(NamedTuple):
     sample_method: str = "cholmod"  # "cholmod" | "jax_dense" | "cholmod_jax"
     lanczos_n_probes: int = 10
     lanczos_deg: int = 30
+    # --- Krylov basis reuse for the ρ slice -------------------------------
+    # When krylov_degree > 0, the slice step factors P(ρ_c) once and
+    # reuses the basis for all candidates within krylov_dmax.
+    # Only beneficial on high-fill-in graphs (queen contiguity, knn);
+    # on ring/lattices with minimal fill-in CHOLMOD is already cheap.
+    # The threshold guards against a slowdown on those graphs.
+    krylov_degree: int = 0
+    krylov_dmax: float = 0.4
+    krylov_min_n: int = 400  # below this, CHOLMOD factorization is too cheap to beat
     # JAX dense backend fields
     W_sym_dense: object | None = None  # jax.numpy.ndarray (n, n): W + W^T
     WtW_dense: object | None = None  # jax.numpy.ndarray (n, n): W^T W
@@ -402,7 +415,7 @@ def _sample_rho(
     # — used only by the JAX-dense β-conditional path below.
     WtXbeta = W.T @ Xbeta
 
-    # --- β-marginalisation precomputes (scipy-sparse path, σ² = 1) ---
+    # --- β-marginalization precomputes (scipy-sparse path, σ² = 1) ---
     beta_mu_arr = np.broadcast_to(np.asarray(priors.beta_mu, dtype=np.float64), (k,))
     beta_sigma_arr = np.broadcast_to(
         np.asarray(priors.beta_sigma, dtype=np.float64), (k,)
@@ -456,6 +469,40 @@ def _sample_rho(
         _warmup_key = jax.random.fold_in(_jax_key, 0)
         _ = float(_jax_logdens_fn(jnp.float64(state.rho), _warmup_key))
 
+    # --- Krylov basis for the precision P(ρ) (scipy sparse path only) -------
+    # Build once at the slice centre ρ_c = state.rho, then evaluate every
+    # candidate within krylov_dmax via a Horner sum.
+    #
+    # The RHS for the slice is [κ, u(ρ)] where u(ρ) = X − ρ·WtX is itself
+    # ρ-dependent.  We seed the basis with the ρ-independent columns
+    # [κ, X, WtX] so that P(ρ)⁻¹u(ρ) = P(ρ)⁻¹X − ρ·P(ρ)⁻¹WtX is recovered
+    # as a linear combination of two Horner evaluations against the same
+    # single factorization.
+    _krylov_basis: KrylovPrecisionBasis | None = None
+    if (
+        not use_jax
+        and cache.krylov_degree > 0
+        and n >= cache.krylov_min_n
+        and W_sym is not None
+        and WtW is not None
+    ):
+        _rho_c = float(state.rho)
+        # Seed with ρ-independent columns: [κ, X, WtX]
+        rhs_c = np.column_stack([kappa, X, WtX])  # (n, 1 + k + k)
+        _krylov_basis = build_precision_krylov_basis(
+            rho_c=_rho_c,
+            base=base,
+            G1=W_sym,
+            G2=WtW,
+            rhs=rhs_c,
+            degree=cache.krylov_degree,
+            cholmod_factor=cholmod_factor,
+            n_probes=cache.lanczos_n_probes,
+            lanczos_deg=cache.lanczos_deg,
+            rng=_lanczos_rng,
+            dmax=cache.krylov_dmax,
+        )
+
     def log_density(rho: float) -> float:
         """Doubly-collapsed log-density of ρ (η and β integrated out)."""
         if use_jax:
@@ -467,41 +514,67 @@ def _sample_rho(
             result = _jax_logdens_fn(jnp.float64(rho), _jax_key)
             return float(result)
 
-        # --- scipy sparse path (β-marginalised, σ² = 1) ---
+        # --- scipy sparse path (β-marginalized, σ² = 1) ---
         log_det_A = logdet_fn(rho)
 
         # u = A_ρᵀ X = X − ρ Wᵀ X   — (n, k) dense
         u = X - rho * WtX
 
-        # Precision: P = base - ρ * W_sym + ρ² * WtW  (σ² = 1)
-        if W_sym is not None and WtW is not None:
-            P = base - rho * W_sym + rho**2 * WtW
-        else:
-            A_rho = sp.eye(n, format="csr") - rho * W
-            AtA = A_rho.T @ A_rho  # σ² = 1
-            P = AtA + sp.diags(omega, format="csr")
-
-        rhs_stack = np.column_stack([kappa, u])  # (n, k+1)
-
-        # --- log|P_η| ---
-        if logdet_P_method == "lanczos":
-            log_det_P = lanczos_logdet(
-                P,
-                n_probes=cache.lanczos_n_probes,
-                lanczos_deg=cache.lanczos_deg,
+        # --- Krylov-accelerated solve + logdet ------------------------------
+        # When the basis is available and ρ is within the Krylov radius,
+        # P⁻¹[κ | u(ρ)] and log|P(ρ)| come from Horner evaluations against
+        # the single factored P_c.
+        if (
+            _krylov_basis is not None
+            and abs(rho - _krylov_basis.rho_basis) <= _krylov_basis.safe_dmax
+        ):
+            drho = rho - _krylov_basis.rho_basis
+            sol_all = eval_precision_solve_from_basis(_krylov_basis, drho)
+            # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹X, P(ρ)⁻¹WtX]
+            z = sol_all[:, 0]
+            PX = sol_all[:, 1 : 1 + k]
+            PWtX = sol_all[:, 1 + k :]
+            # u(ρ) = X − ρ·WtX  →  P(ρ)⁻¹u(ρ) = P(ρ)⁻¹X − ρ·P(ρ)⁻¹WtX
+            M = PX - rho * PWtX
+            # log|P(ρ)| via the first-order trace correction (matvec-only)
+            log_det_P = eval_precision_logdet_from_basis(
+                _krylov_basis,
+                drho,
                 rng=_lanczos_rng,
             )
         else:
-            cholmod_factor.factorize(P)
-            log_det_P = cholmod_factor.logdet()
+            # --- Direct path: factor / Lanczos at this candidate ------------
+            # Precision: P = base - ρ * W_sym + ρ² * WtW  (σ² = 1)
+            if W_sym is not None and WtW is not None:
+                P = base - rho * W_sym + rho**2 * WtW
+            else:
+                A_rho = sp.eye(n, format="csr") - rho * W
+                AtA = A_rho.T @ A_rho  # σ² = 1
+                P = AtA + sp.diags(omega, format="csr")
 
-        # --- Multi-RHS solve: P [z | M] = [κ | u] ---
-        if solve_method == "cg":
-            sol = np.column_stack([cg_solve(P, rhs_stack[:, j]) for j in range(k + 1)])
-        else:
-            sol = cholmod_factor.solve(rhs_stack)
-        z = sol[:, 0]
-        M = sol[:, 1:]
+            rhs_stack = np.column_stack([kappa, u])  # (n, k+1)
+
+            # --- log|P_η| ---
+            if logdet_P_method == "lanczos":
+                log_det_P = lanczos_logdet(
+                    P,
+                    n_probes=cache.lanczos_n_probes,
+                    lanczos_deg=cache.lanczos_deg,
+                    rng=_lanczos_rng,
+                )
+            else:
+                cholmod_factor.factorize(P)
+                log_det_P = cholmod_factor.logdet()
+
+            # --- Multi-RHS solve: P [z | M] = [κ | u] ---
+            if solve_method == "cg":
+                sol = np.column_stack(
+                    [cg_solve(P, rhs_stack[:, j]) for j in range(k + 1)]
+                )
+            else:
+                sol = cholmod_factor.solve(rhs_stack)
+            z = sol[:, 0]
+            M = sol[:, 1:]
 
         # Σ_β*⁻¹ = XᵀX + V₀⁻¹ − uᵀM   (k × k, symmetric PD)
         Sig_inv = XtX_mat - u.T @ M
@@ -704,7 +777,7 @@ def run_chain(
                     eta_samples[idx] = state.eta
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     result = {
         "rho": rho_samples,
@@ -795,6 +868,14 @@ class SEMLogitGibbsCache(NamedTuple):
     sample_method: str = "cholmod"  # "cholmod" | "jax_dense" | "cholmod_jax"
     lanczos_n_probes: int = 10
     lanczos_deg: int = 30
+    # --- Krylov basis reuse for the λ slice -------------------------------
+    # When krylov_degree > 0, the slice step factors P(λ_c) once and
+    # reuses the basis for all candidates within krylov_dmax.
+    # Only beneficial on high-fill-in graphs (queen contiguity, knn);
+    # on ring/lattices with minimal fill-in CHOLMOD is already cheap.
+    krylov_degree: int = 0
+    krylov_dmax: float = 0.4
+    krylov_min_n: int = 400  # below this, CHOLMOD factorization is too cheap to beat
     # JAX dense backend fields
     W_sym_dense: object | None = None
     WtW_dense: object | None = None
@@ -1108,6 +1189,35 @@ def _sample_lam(
         _warmup_key = jax.random.fold_in(_jax_key, 0)
         _ = float(_jax_logdens_fn(jnp.float64(state.lam), _warmup_key))
 
+    # --- Krylov basis for the precision P(λ) (scipy sparse path only) -------
+    # The SEM RHS is quadratic in λ: rhs = Xβ − λ·W_sym·Xβ + λ²·WtW·Xβ + κ.
+    # We seed the basis with the ρ-independent columns [κ, Xβ, W_sym·Xβ,
+    # WtW·Xβ] and reconstruct the solve as a quadratic combination of Horner
+    # evaluations against the single factored P_c.
+    _krylov_basis: KrylovPrecisionBasis | None = None
+    if (
+        not use_jax
+        and cache.krylov_degree > 0
+        and n >= cache.krylov_min_n
+        and W_sym is not None
+        and WtW is not None
+    ):
+        _lam_c = float(state.lam)
+        rhs_c = np.column_stack([kappa, Xbeta, WsymXbeta, WtWXbeta])
+        _krylov_basis = build_precision_krylov_basis(
+            rho_c=_lam_c,
+            base=base,
+            G1=W_sym,
+            G2=WtW,
+            rhs=rhs_c,
+            degree=cache.krylov_degree,
+            cholmod_factor=cholmod_factor,
+            n_probes=cache.lanczos_n_probes,
+            lanczos_deg=cache.lanczos_deg,
+            rng=_lanczos_rng,
+            dmax=cache.krylov_dmax,
+        )
+
     def log_density(lam: float) -> float:
         """Collapsed log-density of λ (η integrated out)."""
         if use_jax:
@@ -1123,31 +1233,52 @@ def _sample_lam(
         # RHS: Xbeta - λ*(W+W')Xbeta + λ²*W'WXbeta + κ  (σ² = 1)
         rhs = Xbeta - lam * WsymXbeta + lam**2 * WtWXbeta + kappa
 
-        # Precision: P = base - λ * W_sym + λ² * WtW  (σ² = 1)
-        if W_sym is not None and WtW is not None:
-            P = base - lam * W_sym + lam**2 * WtW
-        else:
-            A_lam = sp.eye(n, format="csr") - lam * W
-            AtA = A_lam.T @ A_lam
-            P = AtA + sp.diags(omega, format="csr")
-
-        # --- log|P_η| ---
-        if logdet_P_method == "lanczos":
-            log_det_P = lanczos_logdet(
-                P,
-                n_probes=cache.lanczos_n_probes,
-                lanczos_deg=cache.lanczos_deg,
+        # --- Krylov-accelerated solve + logdet ------------------------------
+        if (
+            _krylov_basis is not None
+            and abs(lam - _krylov_basis.rho_basis) <= _krylov_basis.safe_dmax
+        ):
+            dlam = lam - _krylov_basis.rho_basis
+            sol_all = eval_precision_solve_from_basis(_krylov_basis, dlam)
+            # sol_all columns: [P(λ)⁻¹κ, P(λ)⁻¹Xβ, P(λ)⁻¹W_symXβ, P(λ)⁻¹WtWXβ]
+            Pkappa = sol_all[:, 0]
+            PXbeta = sol_all[:, 1:2]
+            PWsymXbeta = sol_all[:, 2:3]
+            PWtWXbeta = sol_all[:, 3:]
+            # rhs = Xβ − λ·W_symXβ + λ²·WtWXβ + κ
+            m = (PXbeta - lam * PWsymXbeta + lam**2 * PWtWXbeta).ravel() + Pkappa
+            log_det_P = eval_precision_logdet_from_basis(
+                _krylov_basis,
+                dlam,
                 rng=_lanczos_rng,
             )
         else:
-            cholmod_factor.factorize(P)
-            log_det_P = cholmod_factor.logdet()
+            # --- Direct path: factor / Lanczos at this candidate ------------
+            # Precision: P = base - λ * W_sym + λ² * WtW  (σ² = 1)
+            if W_sym is not None and WtW is not None:
+                P = base - lam * W_sym + lam**2 * WtW
+            else:
+                A_lam = sp.eye(n, format="csr") - lam * W
+                AtA = A_lam.T @ A_lam
+                P = AtA + sp.diags(omega, format="csr")
 
-        # --- Solve P m = rhs ---
-        if solve_method == "cg":
-            m = cg_solve(P, rhs)
-        else:
-            m = cholmod_factor.solve(rhs)
+            # --- log|P_η| ---
+            if logdet_P_method == "lanczos":
+                log_det_P = lanczos_logdet(
+                    P,
+                    n_probes=cache.lanczos_n_probes,
+                    lanczos_deg=cache.lanczos_deg,
+                    rng=_lanczos_rng,
+                )
+            else:
+                cholmod_factor.factorize(P)
+                log_det_P = cholmod_factor.logdet()
+
+            # --- Solve P m = rhs ---
+            if solve_method == "cg":
+                m = cg_solve(P, rhs)
+            else:
+                m = cholmod_factor.solve(rhs)
 
         quad = float(rhs @ m)
 
@@ -1230,7 +1361,7 @@ def _sem_jax_log_density_core(
     # Build P = I + diag(ω) - λ*W_sym + λ²*WtW  (σ² = 1)
     P_diag = jnp.ones(n) + omega
     P = jnp.diag(P_diag) - lam * W_sym_dense + lam**2 * WtW_dense
-    P = P + 1e-6 * jnp.eye(n)  # regularisation
+    P = P + 1e-6 * jnp.eye(n)  # regularization
 
     # RHS: Xβ - λ*(W+W')Xβ + λ²*W'WXβ + κ
     rhs = Xbeta - lam * WsymXbeta + lam**2 * WtWXbeta + kappa
@@ -1301,7 +1432,7 @@ def _sem_logit_collapsed_log_density(
     # log|I - λW|
     logdet = logdet_fn(lam)
 
-    # log|P| via LU — prefer KLU/UMFPACK (scikit-sparse) over scipy SuperLU
+    # log|P| via LU — prefer KLU (scikit-sparse) over scipy SuperLU
     from ..._ops._backend import _factor_solve_logdet
 
     P_csc = sp.csc_matrix(P)
@@ -1431,7 +1562,7 @@ def run_chain_sem(
                     eta_samples[idx] = state.eta
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     result = {
         "lam": lam_samples,

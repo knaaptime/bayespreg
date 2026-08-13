@@ -57,7 +57,7 @@ class GibbsEstimation:
     X : ndarray of shape (n, k)
         Design matrix (for SDM/SDEM, this is [X, WX]).
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     Wy : ndarray of shape (n,) or None
         W @ y (precomputed, for SAR/SDM).
     priors : GaussianGibbsPriors
@@ -194,12 +194,12 @@ class GibbsEstimation:
         t_start = time.time()
 
         # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        from .._utils._seeds import spawn_chain_seeds
+
+        # extra=1 for the scouting phase (index 0), chains at indices 1..n
+        all_seeds = spawn_chain_seeds(random_seed, chains, extra=1)
+        scouting_seed = all_seeds[0]
+        seeds = all_seeds[1:]  # list[SeedSequence]
 
         parallel = n_jobs != 1
 
@@ -208,7 +208,10 @@ class GibbsEstimation:
                 # A scouting phase consumed the base seed, so the phase that
                 # follows it must not reuse it.  Runs without a refit keep the
                 # original seeding exactly.
-                rng = np.random.default_rng(seed + 1 if init_by_chain[0] else seed)
+                if scouting:
+                    rng = np.random.default_rng(scouting_seed)
+                else:
+                    rng = np.random.default_rng(seed)
                 init = init_by_chain[chain_id]
                 if init is None:
                     init = _initialize_gaussian_gibbs(
@@ -257,7 +260,7 @@ class GibbsEstimation:
         if refitter is not None:
             # Warmup runs on a deliberately coarse interpolant.  Its draws are
             # discarded, so it only has to steer the chains to the right
-            # neighbourhood — and building it cheaply rather than to full
+            # neighborhood — and building it cheaply rather than to full
             # accuracy is what makes the refit cost less overall than not
             # refitting at all.
             self._install_scout(cache, refitter)
@@ -371,7 +374,7 @@ class GibbsEstimation:
         # Build JAX-native logdet function
         # The refit path carries the interpolant as traced state, and the step
         # then ignores any closed-over evaluator — so building one would be a
-        # full precompute (a Cholesky factorisation per node) thrown away.
+        # full precompute (a Cholesky factorization per node) thrown away.
         param_fn, params0, refit_hook = self._build_jax_refit()
         logdet_jax = None if param_fn is not None else self._build_logdet_jax()
         # A refit that replaces the interpolant must also replace the evaluator
@@ -397,12 +400,10 @@ class GibbsEstimation:
         # ── Vectorized path: jax.vmap ──
         if chain_method == "vectorized":
             # Derive per-chain seeds
-            if random_seed is not None:
-                parent_ss = np.random.SeedSequence(random_seed)
-            else:
-                parent_ss = np.random.SeedSequence()
-            child_seeds = parent_ss.spawn(chains)
-            seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+            from .._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+            child_seeds = spawn_chain_seeds(random_seed, chains)
+            seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
             # Build cache for initialization
             cache = self._build_cache()
@@ -476,12 +477,10 @@ class GibbsEstimation:
             logdet_jax = self._build_logdet_jax()
 
         # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        from .._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
         # Build cache for initialization
         cache = self._build_cache()
@@ -560,7 +559,7 @@ class GibbsEstimation:
     def _make_refitter(self) -> LogdetRefitter | None:
         """Return a refitter, or ``None`` when the refit does not apply.
 
-        Construction is lazy — no factorisation happens until a refit is
+        Construction is lazy — no factorization happens until a refit is
         actually performed — so this is cheap to call unconditionally.
         """
         if not self.logdet_refit or self.W_sparse is None:
@@ -573,7 +572,7 @@ class GibbsEstimation:
         if not refitter.supported:
             _log.info(
                 f"logdet_refit requested but method {method!r} does not support "
-                "it (no reusable factorisation or no ρ interval); continuing "
+                "it (no reusable factorization or no ρ interval); continuing "
                 "with the prior interval."
             )
             return None
@@ -676,10 +675,10 @@ class GibbsEstimation:
         case the JAX step keeps its closed-over interpolant and its compiled
         form is byte-for-byte what it was before this feature existed.
 
-        The parameterised evaluator exists because the alternative — swapping a
+        The parameterized evaluator exists because the alternative — swapping a
         closure constant — invalidates the jit cache and costs a full retrace of
         the Gibbs step (~1.1 s measured), an order of magnitude more than the
-        refit's own factorisations.  Carrying the coefficients as traced arrays
+        refit's own factorizations.  Carrying the coefficients as traced arrays
         of fixed capacity keeps the compiled step valid across the swap.
         """
         refitter = self._make_refitter()
@@ -721,8 +720,8 @@ class GibbsEstimation:
             # The retained draws are produced under the refit interpolant, so
             # their pointwise log-likelihood — and any WAIC/LOO built on it —
             # must be too.  The JAX path computes that after the chain from the
-            # NumPy vectorised evaluator, so take it from this same fit rather
-            # than refitting and paying the factorisations twice.
+            # NumPy vectorized evaluator, so take it from this same fit rather
+            # than refitting and paying the factorizations twice.
             params, info, _, vec_fn = refitter.jax_params(
                 lo,
                 hi,
@@ -924,7 +923,7 @@ class GaussianSARGibbs(GibbsEstimation):
     X : ndarray of shape (n, k)
         Design matrix (for SDM, this is [X, WX]).
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     Wy : ndarray of shape (n,)
         W @ y (precomputed).
     priors : GaussianGibbsPriors
@@ -994,7 +993,7 @@ class GaussianSEMGibbs(GibbsEstimation):
     X : ndarray of shape (n, k)
         Design matrix (for SDEM, this is [X, WX]).
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     priors : GaussianGibbsPriors
         Prior hyperparameters.
     logdet_fn : callable

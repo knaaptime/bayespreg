@@ -26,7 +26,7 @@ def _batched_sar_mean(W_sp, rho_f, rhs, n):
 
     Host-side reconstruction (one solve per posterior draw) used by the Tobit
     log-likelihood rebuilders.  Prefers sparsax's cached KLU — the fixed
-    ``(I - rho W)`` sparsity pattern is analysed once and reused across draws
+    ``(I - rho W)`` sparsity pattern is analyzed once and reused across draws
     (only the values rescale with ``rho``) — and falls back to a per-draw scipy
     sparse solve when sparsax is unavailable.
 
@@ -239,8 +239,8 @@ class SARTobit(_SpatialTobitBase):
           for :math:`\\sigma`.
         - ``censor_sigma`` (float, default 10.0): HalfNormal scale for
           the latent ``y_cens_gap`` shifting censored draws below ``c``.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`. ``None`` (default)
@@ -269,8 +269,8 @@ class SARTobit(_SpatialTobitBase):
         P(y^*_i \\le c) = T_\\nu\\!\\left(\\frac{c - \\mu_i}{\\sigma}\\right)
 
     where :math:`T_\\nu` is the Student-t CDF with :math:`\\nu` degrees of
-    freedom, and :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30.
+    freedom, and :math:`\\nu` is a **fixed** hyperparameter set by
+    ``priors={"nu": value}`` (default 4, LeSage's ``rval``).
     """
 
     _priors_cls = SARTobitPriors
@@ -294,8 +294,7 @@ class SARTobit(_SpatialTobitBase):
                 - pt.dot(self._X, beta)
             )
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 logp_resid = pm.logp(
                     pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma), resid
                 ).sum()
@@ -346,7 +345,7 @@ class SARTobit(_SpatialTobitBase):
         n = self._y.shape[0]
         Xb = beta_f @ self._X.T
         mu = _batched_sar_mean(W_sp, rho_f, Xb, n)
-        nu_f = idata.posterior["nu"].values.reshape(s) if self.robust else None
+        nu_f = np.full(s, self._nu) if self.robust else None
         ll = _tobit_pointwise_loglik(
             self._y, mu, sigma_f, self._censored_mask, self.censoring, nu_f
         )
@@ -397,8 +396,8 @@ class SEMTobit(_SpatialTobitBase):
           for :math:`\\sigma`.
         - ``censor_sigma`` (float, default 10.0): HalfNormal scale for
           the latent ``y_cens_gap``.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\lambda W|`; auto-selected when
@@ -424,8 +423,8 @@ class SEMTobit(_SpatialTobitBase):
 
         P(y^*_i \\le c) = T_\\nu\\!\\left(\\frac{c - \\mu_i}{\\sigma}\\right)
 
-    where :math:`T_\\nu` is the Student-t CDF and
-    :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
+    where :math:`T_\\nu` is the Student-t CDF and :math:`\\nu` is a **fixed**
+    hyperparameter set by ``priors={"nu": value}`` (default 4).
     """
 
     _priors_cls = SEMTobitPriors
@@ -446,8 +445,7 @@ class SEMTobit(_SpatialTobitBase):
             resid = y_lat - pt.dot(self._X, beta)
             eps = resid - lam * pts.structured_dot(W_pt, resid[:, None]).flatten()
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 logp_eps = pm.logp(
                     pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma), eps
                 ).sum()
@@ -489,7 +487,7 @@ class SEMTobit(_SpatialTobitBase):
         beta_f = beta.reshape(s, beta.shape[-1])
         sigma_f = sigma.reshape(s)
         mu = beta_f @ self._X.T
-        nu_f = idata.posterior["nu"].values.reshape(s) if self.robust else None
+        nu_f = np.full(s, self._nu) if self.robust else None
         ll = _tobit_pointwise_loglik(
             self._y, mu, sigma_f, self._censored_mask, self.censoring, nu_f
         )
@@ -539,8 +537,8 @@ class SDMTobit(_SpatialTobitBase):
           for :math:`\\sigma`.
         - ``censor_sigma`` (float, default 10.0): HalfNormal scale for
           the latent ``y_cens_gap``.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     logdet_method : str, optional
         How to compute :math:`\\log|I - \\rho W|`; auto-selected when
@@ -569,8 +567,8 @@ class SDMTobit(_SpatialTobitBase):
 
         P(y^*_i \\le c) = T_\\nu\\!\\left(\\frac{c - \\mu_i}{\\sigma}\\right)
 
-    where :math:`T_\\nu` is the Student-t CDF and
-    :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
+    where :math:`T_\\nu` is the Student-t CDF and :math:`\\nu` is a **fixed**
+    hyperparameter set by ``priors={"nu": value}`` (default 4).
     """
 
     _priors_cls = SDMTobitPriors
@@ -598,8 +596,7 @@ class SDMTobit(_SpatialTobitBase):
                 - pt.dot(Z, beta)
             )
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 logp_resid = pm.logp(
                     pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma), resid
                 ).sum()
@@ -650,7 +647,7 @@ class SDMTobit(_SpatialTobitBase):
         W_sp = self._W_sparse
         Zb = beta_f @ Z.T
         mu = _batched_sar_mean(W_sp, rho_f, Zb, n)
-        nu_f = idata.posterior["nu"].values.reshape(s) if self.robust else None
+        nu_f = np.full(s, self._nu) if self.robust else None
         ll = _tobit_pointwise_loglik(
             self._y, mu, sigma_f, self._censored_mask, self.censoring, nu_f
         )

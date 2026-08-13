@@ -52,7 +52,7 @@ class SARNegBinStructural(SpatialModel):
 
     Notes
     -----
-    The structural form parameterises the latent log-mean as
+    The structural form parameterizes the latent log-mean as
     ``eta = rho * W @ eta + X @ beta + nu`` with ``nu ~ N(0, sigma^2 I)``,
     and augments the NB likelihood with Pólya–Gamma auxiliary variables
     to obtain fully conjugate Gibbs updates for eta, beta, and sigma^2.
@@ -179,6 +179,8 @@ class SARNegBinStructural(SpatialModel):
         pg_n_terms: int = 25,
         n_probes: int = 5,
         lanczos_deg: int = 15,
+        krylov_degree: int = 0,
+        krylov_dmax: float = 0.4,
     ) -> az.InferenceData:
         """Sample posterior via Pólya–Gamma block Gibbs.
 
@@ -287,7 +289,7 @@ class SARNegBinStructural(SpatialModel):
         _cholmod_pattern = sp.eye(n, format="csr") + 0.5 * W_sym + 0.25 * WtW
 
         # Map the resolved backend onto the sampler's solve/logdet/sample paths.
-        # ``auto`` prefers exact CHOLMOD factorisation (3× faster than jax_dense
+        # ``auto`` prefers exact CHOLMOD factorization (3× faster than jax_dense
         # at n=2500 on CPU); ``jax`` is the opt-in dense path.
         method, _jax_parts = resolve_pg_jax_backend(
             backend,
@@ -315,6 +317,8 @@ class SARNegBinStructural(SpatialModel):
             solve_method=solve_method,
             logdet_P_method=logdet_P_method,
             sample_method=sample_method,
+            krylov_degree=krylov_degree,
+            krylov_dmax=krylov_dmax,
             W_sym_dense=W_sym_dense,
             WtW_dense=WtW_dense,
             W_eigs=None,  # JAX path uses logdet_jax instead
@@ -326,12 +330,10 @@ class SARNegBinStructural(SpatialModel):
         )
 
         # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        from ...samplers._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
         # Define the per-chain function
         # When using the full-JIT JAX backend, delegate to run_chain_jax()
@@ -370,6 +372,8 @@ class SARNegBinStructural(SpatialModel):
                 lanczos_deg=lanczos_deg,
                 progressbar=progressbar,
                 sparsax_pattern=sparsax_pattern,
+                krylov_degree=krylov_degree,
+                krylov_dmax=krylov_dmax,
             )
         else:
 
@@ -408,7 +412,7 @@ class SARNegBinStructural(SpatialModel):
                     progress_manager=progress_manager,
                 )
 
-            # Run chains.  Non-JAX paths parallelise across chains when
+            # Run chains.  Non-JAX paths parallelize across chains when
             # the user requests multiple workers.
             parallel = n_jobs != 1
             chain_results = run_chains(

@@ -96,7 +96,7 @@ class FlowPanelModel(SpatialPanelModel):
         if self.effects not in (0, 1, 2, 3):
             raise ValueError("effects must be one of {0,1,2,3}.")
 
-        self._is_row_std = True  # Graph is assumed row-standardised
+        self._is_row_std = True  # Graph is assumed row-standardized
         self._idata: Optional[az.InferenceData] = None
         self._pymc_model: Optional[pm.Model] = None
 
@@ -540,15 +540,32 @@ class FlowPanelModel(SpatialPanelModel):
         )
         return idata
 
-    def _add_nu_prior(self):
-        """Add Student-t degrees-of-freedom prior for robust models."""
-        nu_lam = self.priors.get("nu_lam", 1.0 / 30.0)
-        return pm.Truncated("nu", pm.Exponential.dist(lam=nu_lam), lower=2.0)
-
     def _assemble_A(self, rho_d: float, rho_o: float, rho_w: float) -> sp.csr_matrix:
         """Assemble A = I - rho_d*Wd - rho_o*Wo - rho_w*Ww for one period."""
         eye_n = sp.eye(self._N_flow, format="csr", dtype=np.float64)
         return eye_n - rho_d * self._Wd - rho_o * self._Wo - rho_w * self._Ww
+
+    @property
+    def _A_solver(self):
+        """Lazily-built :class:`CachedSparseSolver` over ``[Wd, Wo, Ww]``.
+
+        ``A = I - ρ_d W_d - ρ_o W_o - ρ_w W_w`` has a fixed sparsity pattern
+        across draws — only the three ρ values rescale.  sparsax (when
+        installed) caches the fill-reducing symbolic analysis keyed on the
+        merged COO pattern, so repeated solves across posterior draws /
+        posterior-predictive / LeSage effects pay the symbolic cost once.
+        """
+        cached = getattr(self, "_cached_A_solver", None)
+        if cached is None:
+            from ...samplers._utils._sparsax_utils import CachedSparseSolver
+
+            cached = CachedSparseSolver([self._Wd, self._Wo, self._Ww], self._N_flow)
+            self._cached_A_solver = cached
+        return cached
+
+    def _solve_A(self, rho_d, rho_o, rho_w, rhs):
+        """Solve ``A(ρ_d, ρ_o, ρ_w) x = rhs`` using the cached symbolic analysis."""
+        return self._A_solver.solve([-rho_d, -rho_o, -rho_w], rhs)
 
     def _sparse_flow_panel_lag(
         self, v: np.ndarray, W_flow: sp.csr_matrix
@@ -568,7 +585,7 @@ class FlowPanelModel(SpatialPanelModel):
         ci: float = 0.95,
         mode: str = "auto",
     ) -> "pd.DataFrame | tuple[pd.DataFrame, dict[str, np.ndarray]]":
-        """Summarise posterior origin/destination/intra/network/total effects.
+        """Summarize posterior origin/destination/intra/network/total effects.
 
         See :meth:`bayespecon.models.flow.FlowModel.spatial_effects` for the
         ``mode`` semantics (auto / combined / separate destination-origin
@@ -671,14 +688,12 @@ class FlowPanelModel(SpatialPanelModel):
         """Draw a single posterior-predictive replicate for the full panel.
 
         Default Gaussian implementation: :math:`y_{rep,t} = A^{-1}(X_t \\beta + \\sigma\\varepsilon_t)`
-        for each period ``t``, with a single sparse :math:`LU` factorisation
+        for each period ``t``, with a single sparse :math:`LU` factorization
         of :math:`A` reused across periods.  Subclasses (NB variants)
         override this method.
         """
         N = self._N_flow
         T = self._T
-        A = self._assemble_A(rho_d, rho_o, rho_w).tocsc()
-        lu = sp.linalg.splu(A)
         Xb = self._X @ beta  # (N*T,)
         Xb_mat = Xb.reshape(T, N).T  # (N, T)
         if sigma is not None:
@@ -686,7 +701,10 @@ class FlowPanelModel(SpatialPanelModel):
             rhs = Xb_mat + noise
         else:
             rhs = Xb_mat
-        out = lu.solve(rhs)  # (N, T)
+        # Cached symbolic analysis: A = I - ρ_d W_d - ρ_o W_o - ρ_w W_w
+        # shares its sparsity pattern across draws, so sparsax reuses one
+        # fill-reducing analysis; scipy fallback still avoids re-symbolic work.
+        out = self._solve_A(rho_d, rho_o, rho_w, rhs)  # (N, T)
         return out.T.reshape(-1)  # back to time-first stacked vector
 
     def posterior_predictive(
@@ -762,7 +780,7 @@ class FlowPanelModel(SpatialPanelModel):
         Effects are computed using one-period :math:`n^2 \\times n^2` system
         matrices, which are time-invariant under static panel parameters.  See
         :func:`~bayespecon.models.flow._compute_flow_effects_lesage` for the
-        decomposition.  One sparse :math:`LU` factorisation per draw covers all
+        decomposition.  One sparse :math:`LU` factorization per draw covers all
         :math:`n` shock columns and all :math:`k` predictors.
         """
         n = self._n
@@ -807,11 +825,12 @@ class FlowPanelModel(SpatialPanelModel):
                 beta_draws[idx, intra_start : intra_start + k_d] if has_intra else None
             )
 
-            A = self._assemble_A(rd, ro, rw).tocsc()
-            lu = sp.linalg.splu(A)
+            solver = self._A_solver
 
-            def _solve(rhs: np.ndarray, _lu=lu) -> np.ndarray:
-                return _lu.solve(rhs)
+            def _solve(
+                rhs: np.ndarray, _s=solver, _rd=rd, _ro=ro, _rw=rw
+            ) -> np.ndarray:
+                return _s.solve([-_rd, -_ro, -_rw], rhs)
 
             res = _compute_flow_effects_lesage(
                 _solve,
@@ -839,7 +858,7 @@ class FlowPanelModel(SpatialPanelModel):
     ) -> dict[str, np.ndarray]:
         """Compute LeSage flow effects via Kronecker-factored solve.
 
-        Replaces the :math:`N\\times N` sparse factorisation in
+        Replaces the :math:`N\\times N` sparse factorization in
         :meth:`_compute_flow_effects_from_draws` with two :math:`n\\times n`
         solves via :func:`~bayespecon._ops.kron_solve_matrix`, exploiting
         :math:`A = L_o \\otimes L_d`.
@@ -1009,7 +1028,7 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int
@@ -1033,9 +1052,8 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
         with a differentiable quadratic-wall stability potential.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -1047,7 +1065,7 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``rho_lower`` : float, default -1.0 — Lower bound of Uniform prior on each ρ (only when ``restrict_positive=False``).
         - ``rho_upper`` : float, default 1.0 — Upper bound of Uniform prior on each ρ (only when ``restrict_positive=False``).
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
     """
 
     def __init__(self, *args, **kwargs):
@@ -1106,7 +1124,7 @@ class SARFlowPanel(_ResolventFlowPanelMixin, FlowPanelModel):
             mu = pt.reshape(eta_mat.T, (N * T,))
 
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)
@@ -1163,7 +1181,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int
@@ -1182,9 +1200,8 @@ class SARFlowSeparablePanel(FlowPanelModel):
         Method for the Kronecker-factored log-determinant.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -1196,7 +1213,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``rho_lower`` : float, default -0.999 — Lower bound of Uniform prior on ``rho_d`` and ``rho_o``.
         - ``rho_upper`` : float, default 0.999 — Upper bound of Uniform prior on ``rho_d`` and ``rho_o``.
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
 
     Notes
     -----
@@ -1246,7 +1263,7 @@ class SARFlowSeparablePanel(FlowPanelModel):
 
             mu = rho_d * Wd_y_t + rho_o * Wo_y_t + rho_w * Ww_y_t + pt.dot(X_t, beta)
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)
@@ -1314,7 +1331,7 @@ class OLSFlowPanel(FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units. Required for API
+        Row-standardized graph on ``n`` units. Required for API
         symmetry but not used in estimation.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
@@ -1337,8 +1354,8 @@ class OLSFlowPanel(FlowPanelModel):
           :math:`\beta`.
         - ``sigma_sigma`` (float, default 10.0): HalfNormal prior std
           for :math:`\sigma`.
-        - ``nu_lam`` (float, default 1/30): Rate of TruncExp(lower=2)
-          prior on :math:`\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
         Spatial keys (``rho_*``) are ignored in this aspatial baseline.
     robust : bool, default False
@@ -1372,7 +1389,7 @@ class OLSFlowPanel(FlowPanelModel):
             sigma = pm.HalfNormal("sigma", sigma=sigma_sigma)
             mu = pt.dot(X_t, beta)
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)
@@ -1641,11 +1658,9 @@ class SARNegBinFlowPanel(SARFlowPanel):
         """NB2 posterior-predictive replicate for the full panel stack."""
         N = self._N_flow
         T = self._T
-        A = self._assemble_A(rho_d, rho_o, rho_w).tocsc()
-        lu = sp.linalg.splu(A)
         Xb = self._X @ beta
         Xb_mat = Xb.reshape(T, N).T
-        eta_mat = lu.solve(Xb_mat)
+        eta_mat = self._solve_A(rho_d, rho_o, rho_w, Xb_mat)
         eta = eta_mat.T.reshape(-1)
         lam = np.exp(np.clip(eta, -50.0, 50.0))
         if alpha is None:
@@ -2146,7 +2161,7 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int
@@ -2170,9 +2185,8 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         used with a differentiable quadratic-wall stability potential.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -2184,7 +2198,7 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``lam_lower`` : float, default -1.0 — Lower bound of Uniform prior on each λ (only when ``restrict_positive=False``).
         - ``lam_upper`` : float, default 1.0 — Upper bound of Uniform prior on each λ (only when ``restrict_positive=False``).
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
     """
 
     def __init__(self, y, X, W, T, **kwargs):
@@ -2261,7 +2275,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
 
     Panel analogue of :class:`~bayespecon.models.flow.SEMFlowSeparable` and
     spatial-error counterpart of :class:`SARFlowSeparablePanel`. Uses the
-    eigenvalue / Chebyshev factorisation of :math:`\\log|B|` with the panel
+    eigenvalue / Chebyshev factorization of :math:`\\log|B|` with the panel
     Jacobian scaling :math:`T \\cdot \\log|B|`.
 
     Parameters
@@ -2270,7 +2284,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
         Stacked panel response in shape ``(T, n, n)``, ``(T, n^2)``, or
         ``(n^2 * T,)``.
     W : libpysal.graph.Graph or scipy.sparse / dense (n×n) matrix
-        Row-standardised graph on ``n`` units.
+        Row-standardized graph on ``n`` units.
     X : np.ndarray or pandas.DataFrame, shape ``(n^2 * T, p)``
         Stacked panel design matrix in time-first order.
     T : int
@@ -2289,9 +2303,8 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
         Method for the Kronecker-factored log-determinant.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with prior
-        :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)`,
-        rate ``nu_lam`` (default 1/30, mean ≈ 30).
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     symmetric_xo_xd : bool, optional
         If ``None`` (default), origin and destination design blocks are
         compared and symmetry is auto-detected.
@@ -2303,7 +2316,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
         - ``sigma_sigma`` : float, default 10.0 — HalfNormal prior std for ``sigma``.
         - ``lam_lower`` : float, default -0.999 — Lower bound of Uniform prior on ``lam_d`` and ``lam_o``.
         - ``lam_upper`` : float, default 0.999 — Upper bound of Uniform prior on ``lam_d`` and ``lam_o``.
-        - ``nu_lam`` : float, default 1/30 — Rate of TruncExp prior on ``nu`` (only when ``robust=True``).
+        - ``nu`` : float, default 4.0 — Fixed Student-t degrees of freedom (only when ``robust=True``).
 
     Notes
     -----
@@ -2365,7 +2378,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
                 - lam_w * pt.dot(Ww_X_t, beta)
             )
             if self.robust:
-                nu = self._add_nu_prior()
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=y_t)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=y_t)

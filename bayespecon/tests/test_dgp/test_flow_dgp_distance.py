@@ -181,7 +181,7 @@ class TestAutoBuildG:
         assert out["G"].n_nodes == 25
         assert len(out["gdf"]) == 25
         # KNN graph: each row of W has roughly knn_k positive entries
-        # (after row standardisation).
+        # (after row standardization).
         nnz_per_row = np.diff(out["W"].indptr)
         assert nnz_per_row.min() >= 1
 

@@ -3,7 +3,7 @@
 Five methods are supported:
 
 * ``"eigenvalue"`` — exact O(n) per-call after one-time O(n³) eigendecomposition.
-* ``"slq"`` — stochastic Lanczos quadrature; D-symmetrised batched Lanczos
+* ``"slq"`` — stochastic Lanczos quadrature; D-symmetrized batched Lanczos
   with Gauss quadrature trace estimation → Chebyshev coefficients.
 * ``"chebyshev"`` — Barry-Pace Monte Carlo traces → Chebyshev approximation; O(m) per call.
 * ``"cheb_stochastic"`` — stochastic Chebyshev expansion (Han et al. 2015);
@@ -25,6 +25,7 @@ non-symmetric (directed graph), otherwise ``"cheb_stochastic"``
 from __future__ import annotations
 
 import os
+import warnings
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
@@ -131,8 +132,8 @@ def _is_symmetric_W(W) -> bool:
     """Check whether ``W`` describes an undirected graph → the Cholesky logdet.
 
     The discriminator is **D-symmetrizability**, not literal matrix symmetry:
-    a *row-standardised* undirected graph ``W = D⁻¹A`` (``A`` symmetric) is not
-    literally symmetric, yet ``cheb_cholesky`` handles it via D-symmetrisation.
+    a *row-standardized* undirected graph ``W = D⁻¹A`` (``A`` symmetric) is not
+    literally symmetric, yet ``cheb_cholesky`` handles it via D-symmetrization.
     Only genuinely directed graphs (asymmetric adjacency, e.g. KNN / travel time
     / migration) fall through to the LU-based ``aaa`` path.
 
@@ -150,7 +151,7 @@ def _is_symmetric_W(W) -> bool:
         return True  # default: assume symmetric
 
     # libpysal Graph: use built-in topology asymmetry check (intrinsic=False
-    # ignores weight values, so row-standardisation does not read as directed).
+    # ignores weight values, so row-standardization does not read as directed).
     if hasattr(W, "asymmetry"):
         try:
             asym = W.asymmetry(intrinsic=False)
@@ -165,8 +166,8 @@ def _is_symmetric_W(W) -> bool:
         if diff.nnz == 0 or bool(np.all(np.abs(diff.data) <= 1e-10)):
             return True
         # Not literally symmetric: may still be a D-symmetrizable (row-
-        # standardised undirected) graph, which cheb_cholesky handles.  Test
-        # with the actual symmetrisation so routing == applicability.
+        # standardized undirected) graph, which cheb_cholesky handles.  Test
+        # with the actual symmetrization so routing == applicability.
         try:
             from ._chol_cheb import _d_symmetrize
 
@@ -201,13 +202,22 @@ def _auto_logdet_method(n: int, W=None) -> str:
     - ``aaa`` for n ≤ cheb_cutoff when W is non-symmetric (directed graph):
       exact logdet via sparse LU (KLU with symbolic reuse) at adaptively-selected
       AAA support points.  Rational approximation converges exponentially near
-      singularities.  Uses an adaptive coarse grid of 8–30 LU factorisations,
+      singularities.  Uses an adaptive coarse grid of 8–30 LU factorizations,
       sized from the interval's Bernstein-ellipse rate, selecting ~7 support
       points.  Measured setup ~157ms at n=10k; eval ~5μs/ρ; error 1e-8 to 5e-8.
     - ``cheb_stochastic`` for n > cheb_cutoff: stochastic Chebyshev expansion.
       Lower setup cost (~62ms at n=10k, ~328ms at n=60k) but carries stochastic
-      error 0.7 to 3.5 with 200 probes.  Eval: ~57μs/ρ.  Use when factorisation
+      error 0.7 to 3.5 with 200 probes.  Eval: ~57μs/ρ.  Use when factorization
       fill-in makes exact setup too expensive.
+
+    **Fill-in guard**: when ``W`` is provided and ``n ≤ cheb_cutoff``, the
+    auto-selector estimates the fill-in ratio ``nnz(W²) / nnz(W)`` (in
+    ``O(nnz)`` via :func:`~._fillin.estimate_fillin_ratio`).  If this exceeds
+    ``BAYESPECON_LOGDET_MAX_FILLIN_RATIO`` (default 20), the exact
+    factorization path is skipped in favour of ``cheb_stochastic`` and a
+    warning is issued.  This catches dense or hub-dominated graphs (e.g.
+    KNN-50, fully dense W) at medium ``n`` where the ``n`` cutoff alone
+    would not route to stochastic.
 
     The ``cheb_cutoff`` default of 60,000 is where the benchmark ends, not where
     the exact path stops paying.  It was raised from 20,000 after vectorising the
@@ -217,12 +227,8 @@ def _auto_logdet_method(n: int, W=None) -> str:
     seconds.  Raise it further via ``BAYESPECON_LOGDET_CHEB_MAX_N`` if Cholesky
     fill-in on your graph stays affordable past that.
     """
-    eigen_cutoff_raw = os.getenv("BAYESPECON_LOGDET_EIGEN_MAX_N", "500")
+    eigen_cutoff = _eigen_cutoff()
     cheb_cutoff_raw = os.getenv("BAYESPECON_LOGDET_CHEB_MAX_N", "60000")
-    try:
-        eigen_cutoff = max(1, int(eigen_cutoff_raw))
-    except ValueError:
-        eigen_cutoff = 500
     try:
         cheb_cutoff = max(eigen_cutoff + 1, int(cheb_cutoff_raw))
     except ValueError:
@@ -230,6 +236,27 @@ def _auto_logdet_method(n: int, W=None) -> str:
     if n <= eigen_cutoff:
         return "eigenvalue"
     if n <= cheb_cutoff:
+        # Fill-in guard: if W² is much denser than W, Cholesky/LU fill-in
+        # will dominate setup cost.  Route to stochastic instead.
+        if W is not None:
+            import scipy.sparse as sp
+
+            from ._fillin import estimate_fillin_ratio
+
+            W_csr = sp.csr_matrix(W) if not sp.issparse(W) else W.tocsr()
+            ratio = estimate_fillin_ratio(W_csr)
+            max_ratio = _max_fillin_ratio()
+            if ratio > max_ratio:
+                fallback = "chol_aaa" if _is_symmetric_W(W) else "aaa"
+                warnings.warn(
+                    f"Estimated fill-in ratio nnz(W²)/nnz(W) ≈ {ratio:.0f}× "
+                    f"exceeds max_fillin_ratio={max_ratio:.0f}×. "
+                    f"Sparse factorization fill-in would dominate setup cost; "
+                    f"auto-selecting cheb_stochastic instead of {fallback}. "
+                    f"Set logdet_method explicitly to override.",
+                    stacklevel=3,
+                )
+                return "cheb_stochastic"
         # Check W symmetry: chol_aaa for symmetric (undirected graph),
         # aaa for non-symmetric (directed graph: KNN, travel time, migration).
         # chol_aaa combines CHOLMOD's cheaper factorization with AAA's
@@ -243,6 +270,70 @@ def _auto_logdet_method(n: int, W=None) -> str:
     return "cheb_stochastic"
 
 
+def _eigen_cutoff() -> int:
+    """Return the eigendecomposition size cutoff (``BAYESPECON_LOGDET_EIGEN_MAX_N``).
+
+    Single source of truth for the maximum ``n`` at which the O(n³)
+    eigendecomposition is considered affordable.  Read from the environment
+    variable ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500).  Used by
+    :func:`_auto_logdet_method` for auto-selection.
+    """
+    raw = os.getenv("BAYESPECON_LOGDET_EIGEN_MAX_N", "500")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 500
+
+
+#: Hard limit for explicit ``logdet_method="eigenvalue"`` on large W.
+#: The auto-select cutoff (:func:`_eigen_cutoff`, default 500) is a performance
+#: guideline — slightly exceeding it is fine.  This hard guard prevents
+#: genuinely dangerous O(n²) memory allocations (e.g. a dense 20k×20k matrix
+#: is ~3 GB).  Override with ``BAYESPECON_LOGDET_EIGEN_HARD_MAX_N``.
+_EIGEN_HARD_MAX_N_DEFAULT = 5000
+
+
+def _eigen_hard_max_n() -> int:
+    """Return the hard size limit for explicit eigenvalue eigendecomposition.
+
+    The auto-select cutoff (``BAYESPECON_LOGDET_EIGEN_MAX_N``, default 500) is
+    a performance guideline — tests and users may legitimately force
+    ``logdet_method="eigenvalue"`` on moderately larger W.  This hard guard
+    only fires when the allocation would be genuinely dangerous (O(n²) memory
+    in the multi-GB range).  Read from ``BAYESPECON_LOGDET_EIGEN_HARD_MAX_N``
+    (default 5000; a 5000×5000 dense matrix is ~200 MB).
+    """
+    raw = os.getenv(
+        "BAYESPECON_LOGDET_EIGEN_HARD_MAX_N", str(_EIGEN_HARD_MAX_N_DEFAULT)
+    )
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return _EIGEN_HARD_MAX_N_DEFAULT
+
+
+#: Default fill-in ratio (estimated ``nnz(W²) / nnz(W)``) above which the
+#: auto-selector routes to ``cheb_stochastic`` instead of exact factorization.
+#: The Cholesky factor has at least as many nonzeros as ``W²`` in its early
+#: rows, so this ratio directly predicts factorization cost.  The 2D rook
+#: lattice (degree ~8) gives ratio ~8; KNN-50 gives ~50; dense W gives ~n.
+#: Default 20.0 sits between regular lattices and dense/high-degree graphs.
+DEFAULT_MAX_FILLIN_RATIO = 20.0
+
+
+def _max_fillin_ratio() -> float:
+    """Return the fill-in ratio threshold for auto-selection override.
+
+    Read from ``BAYESPECON_LOGDET_MAX_FILLIN_RATIO`` (default 20.0).
+    Set very high (e.g. 99999) to effectively disable the guard.
+    """
+    raw = os.getenv("BAYESPECON_LOGDET_MAX_FILLIN_RATIO", str(DEFAULT_MAX_FILLIN_RATIO))
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return DEFAULT_MAX_FILLIN_RATIO
+
+
 def resolve_logdet_bounds(
     method: str | None,
     *,
@@ -254,7 +345,7 @@ def resolve_logdet_bounds(
 ) -> LogdetBounds:
     """Resolve rho bounds from explicit overrides, priors, or defaults.
 
-    For row-standardised W the stability interval is approximately (-1, 1).
+    For row-standardized W the stability interval is approximately (-1, 1).
 
     ``W`` (when supplied) participates in auto-selection so that the
     method recorded here agrees with every other resolution site —

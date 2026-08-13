@@ -3,7 +3,7 @@
 The unrestricted 3-parameter flow log-determinant is handled by the scalable
 resolvent-Kronecker gradient (:mod:`bayespecon._logdet._flow_resolvent`); the old
 ``"traces"`` value method was removed because it amplifies stochastic-moment noise
-for large directed ``W``.  What remains here is the *separable* flow factorisation
+for large directed ``W``.  What remains here is the *separable* flow factorization
 ``log|L_o ⊗ L_d| = n·log|I − ρ_d W| + n·log|I − ρ_o W|``, delegated to the general
 single-parameter logdet factories.  Used by ``models/flow`` and ``models/flow_panel``.
 """
@@ -50,7 +50,7 @@ def make_flow_separable_logdet(
     Parameters
     ----------
     W_sparse : array-like or scipy.sparse matrix
-        Row-standardised :math:`n \times n` spatial weights matrix.
+        Row-standardized :math:`n \times n` spatial weights matrix.
     n : int
         Number of spatial units.
     method : str, optional

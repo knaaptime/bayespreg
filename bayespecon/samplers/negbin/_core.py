@@ -8,7 +8,7 @@ Orchestrates the 6-block Gibbs sweep:
   5. ρ | β, σ², ω, y   (collapsed 1-D slice, η integrated out)
   6. α | y, η           (1-D slice on log-likelihood)
 
-The structural form parameterises the latent log-mean as
+The structural form parameterizes the latent log-mean as
 ``η = ρ W η + X β + ν`` with ``ν ~ N(0, σ² I)``, and augments the NB
 likelihood with Pólya–Gamma auxiliary variables to obtain fully
 conjugate Gibbs updates for η, β, and σ².
@@ -24,9 +24,9 @@ where P_η = A_ρ^T A_ρ / σ² + diag(ω) and rhs = A_ρ^T Xβ / σ² + κ.
 **Backend dispatch**: The sampler supports three computational paths,
 selected via ``gibbs_method`` in :meth:`SARNegBinStructural.fit`:
 
-- ``"factorize"``: CHOLMOD/splu factorisation (exact, O(nnz^{1.5})).
+- ``"factorize"``: CHOLMOD/splu factorization (exact, O(nnz^{1.5})).
 - ``"iterative"``: CG + Lanczos + Chebyshev (approximate, avoids
-  factorisation).
+  factorization).
 - ``"jax_dense"``: JAX dense matvec + vmap (3–4× faster for single
   draws, 20–27× per-draw when batching Chebyshev draws).  Requires
   JAX with float64 enabled.  Viable for n ≤ ~10 000 on machines
@@ -63,8 +63,12 @@ from .._utils._slice import (
 )
 from .._utils._spatial_normal import (
     CholmodFactor,
+    KrylovPrecisionBasis,
+    build_precision_krylov_basis,
     cg_solve,
     chebyshev_sample,
+    eval_precision_logdet_from_basis,
+    eval_precision_solve_from_basis,
     jax_build_P_dense,
     jax_chebyshev_sample,
     lanczos_logdet,
@@ -169,9 +173,9 @@ class GibbsCache(NamedTuple):
 
     When ``solve_method="cg"`` or ``logdet_P_method="lanczos"``, the
     decoupled (iterative) path is used in the ρ slice sampler:
-    CG replaces the factorisation-based solve, and Lanczos-based
-    stochastic estimation replaces the factorisation-based log|P_η|.
-    This avoids the O(nnz^{1.5}) factorisation cost for large n.
+    CG replaces the factorization-based solve, and Lanczos-based
+    stochastic estimation replaces the factorization-based log|P_η|.
+    This avoids the O(nnz^{1.5}) factorization cost for large n.
 
     When ``solve_method="jax_dense"``, the JAX-accelerated path is
     used: dense matvec + vmap over Lanczos probes and Chebyshev
@@ -197,6 +201,14 @@ class GibbsCache(NamedTuple):
     lanczos_n_probes: int = 10  # probe vectors for Lanczos logdet
     lanczos_deg: int = 30  # Lanczos iteration depth
     chebyshev_degree: int = 30  # Chebyshev polynomial degree for η draw
+    # --- Krylov basis reuse for the ρ slice -------------------------------
+    # When krylov_degree > 0 and n >= krylov_min_n, the slice step factors
+    # P(ρ_c) once and reuses the basis for all candidates within
+    # krylov_dmax.  Only beneficial on high-fill-in graphs (queen, knn);
+    # the threshold guards against slowdowns on low-fill-in lattices.
+    krylov_degree: int = 0
+    krylov_dmax: float = 0.4
+    krylov_min_n: int = 400
     # JAX dense backend fields (only used when solve_method="jax_dense")
     W_sym_dense: object | None = None  # jax.numpy.ndarray (n, n): W + W^T
     WtW_dense: object | None = None  # jax.numpy.ndarray (n, n): W^T W
@@ -595,9 +607,9 @@ def _sample_rho(
 
     Each ρ evaluation requires computing log|P_η| and solving
     P_η m = rhs.  By default, both are done via CHOLMOD/splu
-    factorisation (O(nnz^{1.5})).  When ``cache.solve_method="cg"``
+    factorization (O(nnz^{1.5})).  When ``cache.solve_method="cg"``
     and/or ``cache.logdet_P_method="lanczos"``, the decoupled
-    (iterative) path is used instead, avoiding the factorisation
+    (iterative) path is used instead, avoiding the factorization
     cost entirely for large n with high fill-in.
 
     Parameters
@@ -616,7 +628,7 @@ def _sample_rho(
         Random state.
     log_density_current : float, optional
         Cached log-density at current ρ. If provided, avoids one
-        logdet + factorisation evaluation.
+        logdet + factorization evaluation.
 
     Returns
     -------
@@ -706,6 +718,36 @@ def _sample_rho(
         _warmup_key = jax.random.fold_in(_jax_key, 0)
         _ = float(_jax_logdens_fn(jnp.float64(state.rho), _warmup_key))
 
+    # --- Krylov basis for the precision P(ρ) (scipy sparse path only) -------
+    # Build once at the slice centre ρ_c = state.rho, then evaluate every
+    # candidate within krylov_dmax via a Horner sum.  The RHS is ρ-dependent
+    # (rhs = Xbeta/σ² − ρ·WtXbeta/σ² + κ), so we seed the basis with the
+    # ρ-independent columns [κ, Xbeta/σ², WtXbeta/σ²] and reconstruct the
+    # solve as a linear combination of two Horner evaluations.
+    _krylov_basis: KrylovPrecisionBasis | None = None
+    if (
+        not use_jax
+        and cache.krylov_degree > 0
+        and n >= cache.krylov_min_n
+        and Wsym_s2 is not None
+        and WtW_s2 is not None
+    ):
+        _rho_c = float(state.rho)
+        rhs_c = np.column_stack([kappa, Xbeta_over_s2, WtXbeta_over_s2])
+        _krylov_basis = build_precision_krylov_basis(
+            rho_c=_rho_c,
+            base=base,
+            G1=Wsym_s2,
+            G2=WtW_s2,
+            rhs=rhs_c,
+            degree=cache.krylov_degree,
+            cholmod_factor=cholmod_factor,
+            n_probes=cache.lanczos_n_probes,
+            lanczos_deg=cache.lanczos_deg,
+            rng=_lanczos_rng,
+            dmax=cache.krylov_dmax,
+        )
+
     def log_density(rho: float) -> float:
         """Collapsed log-density of ρ (η integrated out)."""
         if use_jax:
@@ -727,31 +769,55 @@ def _sample_rho(
         # Right-hand side (constant form regardless of solve method)
         rhs = Xbeta_over_s2 - rho * WtXbeta_over_s2 + kappa
 
-        # Precision: P = base - rho * Wsym_s2 + rho^2 * WtW_s2
-        if Wsym_s2 is not None and WtW_s2 is not None:
-            P = base - rho * Wsym_s2 + rho**2 * WtW_s2
-        else:
-            A_rho = sp.eye(n, format="csr") - rho * W
-            AtA = A_rho.T @ A_rho / sigma2
-            P = AtA + sp.diags(omega, format="csr")
-
-        # --- log|P_η| ---
-        if logdet_P_method == "lanczos":
-            log_det_P = lanczos_logdet(
-                P,
-                n_probes=cache.lanczos_n_probes,
-                lanczos_deg=cache.lanczos_deg,
+        # --- Krylov-accelerated solve + logdet ------------------------------
+        # When the basis is available and ρ is within the Krylov radius,
+        # P⁻¹rhs and log|P(ρ)| come from Horner evaluations against the
+        # single factored P_c.
+        if (
+            _krylov_basis is not None
+            and abs(rho - _krylov_basis.rho_basis) <= _krylov_basis.safe_dmax
+        ):
+            drho = rho - _krylov_basis.rho_basis
+            sol_all = eval_precision_solve_from_basis(_krylov_basis, drho)
+            # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹Xbeta/σ², P(ρ)⁻¹WtXbeta/σ²]
+            Pkappa = sol_all[:, 0]
+            PXbeta = sol_all[:, 1 : 1 + 1]  # (n, 1)
+            PWtXbeta = sol_all[:, 1 + 1 :]  # (n, 1)
+            # rhs = Xbeta/σ² − ρ·WtXbeta/σ² + κ
+            # → P(ρ)⁻¹rhs = P(ρ)⁻¹Xbeta/σ² − ρ·P(ρ)⁻¹WtXbeta/σ² + P(ρ)⁻¹κ
+            m = (PXbeta - rho * PWtXbeta).ravel() + Pkappa
+            log_det_P = eval_precision_logdet_from_basis(
+                _krylov_basis,
+                drho,
                 rng=_lanczos_rng,
             )
         else:
-            cholmod_factor.factorize(P)
-            log_det_P = cholmod_factor.logdet()
+            # --- Direct path: factor / Lanczos at this candidate ------------
+            # Precision: P = base - rho * Wsym_s2 + rho^2 * WtW_s2
+            if Wsym_s2 is not None and WtW_s2 is not None:
+                P = base - rho * Wsym_s2 + rho**2 * WtW_s2
+            else:
+                A_rho = sp.eye(n, format="csr") - rho * W
+                AtA = A_rho.T @ A_rho / sigma2
+                P = AtA + sp.diags(omega, format="csr")
 
-        # --- Solve P m = rhs ---
-        if solve_method == "cg":
-            m = cg_solve(P, rhs)
-        else:
-            m = cholmod_factor.solve(rhs)
+            # --- log|P_η| ---
+            if logdet_P_method == "lanczos":
+                log_det_P = lanczos_logdet(
+                    P,
+                    n_probes=cache.lanczos_n_probes,
+                    lanczos_deg=cache.lanczos_deg,
+                    rng=_lanczos_rng,
+                )
+            else:
+                cholmod_factor.factorize(P)
+                log_det_P = cholmod_factor.logdet()
+
+            # --- Solve P m = rhs ---
+            if solve_method == "cg":
+                m = cg_solve(P, rhs)
+            else:
+                m = cholmod_factor.solve(rhs)
 
         # Quadratic form: rhs^T P^{-1} rhs = rhs^T m
         quad = float(rhs @ m)
@@ -892,7 +958,7 @@ def _sample_alpha(
         # NB log-likelihood: sum_i log NB(y_i | mu_i, alpha)
         # where mu_i = exp(eta_i)
         mu = np.exp(eta)
-        # scipy.stats.nbinom.logpmf uses (n, p) parameterisation
+        # scipy.stats.nbinom.logpmf uses (n, p) parameterization
         # NB(y | mu, alpha) = Gamma-Poisson mixture
         # log p(y | mu, alpha) = log Gamma(y + alpha) - log Gamma(alpha)
         #   + y * log(mu / (mu + alpha)) + alpha * log(alpha / (mu + alpha))
@@ -996,7 +1062,7 @@ def run_chain(
     X : ndarray of shape (n, k)
         Design matrix (including intercept column if desired).
     W_sparse : csr_matrix of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     priors : GibbsPriors
         Prior hyperparameters.
     cache : GibbsCache
@@ -1102,7 +1168,7 @@ def run_chain(
                     eta_samples[idx] = state.eta
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     result = {
         "rho": rho_samples,

@@ -31,10 +31,11 @@ SIDE = 6  # 36 cross-sectional units
 def pytest_collection_modifyitems(config, items):
     """Auto-skip ``requires_jax``-marked tests on Windows.
 
-    JAX (and the JAX-backed NUTS samplers ``numpyro``/``blackjax``) is not
-    reliably installable on Windows CI. Tests that activate those backends
-    are tagged with ``@pytest.mark.requires_jax`` and skipped here so that
-    cross-platform CI matrices don't need per-job marker exclusions.
+    JAX (jaxlib) and the JAX-backed samplers (``gibbs_backend="jax"``,
+    ``numpyro``, ``blackjax``) are not reliably installable on Windows CI.
+    Tests that activate those backends are tagged with
+    ``@pytest.mark.requires_jax`` and skipped here so that cross-platform CI
+    matrices don't need per-job marker exclusions.
     """
     if not sys.platform.startswith("win"):
         return

@@ -12,11 +12,11 @@ The sampler uses:
   :func:`jax_polyagamma` with ``method="exp"``.  Since h = 1 for
   binary logit, the Exp method is exact (no truncation bias) and
   fast (single exponential draw per observation).
-- **η and β draws**: Dense Cholesky factorisation via ``jnp.linalg.cholesky``
+- **η and β draws**: Dense Cholesky factorization via ``jnp.linalg.cholesky``
   and ``jnp.linalg.solve``.  O(n³) but fast for n ≤ ~2000.
 - **ρ/λ draw**: 1-D slice sampler on the doubly-collapsed log-density.
-  For SAR-logit, the density marginalises out both η and β via a
-  multi-RHS Cholesky solve.  For SEM-logit, the density marginalises
+  For SAR-logit, the density marginalizes out both η and β via a
+  multi-RHS Cholesky solve.  For SEM-logit, the density marginalizes
   out η but conditions on β.  Slice sampling avoids the expensive
   gradient computation that MALA requires (autodiff through Cholesky
   + solve is ~3× the forward cost).
@@ -39,6 +39,12 @@ import numpy as np
 from bayespecon._jax_dispatch import ensure_x64
 
 from .._utils._jax_polyagamma import jax_polyagamma
+from .._utils._spatial_normal import (
+    _sparsax_factor_ops_available,
+    build_precision_krylov_basis_jax,
+    eval_precision_logdet_from_basis_jax,
+    eval_precision_solve_from_basis_jax,
+)
 from ._core import JAXLogitGibbsState
 
 # On-device Pólya-Gamma for the ω ~ PG(1, η) block.  Prefer pgjax's exact Devroye
@@ -95,6 +101,8 @@ def _make_gibbs_step_with_data(
     n_probes,
     lanczos_deg,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ):
     """Build a JIT-compiled Gibbs step with data bound into the closure.
 
@@ -109,7 +117,7 @@ def _make_gibbs_step_with_data(
     X_jax : jax.numpy.ndarray of shape (n, k)
         Design matrix (JAX array).
     W_bcoo : jax.experimental.sparse.BCOO of shape (n, n)
-        Row-standardised W as a sparse BCOO matrix (for ``W @ x``).
+        Row-standardized W as a sparse BCOO matrix (for ``W @ x``).
     Wt_bcoo : jax.experimental.sparse.BCOO of shape (n, n)
         Transpose ``Wᵀ`` as a sparse BCOO matrix (for ``Wᵀ @ x``).
     n : int
@@ -183,7 +191,7 @@ def _make_gibbs_step_with_data(
     # For logit: h = 1 always, kappa = y - 0.5
     kappa = y_jax - 0.5
 
-    # Precompute W^T X for the β-marginalised density (sparse, O(nnz·k))
+    # Precompute W^T X for the β-marginalized density (sparse, O(nnz·k))
     WtX = Wt_bcoo @ X_jax  # (n, k)
 
     # ── sparsax setup (optional sparse SPD Cholesky path) ──
@@ -253,7 +261,7 @@ def _make_gibbs_step_with_data(
         else:
             P_diag = jnp.ones(n) + omega_new
             P = jnp.diag(P_diag) - rho * W_sym + rho**2 * WtW
-            P = P + 1e-6 * jnp.eye(n)  # regularisation for numerical stability
+            P = P + 1e-6 * jnp.eye(n)  # regularization for numerical stability
 
             L = jnp.linalg.cholesky(P)
             P_inv_rhs = cho_solve((L, True), rhs)
@@ -283,6 +291,42 @@ def _make_gibbs_step_with_data(
         # MALA requires (autodiff through Cholesky + solve is ~3× the
         # forward cost).  Each slice candidate needs only a forward
         # evaluation — no backward pass.
+        #
+        # ── Krylov basis (sparsax factor-reuse path) ──
+        # When krylov_degree > 0 and the sparsax factor-reuse primitives
+        # are available, factor P(ρ_c) ONCE at the slice centre ρ_c = ρ,
+        # build the shift-invert Krylov basis via a fori_loop of
+        # solve_factor calls (zero refactors), and evaluate every candidate
+        # within krylov_dmax via a Horner recurrence in pure JAX.  Candidates
+        # outside the radius fall back to a direct factor_solve.  This is
+        # the JAX-native analog of the NumPy KrylovPrecisionBasis.
+        _use_krylov = (
+            use_sparsax and krylov_degree > 0 and _sparsax_factor_ops_available()
+        )
+        if _use_krylov:
+            # G = ∂P/∂ρ|_{ρ_c} = G1 − 2ρ_c G2  (COO values at the pattern)
+            _G_vals_c = _W_sym_vals - 2.0 * rho * _WtW_vals
+            # Seed with the ρ-independent RHS columns [κ, X, WtX]
+            # so P(ρ)⁻¹u(ρ) = P(ρ)⁻¹X − ρ·P(ρ)⁻¹WtX is a linear combo of
+            # two Horner evaluations against the same basis.
+            _rhs_seed = jnp.column_stack([kappa, X_jax, WtX])  # (n, 1 + 2k)
+            _Ax_c = _assemble_Ax(omega_new, rho)
+            (
+                _token,
+                _V_stack,
+                _ld_coefs,
+                _safe_dmax,
+            ) = build_precision_krylov_basis_jax(
+                _Ai,
+                _Aj,
+                _Ax_c,
+                _G_vals_c,
+                _WtW_vals,
+                _rhs_seed,
+                n=_n_static,
+                degree=krylov_degree,
+                dmax=krylov_dmax,
+            )
 
         def log_density_rho(rho_val):
             """Doubly-collapsed log-density of ρ (η and β integrated out).
@@ -298,9 +342,38 @@ def _make_gibbs_step_with_data(
             rhs_stack = jnp.column_stack([kappa, u])  # (n, k+1)
 
             if use_sparsax:
-                Ax_r = _assemble_Ax(omega_new, rho_val)
-                # Multi-RHS solve + logdet from one factorization (factor_solve).
-                sol, log_det_P = _solve_logdet(Ax_r, rhs_stack)  # sol: (n, k+1)
+                if _use_krylov:
+                    # Krylov-accelerated path: Horner eval against the basis
+                    # built at ρ_c, plus first-order logdet trace correction.
+                    drho = rho_val - rho
+                    within = jnp.abs(drho) <= _safe_dmax
+                    # Horner in pure JAX (no sparsax calls):
+                    sol_all = eval_precision_solve_from_basis_jax(_V_stack, drho)
+                    # sol_all columns: [P(ρ)⁻¹κ, P(ρ)⁻¹X, P(ρ)⁻¹WtX]
+                    z_kry = sol_all[:, 0]
+                    PX = sol_all[:, 1 : 1 + k]
+                    PWtX = sol_all[:, 1 + k :]
+                    # u(ρ) = X − ρ·WtX  →  P(ρ)⁻¹u = PX − ρ·PWtX
+                    M_kry = PX - rho_val * PWtX
+                    log_det_P_kry = eval_precision_logdet_from_basis_jax(
+                        _ld_coefs, drho
+                    )
+                    # Direct solve for candidates outside the Krylov radius.
+                    # `jnp.where` evaluates both operands, so this factorization
+                    # runs regardless and the basis is pure added work — see the
+                    # note in ``samplers/negbin/_jax.py`` for why the fallback
+                    # cannot simply be dropped.
+                    Ax_r = _assemble_Ax(omega_new, rho_val)
+                    sol_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_stack)
+                    z_vec = jnp.where(within, z_kry, sol_dir[:, 0])
+                    M_mat = jnp.where(within, M_kry, sol_dir[:, 1:])
+                    log_det_P = jnp.where(within, log_det_P_kry, log_det_P_dir)
+                else:
+                    Ax_r = _assemble_Ax(omega_new, rho_val)
+                    # Multi-RHS solve + logdet from one factorization (factor_solve).
+                    sol, log_det_P = _solve_logdet(Ax_r, rhs_stack)  # sol: (n, k+1)
+                    z_vec = sol[:, 0]
+                    M_mat = sol[:, 1:]
             else:
                 # P_η = I + diag(ω) - ρ(W+W^T) + ρ²W^TW  (σ² = 1)
                 P_diag_r = jnp.ones(n) + omega_new
@@ -310,13 +383,12 @@ def _make_gibbs_step_with_data(
                 L_r = jnp.linalg.cholesky(P_r)
                 sol = cho_solve((L_r, True), rhs_stack)  # (n, k+1)
                 log_det_P = 2.0 * jnp.sum(jnp.log(jnp.diag(L_r)))
-
-            z_vec = sol[:, 0]  # P_η⁻¹ κ  — (n,)
-            M_mat = sol[:, 1:]  # P_η⁻¹ u  — (n, k)
+                z_vec = sol[:, 0]
+                M_mat = sol[:, 1:]
 
             # Σ_β*⁻¹ = X^TX + V₀⁻¹ - u^T M  — (k, k)
             Sig_beta_inv = XtX_jax + beta_prior_prec - u.T @ M_mat
-            Sig_beta_inv = Sig_beta_inv + 1e-10 * jnp.eye(k)  # regularise
+            Sig_beta_inv = Sig_beta_inv + 1e-10 * jnp.eye(k)  # regularize
 
             L_sig = jnp.linalg.cholesky(Sig_beta_inv)
             log_det_Sig_inv = 2.0 * jnp.sum(jnp.log(jnp.diag(L_sig)))
@@ -399,6 +471,8 @@ def run_chain_jax(
     pg_n_terms: int = 25,
     n_probes: int = 5,
     lanczos_deg: int = 15,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
     progress_manager=None,
     chain_id: int = 0,
 ):
@@ -509,6 +583,8 @@ def run_chain_jax(
         priors=priors,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     # Warmup the JIT function (first call triggers compilation)
@@ -535,7 +611,7 @@ def run_chain_jax(
                 log_lik_samples[idx] = _logit_loglik_pointwise_jax(y, eta_np)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     if progress_manager is not None:
         progress_manager.refresh()
@@ -572,6 +648,8 @@ def _make_gibbs_step_with_data_sem(
     n_probes,
     lanczos_deg,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ):
     """Build a JIT-compiled SEM-logit Gibbs step with data bound into the closure.
 
@@ -595,7 +673,7 @@ def _make_gibbs_step_with_data_sem(
     use_sparsax = sparsax_pattern is not None
 
     # Sparse W matvecs — never densify W.  (W+Wᵀ)@x and (WᵀW)@x compose the
-    # base W @ x / Wᵀ @ x BCOO matvecs, so no dense W_sym/WtW is materialised.
+    # base W @ x / Wᵀ @ x BCOO matvecs, so no dense W_sym/WtW is materialized.
     def W_matvec(x):
         return W_bcoo @ x
 
@@ -714,6 +792,42 @@ def _make_gibbs_step_with_data_sem(
         WsymXbeta_r = Wsym_matvec(Xbeta_r)
         WtWXbeta_r = WtW_matvec(Xbeta_r)
 
+        # ── Krylov basis (sparsax factor-reuse path, SEM) ──
+        # The SEM RHS is quadratic in λ: rhs = Xβ − λ·W_sym·Xβ + λ²·WtW·Xβ + κ.
+        # Seed with [κ, Xβ, W_sym·Xβ, WtW·Xβ] and reconstruct the solve as a
+        # quadratic combination of Horner evaluations.
+        _use_krylov_sem = (
+            use_sparsax and krylov_degree > 0 and _sparsax_factor_ops_available()
+        )
+        if _use_krylov_sem:
+            _lam_c = lam
+            _G_vals_c_sem = _W_sym_vals - 2.0 * _lam_c * _WtW_vals
+            _rhs_seed_sem = jnp.column_stack(
+                [
+                    kappa,
+                    Xbeta_r,
+                    WsymXbeta_r,
+                    WtWXbeta_r,
+                ]
+            )  # (n, 4)
+            _Ax_c_sem = _assemble_Ax(omega_new, _lam_c)
+            (
+                _token_sem,
+                _V_stack_sem,
+                _ld_coefs_sem,
+                _safe_dmax_sem,
+            ) = build_precision_krylov_basis_jax(
+                _Ai,
+                _Aj,
+                _Ax_c_sem,
+                _G_vals_c_sem,
+                _WtW_vals,
+                _rhs_seed_sem,
+                n=_n_static,
+                degree=krylov_degree,
+                dmax=krylov_dmax,
+            )
+
         def log_density_lam(lam_val):
             """Collapsed log-density of λ (η integrated out, β conditioned).
 
@@ -723,10 +837,35 @@ def _make_gibbs_step_with_data_sem(
             rhs_r = Xbeta_r - lam_val * WsymXbeta_r + lam_val**2 * WtWXbeta_r + kappa
 
             if use_sparsax:
-                Ax_r = _assemble_Ax(omega_new, lam_val)
-                # Solve + logdet from one factorization (factor_solve).
-                m, log_det_P = _solve_logdet(Ax_r, rhs_r)
-                quad_r = rhs_r @ m
+                if _use_krylov_sem:
+                    dlam = lam_val - _lam_c
+                    within = jnp.abs(dlam) <= _safe_dmax_sem
+                    sol_all = eval_precision_solve_from_basis_jax(_V_stack_sem, dlam)
+                    # sol_all: [P(λ)⁻¹κ, P(λ)⁻¹Xβ, P(λ)⁻¹W_symXβ, P(λ)⁻¹WtWXβ]
+                    Pkappa = sol_all[:, 0]
+                    PXbeta = sol_all[:, 1:2]
+                    PWsymXbeta = sol_all[:, 2:3]
+                    PWtWXbeta = sol_all[:, 3:]
+                    # rhs = Xβ − λ·W_symXβ + λ²·WtWXβ + κ
+                    m_kry = (
+                        PXbeta - lam_val * PWsymXbeta + lam_val**2 * PWtWXbeta
+                    ).ravel() + Pkappa
+                    log_det_P_kry = eval_precision_logdet_from_basis_jax(
+                        _ld_coefs_sem, dlam
+                    )
+                    quad_kry = rhs_r @ m_kry
+                    # Direct solve outside the radius (see the SAR-logit site).
+                    Ax_r = _assemble_Ax(omega_new, lam_val)
+                    m_dir, log_det_P_dir = _solve_logdet(Ax_r, rhs_r)
+                    quad_dir = rhs_r @ m_dir
+                    m = jnp.where(within, m_kry, m_dir)
+                    log_det_P = jnp.where(within, log_det_P_kry, log_det_P_dir)
+                    quad_r = jnp.where(within, quad_kry, quad_dir)
+                else:
+                    Ax_r = _assemble_Ax(omega_new, lam_val)
+                    # Solve + logdet from one factorization (factor_solve).
+                    m, log_det_P = _solve_logdet(Ax_r, rhs_r)
+                    quad_r = rhs_r @ m
             else:
                 P_diag_r = jnp.ones(n) + omega_new
                 P_r = jnp.diag(P_diag_r) - lam_val * W_sym + lam_val**2 * WtW
@@ -790,6 +929,8 @@ def run_chain_jax_sem(
     pg_n_terms: int = 25,
     n_probes: int = 5,
     lanczos_deg: int = 15,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
     progress_manager=None,
     chain_id: int = 0,
 ):
@@ -891,6 +1032,8 @@ def run_chain_jax_sem(
         priors=priors,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     # Warmup the JIT function
@@ -917,7 +1060,7 @@ def run_chain_jax_sem(
                 log_lik_samples[idx] = _logit_loglik_pointwise_jax(y, eta_np)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     if progress_manager is not None:
         progress_manager.refresh()
@@ -961,7 +1104,7 @@ def _run_chain_logit_warmup(gibbs_step, init_state, key, n_iters, slice_width):
     """Run ``n_iters`` Gibbs steps and return only the final state + key.
 
     Uses :func:`jax.lax.fori_loop` so no per-iteration traces are
-    materialised — memory cost is independent of ``n_iters``.
+    materialized — memory cost is independent of ``n_iters``.
     The final PRNG key is returned so chunked runs can resume from a
     deterministic point without breaking the chain.
     """
@@ -1079,6 +1222,8 @@ def run_chains_jax_vectorized(
     lanczos_deg: int = 15,
     progressbar: bool = True,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ) -> list[dict]:
     """Run multiple SAR-logit Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1144,6 +1289,8 @@ def run_chains_jax_vectorized(
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
         sparsax_pattern=sparsax_pattern,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     init_states = _stack_chain_inits(inits, JAXLogitGibbsState, "rho")
@@ -1215,7 +1362,7 @@ def run_chains_jax_vectorized(
 
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, iter_done - 1, tuning=True, accept=None)
+                    pm.update(c, iter_done - 1, tuning=True)
 
         final_warm_states = state
 
@@ -1235,7 +1382,7 @@ def run_chains_jax_vectorized(
 
         if pm is not None:
             for c in range(chains):
-                pm.update(c, tune + draws - 1, tuning=False, accept=None)
+                pm.update(c, tune + draws - 1, tuning=False)
 
     # Convert to numpy
     rhos = np.asarray(rhos)
@@ -1278,6 +1425,8 @@ def run_chains_jax_sem_vectorized(
     lanczos_deg: int = 15,
     progressbar: bool = True,
     sparsax_pattern=None,
+    krylov_degree: int = 0,
+    krylov_dmax: float = 0.4,
 ) -> list[dict]:
     """Run multiple SEM-logit Gibbs chains in parallel via ``jax.vmap``.
 
@@ -1313,6 +1462,8 @@ def run_chains_jax_sem_vectorized(
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
         sparsax_pattern=sparsax_pattern,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
     init_states = _stack_chain_inits(inits, JAXSEMLogitGibbsState, "lam")
@@ -1379,7 +1530,7 @@ def run_chains_jax_sem_vectorized(
 
             if pm is not None:
                 for c in range(chains):
-                    pm.update(c, iter_done - 1, tuning=True, accept=None)
+                    pm.update(c, iter_done - 1, tuning=True)
 
         final_warm_states = state
 
@@ -1399,7 +1550,7 @@ def run_chains_jax_sem_vectorized(
 
         if pm is not None:
             for c in range(chains):
-                pm.update(c, tune + draws - 1, tuning=False, accept=None)
+                pm.update(c, tune + draws - 1, tuning=False)
 
     # Convert to numpy
     lams = np.asarray(lams)

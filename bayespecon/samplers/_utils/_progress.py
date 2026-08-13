@@ -1,11 +1,15 @@
 """Progress bar manager for Gibbs samplers.
 
 Uses rich.progress for terminal rendering with per-chain bars
-showing iteration count, MALA accept rate, speed, and timing.
+showing iteration count, speed, and timing.
 
-Like PyMC's progress bar, only the draw phase is tracked in the
-progress bar.  The tune phase is indicated by a ``tune`` label
-but does not advance the bar.
+Following PyMC, the run is *announced before* the bars start so the user
+knows what is about to happen; only the elapsed time and throughput are
+reported afterwards.
+
+There is no accept-rate column: every Gibbs block here is either a
+conjugate draw or a slice step, both of which accept by construction, so
+the column only ever showed ``--`` or a vacuous 100%.
 """
 
 from __future__ import annotations
@@ -39,6 +43,29 @@ default_gibbs_theme = Theme(
         "progress.elapsed": "none",
     }
 )
+
+
+def _announcement(chains: int, tune: int, draws: int, model_type: str) -> str:
+    """Line printed *before* the bars, telling the user what is starting.
+
+    Mirrors PyMC, which announces the run up front; the previous behaviour
+    printed this only on exit, by which point it could no longer inform
+    anyone about what they had been waiting on.
+    """
+    total = chains * (tune + draws)
+    plural = "s" if chains > 1 else ""
+    label = f" ({model_type})" if model_type else ""
+    return (
+        f"Gibbs sampling{label}: {chains} chain{plural} "
+        f"for {tune:,} tune and {draws:,} draw iterations "
+        f"({chains} x {tune + draws:,} = {total:,} draws total)"
+    )
+
+
+def _timing_summary(total_draws: int, elapsed: float) -> str:
+    """Line printed *after* the bars: elapsed time and throughput."""
+    speed = total_draws / elapsed if elapsed > 0 else 0.0
+    return f"Sampling took {elapsed:.0f}s ({speed:,.0f} draws/s)"
 
 
 class _GibbsProgress(Progress):
@@ -84,8 +111,8 @@ class _GibbsProgress(Progress):
 class GibbsProgressBarManager:
     """Progress bar manager for Gibbs sampling.
 
-    Shows per-chain rich progress bars with iteration count,
-    MALA accept rate, speed, and timing.
+    Shows per-chain rich progress bars with iteration count, speed, and
+    timing, preceded by a one-line announcement of the run.
 
     The bar advances across the full chain (tune + draw) so notebook
     users see continuous progress rather than a long flat 0% period.
@@ -119,10 +146,6 @@ class GibbsProgressBarManager:
         self._show = progressbar
         self.model_type = model_type
 
-        # Accept-rate tracking state (populated on first update)
-        self._accept_counts: list[int] | None = None
-        self._accept_totals: list[int] | None = None
-
         # Per-chain start times for accurate speed reporting.
         # Without this, sequential chains inherit elapsed time from
         # task creation (not chain start), making later chains appear
@@ -143,10 +166,6 @@ class GibbsProgressBarManager:
                     table_column=Column("Iter", ratio=2),
                 ),
                 TextColumn(
-                    "{task.fields[accept_rate]}",
-                    table_column=Column("Accept", ratio=1),
-                ),
-                TextColumn(
                     "{task.fields[speed]}",
                     table_column=Column("Speed", ratio=2),
                 ),
@@ -162,6 +181,12 @@ class GibbsProgressBarManager:
 
     def __enter__(self):
         if self._show:
+            # Announce *before* the bars start, as PyMC does, so the user
+            # knows what is running while it runs rather than learning it
+            # only once the bars have finished.
+            self._progress.console.print(
+                _announcement(self.chains, self.tune, self.draws, self.model_type)
+            )
             self._progress.__enter__()
             # Add one task per chain
             for c in range(self.chains):
@@ -171,7 +196,6 @@ class GibbsProgressBarManager:
                     phase="tune",
                     iter_count=0,
                     total_iters=self.total,
-                    accept_rate="--",
                     speed="--",
                 )
                 self._tasks.append(task_id)
@@ -179,19 +203,13 @@ class GibbsProgressBarManager:
 
     def __exit__(self, *args):
         if self._show:
-            # Compute final summary line
+            # Timing only — the run itself was announced in __enter__.
             total_draws = self.chains * (self.draws + self.tune)
             if self._tasks:
                 elapsed = self._progress.tasks[self._tasks[0]].elapsed or 0.0
             else:
                 elapsed = 0.0
-            speed = total_draws / elapsed if elapsed > 0 else 0.0
-            summary = (
-                f"Sampling {self.chains} chain{'s' if self.chains > 1 else ''} "
-                f"for {self.tune} tune and {self.draws} draw iterations, "
-                f"{self.chains} x {self.tune + self.draws:,} draws total "
-                f"took {elapsed:.0f}s ({speed:.0f} draws/s)"
-            )
+            summary = _timing_summary(total_draws, elapsed)
             # Live.stop() skips a final refresh in Jupyter, so force one
             # before exit to render fully completed bars.
             self._progress.refresh()
@@ -226,7 +244,6 @@ class GibbsProgressBarManager:
         chain_idx: int,
         iteration: int,
         tuning: bool,
-        accept: bool | None = None,
     ):
         """Update progress for a chain.
 
@@ -238,19 +255,7 @@ class GibbsProgressBarManager:
             Current iteration (0-based, counting both tune and draw).
         tuning : bool
             Whether in warmup phase.
-        accept : bool or None
-            Whether MALA/MH step was accepted (None for NumPy slice path).
         """
-        # Track accept counts even when the bar is hidden so callers
-        # can rely on them being available after sampling.
-        if accept is not None:
-            if self._accept_counts is None:
-                self._accept_counts = [0] * self.chains
-                self._accept_totals = [0] * self.chains
-            self._accept_totals[chain_idx] += 1
-            if accept:
-                self._accept_counts[chain_idx] += 1
-
         if not self._show:
             return
 
@@ -261,12 +266,6 @@ class GibbsProgressBarManager:
 
         task_id = self._tasks[chain_idx]
         phase = "tune" if tuning else "draw"
-
-        if accept is not None and self._accept_totals[chain_idx] > 0:
-            rate = self._accept_counts[chain_idx] / self._accept_totals[chain_idx]
-            accept_str = f"{rate:.0%}"
-        else:
-            accept_str = "--"
 
         chain_start = self._chain_start_times.get(chain_idx)
         if chain_start is not None:
@@ -280,39 +279,8 @@ class GibbsProgressBarManager:
             completed=iter1,
             phase=phase,
             iter_count=iter1,
-            accept_rate=accept_str,
             speed=speed_str,
         )
-
-    def set_accept_rate(self, chain_idx: int, rate: float) -> None:
-        """Set the aggregate accept rate for a chain.
-
-        Used by JAX-based Gibbs samplers (MALA/MH) to report the
-        overall accept rate after the draw phase completes, since
-        per-iteration accept booleans are not available from JIT-compiled
-        scans.  For NumPy slice sampling, this is not called (the
-        Accept column shows ``"--"``).
-
-        Parameters
-        ----------
-        chain_idx : int
-            Chain index (0-based).
-        rate : float
-            Accept rate between 0 and 1 (e.g., 0.574 for 57.4%).
-        """
-        if not self._show:
-            return
-        # Lazy-init accept tracking
-        if self._accept_counts is None:
-            self._accept_counts = [0] * self.chains
-            self._accept_totals = [0] * self.chains
-        # Use a large denominator so the percentage is precise
-        self._accept_totals[chain_idx] = 1000
-        self._accept_counts[chain_idx] = round(rate * 1000)
-        # Update the progress bar display
-        task_id = self._tasks[chain_idx]
-        accept_str = f"{rate:.0%}"
-        self._progress.update(task_id, accept_rate=accept_str)
 
     def refresh(self):
         """Force a refresh of the progress bar display."""
@@ -329,7 +297,7 @@ class _SharedCounterReporter:
     """Picklable shared-memory progress reporter for worker processes.
 
     Implements the same interface as :class:`GibbsProgressBarManager`
-    (``update``, ``start_chain``, ``set_accept_rate``, ``refresh``)
+    (``update``, ``start_chain``, ``refresh``)
     but writes per-iteration progress into a shared-memory block
     instead of sending IPC messages.  Each chain owns two ``int64``
     slots ``[iteration, tuning_flag]`` in a flat ``(n_chains, 2)``
@@ -405,7 +373,6 @@ class _SharedCounterReporter:
         chain_idx: int,
         iteration: int,
         tuning: bool,
-        accept: bool | None = None,
     ):
         # Two int64 stores.  No syscalls, no locks, ~10 ns.
         self._ensure_open()
@@ -418,12 +385,6 @@ class _SharedCounterReporter:
         # No-op: the renderer infers the chain start from the first
         # non-zero iteration count in its periodic poll.
         self._ensure_open()
-
-    def set_accept_rate(self, chain_idx: int, rate: float):
-        # Accept rate is not surfaced in parallel mode (would cost an
-        # extra SHM slab per chain).  The aggregate is available from
-        # the posterior after sampling.
-        pass
 
     def refresh(self):
         # No-op: the renderer's polling thread refreshes the display.
@@ -474,10 +435,6 @@ class _ParallelProgressRenderer:
                 table_column=Column("Iter", ratio=2),
             ),
             TextColumn(
-                "{task.fields[accept_rate]}",
-                table_column=Column("Accept", ratio=1),
-            ),
-            TextColumn(
                 "{task.fields[speed]}",
                 table_column=Column("Speed", ratio=2),
             ),
@@ -489,6 +446,10 @@ class _ParallelProgressRenderer:
         self._tasks: list[Any] = []
 
     def __enter__(self):
+        # Announce before the bars start (see GibbsProgressBarManager).
+        self._progress.console.print(
+            _announcement(self.n_chains, self.tune, self.draws, self.model_type)
+        )
         self._progress.__enter__()
         for c in range(self.n_chains):
             task_id = self._progress.add_task(
@@ -497,26 +458,19 @@ class _ParallelProgressRenderer:
                 phase="tune",
                 iter_count=0,
                 total_iters=self.draws + self.tune,
-                accept_rate="--",
                 speed="--",
             )
             self._tasks.append(task_id)
         return self
 
     def __exit__(self, *args):
-        # Compute final summary line
+        # Timing only — the run itself was announced in __enter__.
         total_draws = self.n_chains * (self.draws + self.tune)
         if self._tasks:
             elapsed = self._progress.tasks[self._tasks[0]].elapsed or 0.0
         else:
             elapsed = 0.0
-        speed = total_draws / elapsed if elapsed > 0 else 0.0
-        summary = (
-            f"Sampling {self.n_chains} chain{'s' if self.n_chains > 1 else ''} "
-            f"for {self.tune} tune and {self.draws} draw iterations, "
-            f"{self.n_chains} x {self.tune + self.draws:,} draws total "
-            f"took {elapsed:.0f}s ({speed:.0f} draws/s)"
-        )
+        summary = _timing_summary(total_draws, elapsed)
         # Live.stop() skips a final refresh in Jupyter, so force one
         # before exit to render fully completed bars.
         self._progress.refresh()
@@ -578,7 +532,6 @@ class _ParallelProgressRenderer:
                 completed=cur_iter,
                 phase=phase,
                 iter_count=cur_iter,
-                accept_rate="--",
                 speed=speed_str,
                 refresh=True,
             )

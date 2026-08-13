@@ -274,6 +274,7 @@ class TestSARNegBinStructuralRecovery:
             n_jobs=1,
             progressbar=False,
             return_eta=True,
+            gibbs_backend="numpy",
         )
 
         assert "eta" in idata.posterior

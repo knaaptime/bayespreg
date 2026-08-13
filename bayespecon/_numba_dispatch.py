@@ -23,7 +23,7 @@ fallback works correctly downstream, whereas an explicit objmode wrapper over
 the multi-output ``_SparseFlowVJP*`` Ops drops the static shape information
 that PyTensor's elemwise codegen requires (``input_bc_patterns must be
 literal``).  The cost is one informational PyTensor warning per Op for a path
-that already bottlenecks on a sparse SuperLU factorisation per gradient
+that already bottlenecks on a sparse SuperLU factorization per gradient
 evaluation.
 """
 
@@ -137,7 +137,7 @@ def register_numba_dispatch() -> bool:
     # (``np.linalg.solve``) plus a handful of dense matmuls — fully
     # expressible in nopython mode when ``W_dense`` is cached
     # (``n <= _kron_dense_max()``).  The matrix variants do batched
-    # Fortran-order reshapes and ``scipy.sparse.linalg`` factorisations that
+    # Fortran-order reshapes and ``scipy.sparse.linalg`` factorizations that
     # are not njittable; we wrap their ``perform`` in ``numba.objmode``
     # purely to silence PyTensor's "object mode" warning.
     #
@@ -243,7 +243,7 @@ def register_numba_dispatch() -> bool:
     @numba_funcify.register(KroneckerFlowSolveMatrixOp)
     def _funcify_kron_solve_matrix(op, **kwargs):
         # Matrix variant uses batched Fortran-order reshapes and scipy LU
-        # factorisations: not expressible in nopython mode.  Wrap perform
+        # factorizations: not expressible in nopython mode.  Wrap perform
         # in objmode to suppress PyTensor's generic fallback warning.
         ret_sig = numba.types.float64[:, :]
 
@@ -287,7 +287,7 @@ def register_numba_dispatch() -> bool:
     # General sparse NB-flow Ops (3 rho parameters)
     # ------------------------------------------------------------------
     #
-    # The forward solve uses scipy.sparse.linalg.splu / UMFPACK on the full
+    # The forward solve uses scipy.sparse.linalg.splu on the full
     # N x N (N = n^2) system matrix, which Numba cannot lower.  We deliberately
     # do **not** register these Ops: PyTensor's default per-Op object-mode
     # fallback works correctly downstream, whereas explicit objmode wrappers
@@ -295,6 +295,6 @@ def register_numba_dispatch() -> bool:
     # information that PyTensor's elemwise codegen requires
     # (``input_bc_patterns must be literal``).  The cost is one informational
     # PyTensor warning per Op, which is acceptable for a path that already
-    # bottlenecks on a sparse SuperLU factorisation per gradient evaluation.
+    # bottlenecks on a sparse SuperLU factorization per gradient evaluation.
 
     return True

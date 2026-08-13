@@ -22,7 +22,7 @@ algebra (the two functions share the underlying DGP today).
 Note: the existing implementations of ``simulate_panel_slx_dynamic_fe``
 and ``simulate_panel_sdem_dynamic_fe`` do not add an explicit ``W X_t
 theta`` term to the data equation; this preserves their pre-refactor
-behaviour. See the module-level discussion in the bayespecon docs for
+behavior. See the module-level discussion in the bayespecon docs for
 the exact form.
 """
 
@@ -536,7 +536,7 @@ def simulate_panel_slx_dynamic_fe(
 
     Equivalent to :func:`simulate_panel_sdmu_fe` with ``rho=0`` and ``theta=0``;
     in the current implementation no explicit ``W X_t`` term is added (this
-    matches the pre-refactor behaviour).
+    matches the pre-refactor behavior).
     """
     rng = ensure_rng(rng, seed)
     Wd, Wg = _resolve_panel_weights(W, gdf, contiguity, N)

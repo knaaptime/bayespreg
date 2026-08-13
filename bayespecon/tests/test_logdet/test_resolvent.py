@@ -50,7 +50,7 @@ _HAS_JAX = importlib.util.find_spec("jax") is not None
 
 
 def _rook(side: int) -> np.ndarray:
-    """Row-standardised rook-contiguity W (symmetric sparsity → Lanczos)."""
+    """Row-standardized rook-contiguity W (symmetric sparsity → Lanczos)."""
     n = side * side
     A = np.zeros((n, n), dtype=float)
     for r in range(side):
@@ -64,7 +64,7 @@ def _rook(side: int) -> np.ndarray:
 
 
 def _knn(n: int, k: int) -> np.ndarray:
-    """Row-standardised kNN W (asymmetric sparsity → Arnoldi / complex eigs)."""
+    """Row-standardized kNN W (asymmetric sparsity → Arnoldi / complex eigs)."""
     rng = np.random.default_rng(0)
     pts = rng.random((n, 2))
     A = np.zeros((n, n), dtype=float)

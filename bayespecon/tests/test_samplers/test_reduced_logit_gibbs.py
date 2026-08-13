@@ -9,6 +9,7 @@ Monte-Carlo noise.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import scipy.sparse as sp
 
 from bayespecon.models.priors import LogitGibbsPriors
@@ -115,6 +116,7 @@ class TestReducedLogitNumpy:
         np.testing.assert_allclose(_logit_loglik_pointwise(y, eta), expected)
 
 
+@pytest.mark.requires_jax
 class TestReducedLogitBackendParity:
     """The model's NumPy and JAX backends fit the same reduced-form model."""
 

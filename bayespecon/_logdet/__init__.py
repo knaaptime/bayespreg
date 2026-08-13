@@ -125,7 +125,7 @@ __all__ = [
     "logdet_grad_chebyshev",
     "logdet_grad_aaa",
     "logdet_grad_slq",
-    # Flow (separable factorisation)
+    # Flow (separable factorization)
     "make_flow_separable_logdet",
     "make_flow_separable_logdet_numpy",
     # Flow resolvent-Kronecker gradient (scalable, eigenvalue-free)

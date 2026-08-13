@@ -41,7 +41,6 @@ from ._backend import (
     _solve_sparse_matrix,
     _solve_sparse_vector,
     _SparseFactorSolver,
-    _umfpack_available,
     _warn_sparse_auto_scipy_fallback_once,
 )
 from ._flow import (

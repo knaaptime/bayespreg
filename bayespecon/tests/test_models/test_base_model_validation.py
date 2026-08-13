@@ -96,8 +96,90 @@ class TestParseW:
 
     def test_warns_non_row_standardized(self):
         W = sp.csr_matrix(np.ones((4, 4)))  # Not row-standardized
-        with pytest.warns(UserWarning, match="row-standardised"):
+        with pytest.warns(UserWarning, match="row-standardized"):
             _parse_W(W, n=4)
+
+
+class TestIsolates:
+    """Isolates — units with no neighbour inside the bandwidth — are valid.
+
+    Row-standardizing leaves an isolate's row summing to 0 rather than 1
+    because there is nothing to divide by.  That is correct output, not a
+    standardization failure, and must not be warned about or routed onto the
+    O(n³) eigenvalue path.
+    """
+
+    @staticmethod
+    def _W_with_isolates(side=4, isolates=(3,)):
+        W = _rook_W(side).astype(float)
+        for i in isolates:
+            W[i, :] = 0.0
+            W[:, i] = 0.0
+        rs = W.sum(1)
+        conn = rs != 0
+        W[conn] = W[conn] / rs[conn][:, None]
+        return sp.csr_matrix(W)
+
+    def test_isolates_do_not_warn(self, recwarn):
+        W = self._W_with_isolates()
+        _parse_W(W, n=W.shape[0])
+        assert not [w for w in recwarn if "row-standardized" in str(w.message)]
+
+    def test_isolates_keep_the_row_standardized_flag(self):
+        """False here would divert a valid, common W onto the eigenvalue path."""
+        W = self._W_with_isolates()
+        _, row_std = _parse_W(W, n=W.shape[0])
+        assert row_std is True
+
+    def test_all_zero_W_still_warns(self):
+        W = sp.csr_matrix((4, 4))
+        with pytest.warns(UserWarning, match="row-standardized"):
+            _parse_W(W, n=4)
+
+    def test_partially_standardized_W_still_warns(self):
+        """A row summing to neither 0 nor 1 is a real failure."""
+        W = _rook_W(4).astype(float)
+        rs = W.sum(1)
+        W = W / rs[:, None]
+        W[2, :] *= 3.0  # row 2 now sums to 3
+        with pytest.warns(UserWarning, match="row-standardized"):
+            _parse_W(sp.csr_matrix(W), n=W.shape[0])
+
+    @pytest.mark.parametrize("rho", [0.2, 0.5, 0.8, 0.95])
+    def test_multiplier_closed_forms_match_brute_force(self, rho):
+        """The isolate correction must be exact, not approximate.
+
+        An isolate's row of ``(I - ρW)⁻¹`` is ``e_i`` (row sum 1, not
+        ``1/(1-ρ)``); for ``(I - ρW)⁻¹W`` it is zero.  Without the correction
+        the shortcut overstates total impacts, increasingly so as ρ → 1.
+        """
+        from bayespecon.models.cross_section.sar import SAR
+
+        W = self._W_with_isolates()
+        n = W.shape[0]
+        rng = np.random.default_rng(0)
+        model = SAR(y=rng.normal(size=n), X=rng.normal(size=(n, 1)), W=W)
+        assert model._n_isolates == 1
+
+        Wd = W.toarray()
+        M = np.linalg.inv(np.eye(n) - rho * Wd)
+        draws = np.array([rho])
+        assert np.allclose(model._batch_mean_row_sum(draws), M.sum(1).mean())
+        assert np.allclose(model._batch_mean_row_sum_MW(draws), (M @ Wd).sum(1).mean())
+        assert np.allclose(model._multiplier_row_sums(rho), M.sum(1))
+
+    def test_no_isolates_path_is_unchanged(self):
+        from bayespecon.models.cross_section.sar import SAR
+
+        W = _rook_W(4).astype(float)
+        W = sp.csr_matrix(W / W.sum(1)[:, None])
+        n = W.shape[0]
+        rng = np.random.default_rng(0)
+        model = SAR(y=rng.normal(size=n), X=rng.normal(size=(n, 1)), W=W)
+        assert model._n_isolates == 0
+        rho = np.array([0.2, 0.6, 0.9])
+        assert np.allclose(model._batch_mean_row_sum(rho), 1.0 / (1.0 - rho))
+        assert np.allclose(model._batch_mean_row_sum_MW(rho), 1.0 / (1.0 - rho))
 
 
 # ---------------------------------------------------------------------------

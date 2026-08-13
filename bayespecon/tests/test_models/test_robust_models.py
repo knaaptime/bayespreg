@@ -2,7 +2,7 @@
 
 Each test verifies that:
 1. ``robust=True`` builds and samples without error
-2. ``nu`` (degrees of freedom) appears in the posterior
+2. ``nu`` (degrees of freedom) is a fixed hyperparameter, not sampled
 3. ``robust=False`` (default) still works (backward compatibility)
 4. SARProbit raises ``NotImplementedError`` when ``robust=True``
 
@@ -84,7 +84,7 @@ class TestRobustCrossSectional:
         W_graph = W_to_graph(W)
         model = OLS(y=y, X=X, W=W_graph, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior, "nu should be in posterior when robust=True"
+        assert "nu" not in idata.posterior, "nu is fixed, not sampled"
         assert "beta" in idata.posterior
 
     def test_ols_default_still_works(self, sar_data):
@@ -114,7 +114,7 @@ class TestRobustCrossSectional:
         W_graph = W_to_graph(W)
         model = cls(y=y, X=X, W=W_graph, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
         assert extra_var in idata.posterior
 
 
@@ -149,7 +149,7 @@ class TestRobustPanelFE:
             y=y, X=X, W=W_graph, N=PANEL_N, T=PANEL_T, effects=1, robust=True
         )
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
     def test_sar_panel_fe_robust(self, panel_data):
         y, X, W_graph = panel_data
@@ -157,7 +157,7 @@ class TestRobustPanelFE:
             y=y, X=X, W=W_graph, N=PANEL_N, T=PANEL_T, effects=1, robust=True
         )
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
     def test_sem_panel_fe_robust(self, panel_data):
         y, X, W_graph = panel_data
@@ -165,7 +165,7 @@ class TestRobustPanelFE:
             y=y, X=X, W=W_graph, N=PANEL_N, T=PANEL_T, effects=1, robust=True
         )
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
 
 # ---------------------------------------------------------------------------
@@ -197,19 +197,19 @@ class TestRobustPanelRE:
         y, X, W_graph = panel_re_data
         model = OLSPanelRE(y=y, X=X, W=W_graph, N=PANEL_N, T=PANEL_T, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
     def test_sar_panel_re_robust(self, panel_re_data):
         y, X, W_graph = panel_re_data
         model = SARPanelRE(y=y, X=X, W=W_graph, N=PANEL_N, T=PANEL_T, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
     def test_sem_panel_re_robust(self, panel_re_data):
         y, X, W_graph = panel_re_data
         model = SEMPanelRE(y=y, X=X, W=W_graph, N=PANEL_N, T=PANEL_T, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
 
 # ---------------------------------------------------------------------------
@@ -240,21 +240,21 @@ class TestRobustTobit:
         W_graph = W_to_graph(W)
         model = SARTobit(y=y, X=X, W=W_graph, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
     def test_sem_tobit_robust(self, sem_tobit_data):
         y, X, W = sem_tobit_data
         W_graph = W_to_graph(W)
         model = SEMTobit(y=y, X=X, W=W_graph, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
     def test_sdm_tobit_robust(self, sar_tobit_data):
         y, X, W = sar_tobit_data
         W_graph = W_to_graph(W)
         model = SDMTobit(y=y, X=X, W=W_graph, robust=True)
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
+        assert "nu" not in idata.posterior  # fixed, not sampled
 
 
 # ---------------------------------------------------------------------------
@@ -286,17 +286,30 @@ class TestRobustSpatialProbit:
 
 
 class TestNuPriorParameters:
-    """Test that nu_lam parameter is passed through correctly."""
+    """``nu`` is a fixed hyperparameter (LeSage), not a sampled quantity."""
 
-    def test_custom_nu_lam(self, rng):
+    def test_default_nu_is_lesage_rval(self, rng):
         W = make_rook_W(SIDE)
         out = simulate_sar(W=W, rho=0.5, beta=np.array([1.0, 2.0]), sigma=0.8, rng=rng)
-        W_graph = W_to_graph(W)
+        model = OLS(y=out["y"], X=out["X"], W=W_to_graph(W), robust=True)
+        assert model._nu == 4.0
+
+    def test_custom_nu(self, rng):
+        W = make_rook_W(SIDE)
+        out = simulate_sar(W=W, rho=0.5, beta=np.array([1.0, 2.0]), sigma=0.8, rng=rng)
         model = OLS(
-            y=out["y"], X=out["X"], W=W_graph, robust=True, priors={"nu_lam": 1 / 10}
+            y=out["y"], X=out["X"], W=W_to_graph(W), robust=True, priors={"nu": 10.0}
         )
+        assert model._nu == 10.0
         idata = model.fit(**QUICK_KWARGS)
-        assert "nu" in idata.posterior
-        # With nu_lam=1/10, mean of Exponential is 10, so nu should be > 2
-        nu_mean = float(idata.posterior["nu"].mean())
-        assert nu_mean > 2.0, f"nu mean should be > 2, got {nu_mean:.2f}"
+        # nu is fixed, so it must NOT appear as a sampled variable
+        assert "nu" not in idata.posterior
+
+    def test_nu_must_exceed_two(self, rng):
+        W = make_rook_W(SIDE)
+        out = simulate_sar(W=W, rho=0.5, beta=np.array([1.0, 2.0]), sigma=0.8, rng=rng)
+        model = OLS(
+            y=out["y"], X=out["X"], W=W_to_graph(W), robust=True, priors={"nu": 1.5}
+        )
+        with pytest.raises(ValueError, match="must be > 2"):
+            _ = model._nu

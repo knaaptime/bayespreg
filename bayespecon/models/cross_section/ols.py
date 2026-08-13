@@ -39,11 +39,9 @@ class OLS(GaussianLikelihoodMixin, SpatialModel):
 
         \\varepsilon \\sim t_\\nu(0, \\sigma^2 I)
 
-    where :math:`\\nu \\sim \\mathrm{TruncExp}(\\lambda_\\nu, \\mathrm{lower}=2)` with rate ``nu_lam`` (default 1/30).
-    The default ``nu_lam = 1/30`` gives a prior mean of approximately 30,
-    favouring near-Normal tails.  The lower bound of 2 ensures the
-    variance exists.  The ``nu_lam`` rate can be controlled via
-    ``priors={"nu_lam": value}``.
+    where :math:`\\nu` is a **fixed** hyperparameter set by ``priors={"nu": value}``
+    (default 4, LeSage's ``rval``); larger values approach the Normal.  Values
+    must exceed 2 so the variance exists.
 
     Parameters
     ----------
@@ -73,8 +71,8 @@ class OLS(GaussianLikelihoodMixin, SpatialModel):
           InverseGamma prior on :math:`\\sigma^2`.
         - ``sigma2_beta`` (float, default ``Var(y)``): Scale of the
           InverseGamma prior on :math:`\\sigma^2`.
-        - ``nu_lam`` (float, default 1/30): Rate for Exponential prior on
-          :math:`\\nu` (only used when ``robust=True``).
+        - ``nu`` (float, default 4.0): Fixed Student-t degrees of
+          freedom (only used when ``robust=True``).
 
     robust : bool, default False
         If True, use a Student-t error distribution instead of Normal.

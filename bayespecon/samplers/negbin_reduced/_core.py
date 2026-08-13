@@ -33,13 +33,13 @@ Sweep
 -----
 Four blocks per iteration:
 
-1. **ω | β, ρ, α, y** — vectorised PG draw at :math:`\psi`.
+1. **ω | β, ρ, α, y** — vectorized PG draw at :math:`\psi`.
 2. **β | ω, ρ, α, y** — conjugate normal via the construction above.
    Requires building :math:`\tilde X = A_\rho^{-1} X` (one sparse LU
-   factorisation of :math:`A_\rho = I - \rho W` plus k triangular
+   factorization of :math:`A_\rho = I - \rho W` plus k triangular
    solves), then a :math:`k \times k` Cholesky.
 3. **ρ | ω, α, y** — 1-D adaptive slice sampler on the
-   **β-marginalised** conditional density.  With working response
+   **β-marginalized** conditional density.  With working response
    :math:`s_i = (y_i - \alpha) / (2\omega_i) + \log\alpha` and
    :math:`U(\rho) = A_\rho^{-1} X`, integrating out :math:`\beta\sim
    N(b_0, V_0)` gives :math:`s\mid\rho,\omega,\alpha \sim
@@ -55,7 +55,7 @@ Four blocks per iteration:
                - (U^\top \Omega r)^\top M^{-1} (U^\top \Omega r)\bigr)
            + \log p_0(\rho),
 
-   up to terms independent of :math:`\rho`.  Marginalising β inside
+   up to terms independent of :math:`\rho`.  Marginalizing β inside
    the ρ update breaks the β–ρ posterior correlation that would
    otherwise dominate single-site ρ mixing.  No :math:`\log|A_\rho|`
    Jacobian appears (η is not being integrated out).
@@ -68,9 +68,9 @@ within the Krylov radius are evaluated via a cheap Horner polynomial,
 while candidates outside the radius use CG iterative solves
 (:math:`O(K \cdot \mathrm{nnz})` per candidate, where :math:`K \approx
 \sqrt{\kappa}`).  For :math:`n < 2500`, the Krylov basis build uses
-CHOLMOD factorisation (fast at small n); for :math:`n \geq 2500`,
+CHOLMOD factorization (fast at small n); for :math:`n \geq 2500`,
 it uses CG iterative solves (avoids the :math:`O(\mathrm{nnz}^{1.5})`
-factorisation cost).
+factorization cost).
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ from .._utils._slice import (
     slice_sample_1d_adaptive,
     update_slice_width,
 )
-from .._utils._spatial_normal import CholmodFactor, iterative_solve
+from .._utils._spatial_normal import CholmodFactor, _series_radius
 from ..negbin._core import _nb_loglik_pointwise, _sample_alpha
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ from ..negbin._core import _nb_loglik_pointwise, _sample_alpha
 
 # When CHOLMOD is available we solve (I − ρW) x = b via the normal
 # equations  A^T A x = A^T b  where  A^T A = I − ρ(W+W^T) + ρ² W^T W
-# is SPD.  This avoids UMFPACK (``splu``), which can deadlock on macOS
+# is SPD.  This avoids scipy SuperLU (``splu``), which can deadlock on macOS
 # when Apple Accelerate BLAS is called concurrently from multiple
 # processes.  CHOLMOD is also faster because it reuses the symbolic
 # analysis across all ρ values.
@@ -115,11 +115,11 @@ class _CholmodNormalEqSolver:
         A_\\rho^T A_\\rho = I - \\rho (W + W^T) + \\rho^2 W^T W
 
     is symmetric positive definite for any non-singular ``A_ρ``.
-    CHOLMOD factorises it and we recover ``x = A_ρ⁻¹ b`` from
+    CHOLMOD factorizes it and we recover ``x = A_ρ⁻¹ b`` from
     ``A_ρ^T A_ρ x = A_ρ^T b``.
 
     The ``cholmod_factor`` holds the symbolic analysis (computed once
-    from a pattern matrix) so that only the numeric factorisation is
+    from a pattern matrix) so that only the numeric factorization is
     needed for each new ρ.
 
     Parameters
@@ -153,7 +153,7 @@ class _CholmodNormalEqSolver:
         self._rho: float | None = None
 
     def factorize(self, rho: float) -> None:
-        """Build and factorise ``A^T A`` at the given ρ."""
+        """Build and factorize ``A^T A`` at the given ρ."""
         AtA = sp.eye(self._n, format="csc") - rho * self._W_sym + rho**2 * self._WtW
         self._cholmod.factorize(AtA)
         self._rho = rho
@@ -169,18 +169,203 @@ class _CholmodNormalEqSolver:
         return self._cholmod.solve(Atb)
 
 
+class _DSymCholSolver:
+    r"""Solve :math:`(I-\rho W)x = b` by Cholesky on the D-symmetrized twin.
+
+    A row-standardized ``W = D^{-1}A`` with symmetric adjacency ``A`` is not
+    itself symmetric — each row carries its own degree — but it is *similar*
+    to a symmetric matrix:
+
+    .. math::
+
+        S = D^{1/2} W D^{-1/2} = D^{-1/2} A D^{-1/2},
+
+    with the same eigenvalues as ``W``.  Hence
+    :math:`M(\rho) = D^{1/2}(I-\rho W)D^{-1/2} = I - \rho S` is symmetric,
+    and positive definite wherever ``ρ`` is inside the stability range.
+
+    This is the best of the three routes when it applies.  ``M`` carries
+    ``W``'s own sparsity, so its Cholesky is far cheaper than one on
+    :math:`A^\top A` (two-hop fill) and cheaper than an LU of ``A``; it also
+    avoids squaring the condition number, and :math:`\log\det A = \log\det M`
+    comes free from the same factorization.
+
+    Solves map back through the similarity:
+    :math:`x = D^{-1/2} M^{-1} D^{1/2} b`.
+
+    Parameters
+    ----------
+    W_csc : csc_matrix
+        Row-standardized weights, known to be D-symmetrizable.
+    d : ndarray, shape (n,)
+        Symmetrizing diagonal from
+        :func:`bayespecon._logdet._slq._recover_symmetrizing_diagonal`.
+    n : int
+        Matrix dimension.
+    """
+
+    def __init__(self, W_csc: sp.csc_matrix, d: np.ndarray, n: int) -> None:
+        sq = np.sqrt(np.asarray(d, dtype=np.float64))
+        inv_sq = 1.0 / sq
+        S = (sp.diags(sq) @ sp.csc_matrix(W_csc) @ sp.diags(inv_sq)).tocsc()
+        # Symmetrize explicitly: the similarity makes S symmetric in exact
+        # arithmetic, but CHOLMOD reads a single triangle, so any residual
+        # round-off asymmetry would silently change the matrix being factored.
+        self._S = (0.5 * (S + S.T)).tocsc()
+        self._sq = sq
+        self._inv_sq = inv_sq
+        self._n = n
+        # I + 0.5·S has the pattern of I − ρS for every ρ and is SPD
+        # (eigenvalues 1 + 0.5λ ∈ [0.5, 1.5] for λ(S) ∈ [−1, 1]).
+        self._chol = CholmodFactor((sp.eye(n, format="csc") + 0.5 * self._S).tocsc())
+        self._rho: float | None = None
+
+    def factorize(self, rho: float) -> None:
+        """Factorize ``M = I − ρS``."""
+        M = (sp.eye(self._n, format="csc") - float(rho) * self._S).tocsc()
+        self._chol.factorize(M)
+        self._rho = float(rho)
+
+    def solve(self, rhs: np.ndarray) -> np.ndarray:
+        """Solve ``(I − ρW) x = rhs`` (vector or matrix RHS)."""
+        arr = np.asarray(rhs, dtype=np.float64)
+        scale = self._sq[:, None] if arr.ndim > 1 else self._sq
+        unscale = self._inv_sq[:, None] if arr.ndim > 1 else self._inv_sq
+        return self._chol.solve(arr * scale) * unscale
+
+    def logdet(self) -> float:
+        """``log det(I − ρW)``, equal to ``log det M`` by similarity."""
+        return self._chol.logdet()
+
+
+def make_sar_solver(
+    cholmod_factor: CholmodFactor,
+    W_csc: sp.csc_matrix,
+    W_sym: sp.csc_matrix,
+    WtW: sp.csc_matrix,
+    n: int,
+    force: str | None = None,
+    fill_threshold: float = 1.5,
+):
+    r"""Return the right :math:`(I-\rho W)` solver for this ``W``.
+
+    Both returned types expose ``factorize(rho)`` / ``solve(rhs)``.
+
+    Three routes, preferred in this order:
+
+    1. **D-symmetrized Cholesky** (:class:`_DSymCholSolver`) whenever ``W`` is
+       D-symmetrizable — i.e. ``W = D^{-1}A`` for a symmetric adjacency ``A``,
+       which covers every row-standardized undirected graph.  ``I − ρW`` is
+       then similar to the symmetric ``I − ρS``, carrying ``W``'s own
+       sparsity.  Cheapest of the three, and exact.
+    2. **KLU on ``A``** (:class:`KluSarSolver`) for genuinely directed ``W``
+       (flow matrices, asymmetric k-nearest-neighbor graphs), where no
+       symmetrizing diagonal exists.
+    3. **CHOLMOD normal equations** (:class:`_CholmodNormalEqSolver`) as the
+       fallback when neither applies — correct for any non-singular ``A``,
+       but it pays :math:`W^\top W`'s two-hop fill and squares the condition
+       number.
+
+    Raw symmetry is deliberately *not* the test.  Row-standardizing divides
+    each row by its own degree, so a symmetric adjacency generally yields an
+    asymmetric ``W``; keying on ``W == Wᵀ`` would reject the very cases route
+    1 handles best.  Measured on row-standardized weights (6 RHS, one
+    factorization each):
+
+    ==========  ====  ========  =======  ========
+    graph          n   AᵀA         KLU     D-sym
+    ==========  ====  ========  =======  ========
+    ring        6000    3.2 ms   3.9 ms
+    queen       2500   31.9 ms  13.3 ms
+    knn (k=6)   6000  277.6 ms  188.0 ms
+    ==========  ====  ========  =======  ========
+
+    Parameters
+    ----------
+    cholmod_factor : CholmodFactor
+        Pre-built factor carrying the ``AᵀA`` symbolic analysis.
+    W_csc, W_sym, WtW : csc_matrix
+        ``W``, ``W + Wᵀ`` and ``WᵀW``.
+    n : int
+        Matrix dimension.
+    force : {"cholmod", "klu", "dsym"}, optional
+        Override the automatic routing (mainly for tests and benchmarks).
+    fill_threshold : float, default 1.5
+        Only consulted on the fallback path, when ``W`` is not
+        D-symmetrizable and KLU is unavailable.
+
+    Returns
+    -------
+    _DSymCholSolver, KluSarSolver or _CholmodNormalEqSolver
+    """
+    from bayespecon.samplers._utils._sparsax_utils import KluSarSolver
+
+    def _cholmod():
+        return _CholmodNormalEqSolver(
+            cholmod_factor=cholmod_factor,
+            W_csc=W_csc,
+            W_sym=W_sym,
+            WtW=WtW,
+            n=n,
+        )
+
+    if force == "cholmod":
+        return _cholmod()
+    if force == "klu":
+        return KluSarSolver(W_csc, n)
+    if force == "dsym":
+        return _DSymCholSolver(W_csc, _symmetrizing_diagonal(W_csc), n)
+
+    d = _symmetrizing_diagonal(W_csc)
+    if d is not None:
+        return _DSymCholSolver(W_csc, d, n)
+
+    from bayespecon._jax_dispatch import _sparsax_available
+
+    if _sparsax_available():
+        return KluSarSolver(W_csc, n)
+    return _cholmod()
+
+
+def _symmetrizing_diagonal(W_csc: sp.csc_matrix) -> np.ndarray | None:
+    """Return a positive ``D`` with ``D^{1/2}WD^{-1/2}`` symmetric, else ``None``.
+
+    Thin guard around
+    :func:`bayespecon._logdet._slq._recover_symmetrizing_diagonal`: that
+    routine returns ``None`` for directed graphs and can return a
+    sign-inconsistent ``D`` for weights that are not of the form ``D⁻¹A``, so
+    we additionally require ``D > 0`` and verify the resulting similarity is
+    symmetric before trusting it.
+    """
+    from bayespecon._logdet._slq import _recover_symmetrizing_diagonal
+
+    try:
+        d = _recover_symmetrizing_diagonal(sp.csr_matrix(W_csc))
+    except Exception:
+        return None
+    if d is None or not np.all(np.isfinite(d)) or np.any(d <= 0.0):
+        return None
+    sq = np.sqrt(d)
+    S = (sp.diags(sq) @ sp.csc_matrix(W_csc) @ sp.diags(1.0 / sq)).tocsr()
+    diff = (S - S.T).tocoo()
+    scale = max(np.abs(S.data).max(), 1.0) if S.nnz else 1.0
+    if diff.nnz and np.max(np.abs(diff.data)) > 1e-9 * scale:
+        return None
+    return d
+
+
 def _factor_A(rho: float, W_csc: sp.csc_matrix, n: int):
-    """Factorise :math:`A_\\rho = I - \\rho W` via the backend sparse solver.
+    """Factorize :math:`A_\\rho = I - \\rho W` via the backend sparse solver.
 
     Returns a factor object whose ``.solve(rhs)`` method handles single
-    and multiple right-hand sides.  Uses KLU/UMFPACK via
+    and multiple right-hand sides.  Uses KLU via
     :func:`bayespecon._ops._backend._sparse_factor` when available,
     falling back to scipy SuperLU.
 
     .. deprecated::
         Used only as a fallback when CHOLMOD is not available.
         The CHOLMOD normal-equations path (``_CholmodNormalEqSolver``)
-        is preferred to avoid UMFPACK deadlocks on macOS.
+        is preferred to avoid scipy SuperLU deadlocks on macOS.
     """
     from bayespecon._ops._backend import _select_sparse_backend, _sparse_factor
 
@@ -233,9 +418,9 @@ def _make_solver(
 ) -> _CholmodNormalEqSolver | object:
     """Return a solver for ``(I − ρW) x = b``.
 
-    When ``cholmod_solver`` is provided (CHOLMOD available), factorises
+    When ``cholmod_solver`` is provided (CHOLMOD available), factorizes
     the normal-equation matrix ``A^T A`` and returns the solver.
-    Otherwise falls back to ``splu`` (UMFPACK).
+    Otherwise falls back to ``splu`` (scipy SuperLU).
 
     Both return types expose a ``.solve(rhs)`` method.
     """
@@ -250,29 +435,89 @@ def _make_solver(
 # ---------------------------------------------------------------------------
 
 # Default Krylov degree and maximum |Δρ| for polynomial approximation.
-# The JAX Gibbs path is *Krylov-only* (it never falls back to a per-candidate
-# direct solve, which under jax.vmap would be computed for every slice candidate
-# — the dominant cost), so its ρ step is bounded to ``krylov_dmax``.  A wider
-# dmax (with enough degree to keep the Horner approximation accurate — validated
-# correct to |Δρ|≲0.003 vs the direct solver up to ρ≈0.85) restores mixing while
-# eliminating the per-candidate solve.  The NumPy path keeps its cheap
-# conditional direct-solve fallback for |Δρ| > dmax, so a wider dmax only shifts
-# more candidates onto the (accurate) basis for it — neutral-to-faster.
+# The JAX Gibbs path is Krylov-only (no per-candidate direct solve under
+# jax.vmap), so its ρ step is bounded to ``krylov_dmax``.  A wider dmax (with
+# enough degree to keep the Horner approximation accurate) restores mixing.
+# The NumPy path keeps its conditional direct-solve fallback for |Δρ| > dmax.
 _KRYLOV_DEGREE_DEFAULT = 12
 _KRYLOV_DMAX_DEFAULT = 0.4
 
-# Problem-size threshold for switching from CHOLMOD factorisation to
-# CG iterative solves.  Below this threshold, CHOLMOD's O(nnz^{1.5})
-# factorisation is fast enough that the overhead of CG's Python-level
-# iteration loop makes it slower.  Above the threshold, the
-# factorisation cost dominates and CG's O(K · nnz) per solve wins.
-_CG_THRESHOLD = 2500
+# CG is now only a *fallback* for when no direct solver could be built, not a
+# large-n strategy.
+#
+# It used to take over above n = 2500, back when the only direct option was
+# CHOLMOD on the normal equations ``AᵀA`` — which pays ``WᵀW``'s two-hop fill
+# and squares the condition number, so it did lose to CG as n grew.  Routing
+# now picks a factorization matched to the weights (``make_sar_solver``):
+# Cholesky on the D-symmetrized ``I − ρS``, which carries ``W``'s own
+# sparsity, or KLU for genuinely directed ``W``.  Measured on queen
+# contiguity, one degree-12 basis build (13 multi-RHS solves), CG vs the
+# routed factorization:
+#
+#   n =  1600   9.3 ms vs  1.7 ms   (5.55x)
+#   n =  2500  11.6 ms vs  2.7 ms   (4.25x)   <- the old threshold
+#   n =  4900  17.1 ms vs  6.1 ms   (2.81x)
+#   n = 10000  30.8 ms vs 14.6 ms   (2.11x)
+#   n = 16900  42.5 ms vs 30.9 ms   (1.38x)
+#
+# The factorization wins everywhere measured, agreeing with CG to 4e-07 (CG's
+# own iterative tolerance), and the margin was still positive at the largest
+# size tried — so there is no crossover left to switch at.
+_CG_THRESHOLD = None
+
+# Safety factor on the Neumann convergence radius (see krylov_safe_radius).
+# The series error behaves like r^(degree+1) for r = |Δρ|·ϱ(A_c⁻¹W); at the
+# default degree 12, r = 0.6 gives ~1e-3 while r = 0.8 gives ~6e-2.
+_KRYLOV_RADIUS_SAFETY = 0.6
+
+
+def krylov_safe_radius(
+    rho_c: float,
+    W_eig_min: float = -1.0,
+    W_eig_max: float = 1.0,
+    dmax: float = _KRYLOV_DMAX_DEFAULT,
+    safety: float = _KRYLOV_RADIUS_SAFETY,
+) -> float:
+    r"""Largest ``|Δρ|`` the Neumann series can be trusted over at ``ρ_c``.
+
+    :math:`U(\rho_c+\Delta\rho)` is expanded as
+    :math:`\sum_j \Delta\rho^j (A_c^{-1}W)^j A_c^{-1} X`, which converges only
+    while :math:`|\Delta\rho|\,\varrho(A_c^{-1}W) < 1`.  The eigenvalues of
+    :math:`A_c^{-1}W` are :math:`\lambda/(1-\rho_c\lambda)`, so the spectral
+    radius is attained at one end of ``W``'s spectrum.
+
+    A *fixed* ``dmax`` is therefore unsafe: for row-standardized ``W``
+    (:math:`\lambda_{\max}=1`) the radius of convergence is
+    :math:`1-\rho_c`, so the default ``dmax = 0.4`` already diverges once
+    ``ρ_c > 0.6`` — squarely inside the range spatial models care about.
+    Measured relative error of the degree-12 series on a ring lattice:
+
+    =======  ========  ========  ========
+    ρ_c      Δρ = 0.2  Δρ = 0.3  Δρ = 0.4
+    =======  ========  ========  ========
+    0.30     4.5e-07   7.9e-06   3.6e-04
+    0.50     3.5e-06   7.3e-04   3.7e-02
+    0.70     3.2e-03   diverges  diverges
+    =======  ========  ========  ========
+
+    Returns ``min(dmax, safety / ϱ)``, so callers keep their configured
+    radius wherever it is genuinely safe and tighten only where it is not.
+    """
+    denom_max = 1.0 - rho_c * W_eig_max
+    denom_min = 1.0 - rho_c * W_eig_min
+    radius = 0.0
+    for lam, denom in ((W_eig_max, denom_max), (W_eig_min, denom_min)):
+        if denom > 0.0:
+            radius = max(radius, abs(lam) / denom)
+    if radius <= 0.0:
+        return float(dmax)
+    return float(min(dmax, safety / radius))
 
 
 class ReducedKrylovBasis(NamedTuple):
     """Precomputed shift-invert Krylov basis for fast ρ-slice evaluation.
 
-    At a centre point :math:`\\rho_c`, we factorise
+    At a center point :math:`\\rho_c`, we factorize
     :math:`A_c = I - \\rho_c W` once and build the basis
 
     .. math::
@@ -281,23 +526,23 @@ class ReducedKrylovBasis(NamedTuple):
         V_{j+1} = A_c^{-1} (W V_j), \\quad j = 0, \\dots, m-1.
 
     For any nearby :math:`\\rho = \\rho_c + \\Delta\\rho` the
-    β-marginalised slice density only needs
+    β-marginalized slice density only needs
 
     .. math::
 
         U(\\rho) \\approx \\sum_{j=0}^{m} (\\Delta\\rho)^j V_j,
 
-    which is a cheap ``einsum`` instead of a fresh factorisation.
+    which is a cheap ``einsum`` instead of a fresh factorization.
     The approximation error decays geometrically in :math:`m` as
     :math:`O((\\Delta\\rho \\|A_c^{-1} W\\|)^{m+1})`.
 
     Attributes
     ----------
     rho_basis : float
-        Centre point :math:`\\rho_c` at which the system was factored.
+        Center point :math:`\\rho_c` at which the system was factored.
     solver : _CholmodNormalEqSolver or spla.SuperLU or None
         The factored solver for :math:`A_c = I - \\rho_c W`.
-        ``None`` when the CG path was used (no factorisation).
+        ``None`` when the CG path was used (no factorization).
     V_stack : ndarray, shape (m+1, n, k)
         Krylov basis vectors stacked along axis 0.
     degree : int
@@ -309,6 +554,9 @@ class ReducedKrylovBasis(NamedTuple):
     solver: _CholmodNormalEqSolver | spla.SuperLU | None
     V_stack: np.ndarray
     degree: int
+    # Largest |Δρ| the series is trustworthy over at this center; see
+    # krylov_safe_radius.  Consumers clamp their configured dmax to this.
+    safe_dmax: float = _KRYLOV_DMAX_DEFAULT
 
 
 def _build_krylov_basis(
@@ -318,55 +566,40 @@ def _build_krylov_basis(
     n: int,
     degree: int = _KRYLOV_DEGREE_DEFAULT,
     cholmod_solver: _CholmodNormalEqSolver | None = None,
-    W_eig_max: float = 1.0,
-    W_eig_min: float = -1.0,
 ) -> ReducedKrylovBasis:
     """Build a shift-invert Krylov basis at :math:`\\rho_c`.
 
-    When ``cholmod_solver`` is provided **and** ``n < _CG_THRESHOLD``,
-    uses CHOLMOD normal equations (1 factorisation + ``(degree + 1)``
-    solve calls).  Otherwise uses CG iterative solves (no factorisation;
-    ``(degree + 1)`` CG calls, each O(K · nnz) where K ≈ √κ).
+    One factorization plus ``(degree + 1)`` multi-RHS solves, against whatever
+    :func:`make_sar_solver` routed to — Cholesky on the D-symmetrized
+    ``I - rho*S`` for row-standardized undirected ``W``, KLU for directed
+    ``W``.  ``_make_solver`` falls back to a plain sparse LU when no routed
+    solver was supplied, so there is always a factorization available.
 
-    The CG path avoids the O(nnz^{1.5}) factorisation cost that
-    dominates for large n (n ≥ 2500).
+    There is no iterative path.  CG used to take over above n = 2500, back
+    when the only direct option was CHOLMOD on the normal equations ``AtA``
+    (two-hop fill from ``WtW``, squared condition number).  Against the routed
+    factorization it loses everywhere measured — one degree-12 build on queen
+    contiguity: 5.55x at n=1600, 4.25x at n=2500, 2.81x at n=4900, 2.11x at
+    n=10000, 1.38x at n=16900, agreeing to 4e-07 — with the margin still
+    positive at the largest size tried.
     """
-    use_cg = cholmod_solver is None or n >= _CG_THRESHOLD
     m = degree
     V_stack = np.empty((m + 1, n, X.shape[1]), dtype=np.float64)
+    solver = _make_solver(rho_c, W_csc, n, cholmod_solver=cholmod_solver)
+    V_stack[0] = solver.solve(X)  # (n, k)
+    for j in range(m):
+        Wv = W_csc @ V_stack[j]  # (n, k)
+        V_stack[j + 1] = solver.solve(Wv)
 
-    if use_cg:
-        # CG path: no factorisation needed
-        A_rho = _build_A_rho(rho_c, W_csc, n)
-        lam_at_max = 1.0 - rho_c * W_eig_max
-        lam_at_min = 1.0 - rho_c * W_eig_min
-        lam_min = min(lam_at_max, lam_at_min)
-        lam_max = max(lam_at_max, lam_at_min)
-        if lam_min <= 0:
-            raise ValueError(f"A_ρ not SPD at ρ_c={rho_c} (λ_min={lam_min:.4f})")
-        import warnings as _w
-
-        with _w.catch_warnings():
-            _w.simplefilter("ignore", RuntimeWarning)
-            V_stack[0] = iterative_solve(
-                A_rho, X, lambda_min=lam_min, lambda_max=lam_max
-            )
-            for j in range(m):
-                Wv = W_csc @ V_stack[j]  # (n, k)
-                V_stack[j + 1] = iterative_solve(
-                    A_rho, Wv, lambda_min=lam_min, lambda_max=lam_max
-                )
-        # No solver to store — CG is stateless
-        solver: _CholmodNormalEqSolver | spla.SuperLU | None = None
-    else:
-        # Factorisation path: CHOLMOD or splu
-        solver = _make_solver(rho_c, W_csc, n, cholmod_solver=cholmod_solver)
-        V_stack[0] = solver.solve(X)  # (n, k)
-        for j in range(m):
-            Wv = W_csc @ V_stack[j]  # (n, k)
-            V_stack[j + 1] = solver.solve(Wv)
-
-    return ReducedKrylovBasis(rho_basis=rho_c, solver=solver, V_stack=V_stack, degree=m)
+    return ReducedKrylovBasis(
+        rho_basis=rho_c,
+        solver=solver,
+        V_stack=V_stack,
+        degree=m,
+        # Radius from the coefficients themselves (root test), not from W's
+        # spectrum -- so no eigenvalue bounds are needed anywhere.
+        safe_dmax=_series_radius(V_stack),
+    )
 
 
 def _eval_U_from_basis(
@@ -400,7 +633,7 @@ class ReducedGibbsState:
     rho : float
         Spatial autoregressive parameter.
     alpha : float
-        NB dispersion (NB2 parameterisation; ``Var(y) = mu + mu^2 / alpha``).
+        NB dispersion (NB2 parameterization; ``Var(y) = mu + mu^2 / alpha``).
     omega : ndarray, shape (n,)
         Pólya–Gamma auxiliary variables.
     """
@@ -417,7 +650,7 @@ class ReducedGibbsCache(NamedTuple):
     Attributes
     ----------
     W_sparse : scipy.sparse.csr_matrix
-        Row-standardised spatial weights (csr for fast matvec).
+        Row-standardized spatial weights (csr for fast matvec).
     W_csc : scipy.sparse.csc_matrix
         Same matrix in csc format (preferred for ``splu`` fallback).
     rho_lower, rho_upper : float
@@ -434,7 +667,7 @@ class ReducedGibbsCache(NamedTuple):
     krylov_dmax : float
         Maximum :math:`|\\Delta\\rho|` for which the Krylov basis is
         used.  When a slice candidate falls outside this radius around
-        the basis centre, a fresh factorisation is performed for
+        the basis center, a fresh factorization is performed for
         that single candidate.  Default 0.15.
     cholmod_pattern : csc_matrix or None
         When CHOLMOD is available, a sparse matrix with the sparsity
@@ -451,12 +684,12 @@ class ReducedGibbsCache(NamedTuple):
         Maximum absolute eigenvalue of W.  Used to compute eigenvalue
         bounds for the CG iterative solver:
         ``lam_min(A_rho) = 1 - rho * W_eig_max``.
-        Default 1.0 (correct for row-standardised W).
+        Default 1.0 (correct for row-standardized W).
     W_eig_min : float
         Minimum (real) eigenvalue of W.  Used to compute eigenvalue
         bounds for the CG iterative solver:
         ``lam_max(A_rho) = 1 - rho * W_eig_min``.
-        Default -1.0 (correct for row-standardised W).
+        Default -1.0 (correct for row-standardized W).
     n_rho_omega_cycles : int
         Number of (ω, ρ, β) Gibbs cycles per sweep.  At high ρ with
         large β₀, the ρ conditional mode shifts by ~2 posterior
@@ -464,17 +697,17 @@ class ReducedGibbsCache(NamedTuple):
         chain lagging behind the mode, giving ESS ≈ 6.  Interleaving
         multiple ω→ρ→β cycles allows ρ to track the conditional
         mode, dramatically improving ESS.  Each cycle is a valid
-        Gibbs update.  Default 1 (single cycle, original behaviour).
+        Gibbs update.  Default 1 (single cycle, original behavior).
         Set to 3–10 for data with high ρ and large β₀.
     krylov_reuse : bool
         When ``True`` (default), the Krylov basis built at the
         previous sweep's ρ is reused when |Δρ| <
-        ``krylov_reuse_threshold``, skipping the CHOLMOD factorisation
+        ``krylov_reuse_threshold``, skipping the CHOLMOD factorization
         + ``(degree + 1)`` triangular solves that account for 27–47%
         of per-sweep time.  Measured reuse rates are 95–100%
         post-warmup, giving 1.7–5.3× end-to-end speedup.  When
         ``False``, the basis is rebuilt every sweep (legacy
-        behaviour).
+        behavior).
     krylov_reuse_threshold : float
         Maximum |Δρ| for which the previous sweep's Krylov basis is
         reused.  Must be ≤ ``krylov_dmax`` to stay within the
@@ -517,7 +750,7 @@ def _compute_eta(
     """Return :math:`\\eta = (I - \\rho W)^{-1} X\\beta` and the solver.
 
     The solver is returned so callers can reuse it (e.g. to compute
-    :math:`\\tilde X = A^{-1} X` without re-factorising).
+    :math:`\\tilde X = A^{-1} X` without re-factorizing).
     """
     solver = _make_solver(rho, W_csc, n, cholmod_solver=cholmod_solver)
     eta = solver.solve(Xbeta)
@@ -589,10 +822,10 @@ def _sample_beta(
 
     where :math:`\kappa = (y - \alpha)/2`.
 
-    **Intercept reparameterisation.**  For row-standardised :math:`W`,
+    **Intercept reparameterization.**  For row-standardized :math:`W`,
     the intercept column of :math:`\tilde X` equals :math:`\mathbf{1}/(1-\rho)`,
     creating strong :math:`\rho`–:math:`\beta_0` posterior correlation at
-    high :math:`\rho`.  We reparameterise :math:`\delta_0 = \beta_0/(1-\rho)`
+    high :math:`\rho`.  We reparameterize :math:`\delta_0 = \beta_0/(1-\rho)`
     so that the intercept enters :math:`\eta` directly as
     :math:`\delta_0 \cdot \mathbf{1}`, breaking the correlation.  The draw
     is in :math:`\delta`-space; we transform back via
@@ -614,10 +847,10 @@ def _sample_beta(
     rng : numpy.random.Generator
     rho : float, default 0.0
         Current spatial autoregressive parameter (used for intercept
-        reparameterisation).
+        reparameterization).
     intercept_col : int, default 0
         Column index of the intercept in :math:`X`.  Set to ``-1`` to
-        disable the reparameterisation.
+        disable the reparameterization.
 
     Returns
     -------
@@ -639,7 +872,7 @@ def _sample_beta(
     else:
         mu0 = np.asarray(beta_mu, dtype=np.float64)
 
-    # --- Intercept reparameterisation: δ₀ = β₀/(1−ρ) ---
+    # --- Intercept reparameterization: δ₀ = β₀/(1−ρ) ---
     # Replace the intercept column of Xtilde (which is 1/(1−ρ) · 1)
     # with 1 · 1, so we sample δ₀ instead of β₀.
     # Prior on δ₀: N(μ₀/(1−ρ), σ₀²/(1−ρ)²) — precision scales by (1−ρ)².
@@ -743,20 +976,18 @@ def _rho_log_density_marginal(
     basis: Optional[ReducedKrylovBasis] = None,
     krylov_dmax: float = _KRYLOV_DMAX_DEFAULT,
     cholmod_solver: Optional[_CholmodNormalEqSolver] = None,
-    W_eig_max: float = 1.0,
-    W_eig_min: float = -1.0,
     intercept_col: int = 0,
 ) -> float:
-    r"""β-marginalised conditional log-density for the ρ slice.
+    r"""β-marginalized conditional log-density for the ρ slice.
 
     When a :class:`ReducedKrylovBasis` is provided and
     :math:`|\rho - \rho_c| \leq \texttt{krylov_dmax}`, the expensive
     solve is replaced by a cheap Horner evaluation of the
     shift-invert Krylov polynomial.  Otherwise a CG iterative
-    solve is used (no factorisation needed), with eigenvalue bounds
+    solve is used (no factorization needed), with eigenvalue bounds
     derived from ``W_eig_max`` and ``W_eig_min``.
 
-    **Intercept reparameterisation.**  The intercept column of
+    **Intercept reparameterization.**  The intercept column of
     :math:`U = (I - \rho W)^{-1} X` is replaced with :math:`\mathbf{1}`,
     and the prior is adjusted for :math:`\delta_0 = \beta_0/(1-\rho)`.
     This breaks the :math:`\rho`–:math:`\beta_0` posterior correlation
@@ -770,40 +1001,22 @@ def _rho_log_density_marginal(
     use_basis = (
         basis is not None
         and basis.degree > 0
-        and abs(rho - basis.rho_basis) <= krylov_dmax
+        and abs(rho - basis.rho_basis) <= min(krylov_dmax, basis.safe_dmax)
     )
     if use_basis:
         drho = rho - basis.rho_basis
         U = _eval_U_from_basis(basis, drho)
     else:
         try:
-            # Chebyshev iterative solve — no factorisation needed.
-            # Eigenvalue bounds for A_ρ = I − ρW:
-            #   eigenvalues of A_ρ are {1 − ρ·λ_i(W)}
-            #   λ_min(A_ρ) = min(1 − ρ·λ_max(W), 1 − ρ·λ_min(W))
-            #   λ_max(A_ρ) = max(1 − ρ·λ_max(W), 1 − ρ·λ_min(W))
-            lam_at_max = 1.0 - rho * W_eig_max
-            lam_at_min = 1.0 - rho * W_eig_min
-            lam_min = min(lam_at_max, lam_at_min)
-            lam_max = max(lam_at_max, lam_at_min)
-            if lam_min <= 0:
-                # ρ is too extreme for A_ρ to be SPD — reject
-                return -np.inf
-            # Build A_ρ = I − ρW as a sparse CSR matrix.
-            # CSR is preferred over LinearOperator because scipy's
-            # CG implementation calls the C-level sparse matvec
-            # directly, avoiding Python callback overhead (~2×
-            # faster per iteration for n ≤ 10 000).
-            A_rho = _build_A_rho(rho, W_csc, n)
-            import warnings as _w
-
-            with _w.catch_warnings():
-                _w.simplefilter("ignore", RuntimeWarning)
-                U = iterative_solve(A_rho, X, lambda_min=lam_min, lambda_max=lam_max)
+            # Outside the Krylov radius: factor A_rho at this candidate.
+            # This used to be a Chebyshev/CG solve parameterized by W's
+            # spectral bounds; the routed factorization is faster and needs
+            # no bounds, which is what let the eigendecomposition go.
+            U = _make_solver(rho, W_csc, n, cholmod_solver=cholmod_solver).solve(X)
         except (RuntimeError, ValueError):
             return -np.inf
 
-    # --- Intercept reparameterisation: δ₀ = β₀/(1−ρ) ---
+    # --- Intercept reparameterization: δ₀ = β₀/(1−ρ) ---
     reparam = intercept_col >= 0 and abs(rho) > 1e-8
     if reparam:
         scale = 1.0 - rho
@@ -848,7 +1061,7 @@ def _rho_log_density_marginal(
     log_det_M = 2.0 * float(np.sum(np.log(np.diag(L))))
 
     result = -0.5 * log_det_M - 0.5 * (rOr - quad_pen)
-    # Jacobian correction for the intercept reparameterisation:
+    # Jacobian correction for the intercept reparameterization:
     # β₀ = δ₀·(1−ρ), so |∂β/∂δ| = (1−ρ) and log|det J| = log(1−ρ).
     if reparam:
         result += np.log(scale)
@@ -874,11 +1087,11 @@ def _sample_rho(
     cholmod_solver: Optional[_CholmodNormalEqSolver] = None,
     intercept_col: int = 0,
 ) -> tuple[float, float]:
-    """Block 3: 1-D adaptive slice on :math:`\\rho` with β marginalised.
+    """Block 3: 1-D adaptive slice on :math:`\\rho` with β marginalized.
 
     When ``basis`` is provided (``krylov_degree > 0``), the slice density
     is evaluated via the shift-invert Krylov polynomial instead of a
-    fresh factorisation per candidate.  The basis is built once per sweep
+    fresh factorization per candidate.  The basis is built once per sweep
     at the current ρ and reused for all candidates within ``krylov_dmax``.
     """
     n, k = X.shape
@@ -902,8 +1115,6 @@ def _sample_rho(
             basis=basis,
             krylov_dmax=cache.krylov_dmax,
             cholmod_solver=cholmod_solver,
-            W_eig_max=cache.W_eig_max,
-            W_eig_min=cache.W_eig_min,
             intercept_col=intercept_col,
         )
 
@@ -961,7 +1172,7 @@ def run_chain(
     X : ndarray, shape (n, k)
         Design matrix (intercept column expected if desired).
     W_sparse : scipy.sparse.csr_matrix, shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     priors : ReducedGibbsPriors
         Prior hyperparameters.
     cache : ReducedGibbsCache
@@ -1015,7 +1226,7 @@ def run_chain(
     use_krylov = cache.krylov_degree > 0
     krylov_degree = cache.krylov_degree
 
-    # Detect intercept column for reparameterisation: find the first
+    # Detect intercept column for reparameterization: find the first
     # column of X that is all ones.  This breaks the ρ–β₀ correlation
     # that causes ESS collapse at high ρ.  Set to -1 if none found.
     intercept_col = -1
@@ -1025,7 +1236,7 @@ def run_chain(
             break
 
     # Build the CHOLMOD normal-equations solver once per chain.
-    # When CHOLMOD is available, this replaces all ``splu`` (UMFPACK)
+    # When CHOLMOD is available, this replaces all ``splu`` (scipy SuperLU)
     # calls with CHOLMOD on the SPD matrix A^T A, avoiding Apple
     # Accelerate BLAS deadlocks on macOS under concurrent access.
     # The CholmodFactor is created from the pattern matrix **here in
@@ -1038,7 +1249,7 @@ def run_chain(
         and cache.WtW is not None
     ):
         cholmod_factor = CholmodFactor(cache.cholmod_pattern)
-        cholmod_solver = _CholmodNormalEqSolver(
+        cholmod_solver = make_sar_solver(
             cholmod_factor=cholmod_factor,
             W_csc=cache.W_csc,
             W_sym=cache.W_sym,
@@ -1051,9 +1262,9 @@ def run_chain(
     _prev_rho = None
 
     for i in range(total_iters):
-        # --- Build Krylov basis at current ρ (or factorise for legacy) ---
+        # --- Build Krylov basis at current ρ (or factorize for legacy) ---
         if use_krylov:
-            # Basis reuse: skip the factorisation + (degree+1) solves when
+            # Basis reuse: skip the factorization + (degree+1) solves when
             # ρ hasn't moved far since the last rebuild.  The Krylov basis
             # at ρ_c is valid (to Horner accuracy) for any ρ within
             # krylov_dmax of ρ_c, so a |Δρ| < threshold reuse is exact
@@ -1073,11 +1284,9 @@ def run_chain(
                         n,
                         degree=krylov_degree,
                         cholmod_solver=cholmod_solver,
-                        W_eig_max=cache.W_eig_max,
-                        W_eig_min=cache.W_eig_min,
                     )
                 except (RuntimeError, ValueError):
-                    # CHOLMOD factorisation failed (e.g. A^T A not SPD for
+                    # CHOLMOD factorization failed (e.g. A^T A not SPD for
                     # extreme ρ).  Fall back to ρ = 0 (identity transform).
                     state.rho = 0.0
                     basis = _build_krylov_basis(
@@ -1087,8 +1296,6 @@ def run_chain(
                         n,
                         degree=krylov_degree,
                         cholmod_solver=cholmod_solver,
-                        W_eig_max=cache.W_eig_max,
-                        W_eig_min=cache.W_eig_min,
                     )
                 _prev_basis = basis
                 _prev_rho = state.rho
@@ -1134,7 +1341,7 @@ def run_chain(
         Xtilde = None  # will be set by the last cycle
 
         for _cycle in range(_n_cycles):
-            # --- ρ | ω, α, y (β marginalised) ---
+            # --- ρ | ω, α, y (β marginalized) ---
             state.rho, _ = _sample_rho(
                 state=state,
                 cache=cache,
@@ -1165,32 +1372,16 @@ def run_chain(
                 Xtilde = X.copy()
             elif basis is not None:
                 drho = state.rho - basis.rho_basis
-                if abs(drho) <= cache.krylov_dmax:
+                if abs(drho) <= min(cache.krylov_dmax, basis.safe_dmax):
                     Xtilde = _eval_U_from_basis(basis, drho)
                 else:
-                    _A_rho = _build_A_rho(state.rho, cache.W_csc, n)
-                    import warnings as _w2
-
-                    with _w2.catch_warnings():
-                        _w2.simplefilter("ignore", RuntimeWarning)
-                        Xtilde = iterative_solve(
-                            _A_rho,
-                            X,
-                            lambda_min=_lam_min,
-                            lambda_max=_lam_max,
-                        )
+                    Xtilde = _make_solver(
+                        state.rho, cache.W_csc, n, cholmod_solver=cholmod_solver
+                    ).solve(X)
             else:
-                _A_rho = _build_A_rho(state.rho, cache.W_csc, n)
-                import warnings as _w2
-
-                with _w2.catch_warnings():
-                    _w2.simplefilter("ignore", RuntimeWarning)
-                    Xtilde = iterative_solve(
-                        _A_rho,
-                        X,
-                        lambda_min=_lam_min,
-                        lambda_max=_lam_max,
-                    )
+                Xtilde = _make_solver(
+                    state.rho, cache.W_csc, n, cholmod_solver=cholmod_solver
+                ).solve(X)
 
             state.beta = _sample_beta(
                 beta_current=state.beta,
@@ -1238,7 +1429,7 @@ def run_chain(
                 log_lik_samples[idx] = _nb_loglik_pointwise(y, eta, state.alpha)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     return {
         "rho": rho_samples,

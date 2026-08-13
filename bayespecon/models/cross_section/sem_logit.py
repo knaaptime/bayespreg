@@ -90,7 +90,7 @@ class SEMLogit(SpatialModel):
 
     Notes
     -----
-    The structural form parameterises the latent log-odds as
+    The structural form parameterizes the latent log-odds as
     ``eta = X @ beta + u`` with ``u = lam * W @ u + nu``,
     ``nu ~ N(0, I)``, and augments the logistic likelihood with
     Pólya–Gamma auxiliary variables to obtain fully conjugate Gibbs
@@ -190,6 +190,8 @@ class SEMLogit(SpatialModel):
         pg_n_terms: int = 25,
         n_probes: int = 5,
         lanczos_deg: int = 15,
+        krylov_degree: int = 0,
+        krylov_dmax: float = 0.4,
     ) -> az.InferenceData:
         """Sample posterior via Pólya–Gamma block Gibbs.
 
@@ -206,7 +208,7 @@ class SEMLogit(SpatialModel):
         progressbar : bool
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
-            Execution backend.  ``"numpy"`` uses the CHOLMOD factorisation
+            Execution backend.  ``"numpy"`` uses the CHOLMOD factorization
             path (the default); ``"jax"`` uses the JAX-accelerated dense path
             (requires float64; viable for n ≲ 10 000).
         return_eta : bool
@@ -222,6 +224,11 @@ class SEMLogit(SpatialModel):
         lanczos_deg : int, default 15
             Lanczos iteration depth for log|P| estimation.  Only used
             on the JAX path.
+        krylov_degree : int, default 12
+            Krylov basis degree for the λ-slice factor-reuse path
+            (JAX + sparsax, or NumPy + CHOLMOD).  Set 0 to disable.
+        krylov_dmax : float, default 0.4
+            Maximum |Δλ| for the Krylov basis reuse radius.
 
         Returns
         -------
@@ -287,6 +294,8 @@ class SEMLogit(SpatialModel):
             solve_method=solve_method,
             logdet_P_method=logdet_P_method,
             sample_method=sample_method,
+            krylov_degree=krylov_degree,
+            krylov_dmax=krylov_dmax,
             W_sym_dense=W_sym_dense,
             WtW_dense=WtW_dense,
             logdet_jax=logdet_jax,
@@ -295,12 +304,10 @@ class SEMLogit(SpatialModel):
         )
 
         # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        from ...samplers._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
         # Define the per-chain function
         _use_jax_full = sample_method in ("jax_dense", "cholmod_jax")
@@ -335,6 +342,8 @@ class SEMLogit(SpatialModel):
                 lanczos_deg=lanczos_deg,
                 progressbar=progressbar,
                 sparsax_pattern=sparsax_pattern,
+                krylov_degree=krylov_degree,
+                krylov_dmax=krylov_dmax,
             )
         else:
 
@@ -358,7 +367,7 @@ class SEMLogit(SpatialModel):
                     chain_id=progress_chain_id,
                 )
 
-            # Non-JAX paths parallelise across chains when the user
+            # Non-JAX paths parallelize across chains when the user
             # requests multiple workers.
             parallel = n_jobs != 1
             chain_results = run_chains(

@@ -160,17 +160,17 @@ def test_reduced_fit_default_is_gibbs():
 
 
 # ---------------------------------------------------------------------------
-# Mixing: β-marginalised ρ slice should give healthy ESS
+# Mixing: β-marginalized ρ slice should give healthy ESS
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.slow
-def test_reduced_rho_mixing_with_beta_marginalisation():
+def test_reduced_rho_mixing_with_beta_marginalization():
     """ρ ESS_bulk should be a non-trivial fraction of total draws.
 
-    Regression test for the β-marginalised ρ slice sampler.  Without
-    marginalisation, ρ ESS at this DGP is in single digits per chain;
-    with marginalisation it is in the hundreds.  We set a deliberately
+    Regression test for the β-marginalized ρ slice sampler.  Without
+    marginalization, ρ ESS at this DGP is in single digits per chain;
+    with marginalization it is in the hundreds.  We set a deliberately
     loose floor so the test is robust to seed / library variation.
     """
     import scipy.sparse as sp
@@ -206,6 +206,6 @@ def test_reduced_rho_mixing_with_beta_marginalisation():
 
     rho_ess = float(az.ess(model.inference_data, var_names=["rho"]).rho.values)
     # Conservative floor: at 800 total post-warmup draws, even a fraction
-    # of 0.1 (ESS=80) signals that ρ is mixing, vs the pre-marginalised
+    # of 0.1 (ESS=80) signals that ρ is mixing, vs the pre-marginalized
     # ESS that was ~5–10 at this DGP.
     assert rho_ess >= 80.0, f"ρ ESS too low: {rho_ess}"

@@ -127,7 +127,7 @@ def test_krylov_basis_accuracy():
     rng = np.random.default_rng(0)
     n, k = 200, 3
 
-    # Random sparse W (row-standardised)
+    # Random sparse W (row-standardized)
     from scipy import sparse
 
     W_dense = rng.random((n, n)) * (rng.random((n, n)) < 0.05)
@@ -137,7 +137,7 @@ def test_krylov_basis_accuracy():
     W_csc = sparse.csc_matrix(W_dense)
     X = rng.standard_normal((n, k))
 
-    # Use CHOLMOD for exact factorisation (CG has ~1e-4 absolute error
+    # Use CHOLMOD for exact factorization (CG has ~1e-4 absolute error
     # which swamps the Krylov polynomial approximation error we want
     # to test).
     W_sym, WtW, pattern = _make_cholmod_pattern(W_csc, n)

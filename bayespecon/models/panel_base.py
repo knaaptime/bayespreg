@@ -22,7 +22,7 @@ from .._backends.sampler_helpers import (
 from .._lazy_deps import az, pm
 from ._base._shared import (
     SharedSpatialMethods,
-    _is_row_standardized_csr,
+    _check_row_standardization,
     _pointwise_gaussian_loglik,
     _write_log_likelihood_to_idata,
 )
@@ -52,14 +52,14 @@ def _resolve_effects(effects: Union[str, int]) -> int:
         if key not in _EFFECTS_MAP:
             valid = ", ".join(sorted(_EFFECTS_MAP))
             raise ValueError(
-                f"effects={effects!r} is not recognised. "
+                f"effects={effects!r} is not recognized. "
                 f"Valid strings: {valid}; valid ints: 0–3."
             )
         return _EFFECTS_MAP[key]
     if isinstance(effects, int) and 0 <= effects <= 3:
         return effects
     raise ValueError(
-        f"effects={effects!r} is not recognised. "
+        f"effects={effects!r} is not recognized. "
         "Use an int 0–3 or one of: 'pooled', 'unit', 'time', 'two_way'."
     )
 
@@ -195,7 +195,7 @@ def _parse_panel_W(
     Accepts a :class:`libpysal.graph.Graph` or any :class:`scipy.sparse`
     matrix. Raises a :class:`ValueError` if the shape is incompatible with
     *N* (and optionally *T*). Issues a :class:`UserWarning` when *W* does not
-    appear to be row-standardised.
+    appear to be row-standardized.
 
     Returns the CSR representation of the ``N x N`` cross-sectional matrix;
     callers that need the full ``(N*T) x (N*T)`` Kronecker form should use
@@ -203,11 +203,8 @@ def _parse_panel_W(
     """
     if isinstance(W, Graph):
         W_csr = W.sparse.tocsr().astype(np.float64)
-        transform = getattr(W, "transformation", None)
-        row_std = transform in ("r", "R") or _is_row_standardized_csr(W_csr)
     elif sp.issparse(W):
         W_csr = W.tocsr().astype(np.float64)
-        row_std = _is_row_standardized_csr(W_csr)
     elif hasattr(W, "sparse") and hasattr(W, "transform"):
         raise TypeError(
             "W appears to be a legacy libpysal.weights.W object. "
@@ -235,18 +232,7 @@ def _parse_panel_W(
             f"W must be ({N},{N}) or ({N * T},{N * T})."
         )
 
-    if not row_std:
-        warnings.warn(
-            "W does not appear to be row-standardised (row sums \u2260 1). "
-            "Most spatial models assume W is row-standardised; results may be "
-            "unreliable otherwise. For a scipy sparse matrix normalise rows "
-            "manually (divide each row by its sum). To use a libpysal.graph.Graph "
-            "set its transformation attribute: "
-            "graph = graph.transform('r').",
-            UserWarning,
-            stacklevel=3,
-        )
-    return W_csr, row_std
+    return W_csr, _check_row_standardization(W_csr)
 
 
 class SpatialPanelModel(SharedSpatialMethods, ABC):
@@ -277,7 +263,7 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         :class:`scipy.sparse` matrix. The legacy
         :class:`libpysal.weights.W` object is **not** accepted; pass
         ``w.sparse`` or ``libpysal.graph.Graph.from_W(w)``. Should be
-        row-standardised; a :class:`UserWarning` is raised otherwise.
+        row-standardized; a :class:`UserWarning` is raised otherwise.
     unit_col : str, optional
         Column in ``data`` identifying the cross-sectional unit.
         Required in formula mode for panel sorting and N/T inference.
@@ -310,9 +296,8 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         ``SpatialModel`` base class.
     robust : bool, default False
         If True, replace the Normal error with Student-t for robustness
-        to heavy-tailed outliers. Adds a ``nu`` parameter with a
-        ``TruncExp(lower=2)`` prior of rate ``nu_lam`` (default 1/30,
-        mean ≈ 30). Override via ``priors={"nu_lam": value}``.
+        to heavy-tailed outliers.  The degrees of freedom :math:`\\nu` are
+        **fixed** at ``priors["nu"]`` (default 4, LeSage's ``rval``).
     w_vars : list of str, optional
         Names of X columns to spatially lag. Only relevant for
         subclasses that include ``WX`` terms (``SLXPanelFE``,
@@ -454,7 +439,7 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
 
         # Resolve the logdet method and rho/lambda bounds exactly once,
         # passing the N×N W so auto-selection can honour graph directedness.
-        # For row-standardised W the spectral stability interval is
+        # For row-standardized W the spectral stability interval is
         # always approximately (-1, 1), so no eigenvalue computation
         # is needed here.
         from .._logdet import resolve_logdet_bounds
@@ -528,7 +513,7 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
 
     @property
     def _W_dense(self) -> np.ndarray:
-        """Dense (N*T)×(N*T) weight matrix, materialised lazily on first access."""
+        """Dense (N*T)×(N*T) weight matrix, materialized lazily on first access."""
         if self._W_dense_cache is None:
             # If W is N x N, dense panel matrix is (N*T) x (N*T); otherwise
             # caller supplied full panel matrix already.
@@ -960,6 +945,13 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         if spatial_param not in {"rho", "lam"}:
             return
 
+        # When ``_build_pymc_model`` registered the likelihood as an observed
+        # CustomDist with the Jacobian folded in, PyMC already captured a
+        # complete pointwise log-likelihood — rebuilding it here would be pure
+        # duplicated work.
+        if getattr(self, "_native_log_likelihood", False):
+            return
+
         # SEM/SDEM on JAX backends build an observed CustomDist and already
         # have complete log_likelihood from PyMC.
         if spatial_param == "lam" and use_jax_likelihood(nuts_sampler):
@@ -973,7 +965,7 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         spatial_draws = idata.posterior[spatial_param].values.reshape(-1)
         beta_draws = idata.posterior["beta"].values.reshape(-1, Z.shape[1])
         sigma_draws = idata.posterior["sigma"].values.reshape(-1)
-        nu_draws = idata.posterior["nu"].values.reshape(-1) if self.robust else None
+        nu_draws = np.full(spatial_draws.shape[0], self._nu) if self.robust else None
         alpha_component = None
         if "alpha" in idata.posterior and hasattr(self, "_unit_idx"):
             alpha_draws = idata.posterior["alpha"].values
@@ -993,7 +985,10 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
             eps = resid - spatial_draws[:, None] * W_resid
 
         ll_data = _pointwise_gaussian_loglik(eps, sigma_draws, nu_draws)
-        jacobian = self._logdet_numpy_vec_fn(spatial_draws) * T_mult
+        # ``_logdet_numpy_vec_fn`` is built with ``T=self._T`` and so already
+        # returns T·log|I_N - ρW_N|.  Multiplying by ``T_mult`` again here
+        # squared the Jacobian; ``T_mult`` scales the spatial lag only.
+        jacobian = self._logdet_numpy_vec_fn(spatial_draws)
         ll_total = ll_data + jacobian[:, None] / n
 
         n_chains = idata.posterior.sizes["chain"]

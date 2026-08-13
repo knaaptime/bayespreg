@@ -232,7 +232,7 @@ def run_chains_jax_zinb(
     krylov_dmax=_KRYLOV_DMAX_DEFAULT,
     slice_width=0.4,
     jax_seeds=None,
-    progressbar=False,
+    progressbar=True,
 ):
     """Run the reduced-form ZINB PG-Gibbs sampler (device-parallel).
 
@@ -245,7 +245,8 @@ def run_chains_jax_zinb(
 
     from bayespecon._jax_dispatch import ensure_x64
 
-    from ..negbin_reduced._jax import _build_sparse_ctx, _run_chains_device_parallel
+    from .._utils._progress import GibbsProgressBarManager
+    from ..negbin_reduced._jax import _build_sparse_ctx
 
     ensure_x64()
     chains = len(inits)
@@ -295,38 +296,96 @@ def run_chains_jax_zinb(
         [jax.random.fold_in(jax.random.PRNGKey(int(s)), 1) for s in jax_seeds]
     )
 
-    def _warm_one(s, key):
+    # Warmup and draws run in *chunks* rather than one fori_loop/scan, so the
+    # progress bar has somewhere to tick.  A single fused loop is marginally
+    # faster but reports nothing for the whole run, which is why
+    # ``progressbar`` used to be accepted here and silently ignored.  Mirrors
+    # the chunking in ``negbin_reduced._jax.run_chains_jax_reduced``.
+    def _warm_chunk(s, key, n_iters):
         def body(_, carry):
             st, kk = carry
             kk, sk = jax.random.split(kk)
             st, _ = gibbs_step(st, sk, slice_width_jax)
             return (st, kk)
 
-        st, _ = jax.lax.fori_loop(0, tune, body, (s, key))
-        return st
+        return jax.lax.fori_loop(0, n_iters, body, (s, key))
 
-    def _draw_one(s, key):
+    def _draw_chunk(s, key, n_iters):
         def body(carry, _):
             st, kk = carry
             kk, sk = jax.random.split(kk)
             st, tr = gibbs_step(st, sk, slice_width_jax)
             return (st, kk), tr
 
-        _, traces = jax.lax.scan(body, (s, key), None, length=draws)
-        return traces
+        (st, kk), traces = jax.lax.scan(body, (s, key), None, length=n_iters)
+        return st, kk, traces
 
-    lam_all, gamma_all, rho_all, beta_all, alpha_all, etasel_all, etacnt_all = (
-        _run_chains_device_parallel(
-            _warm_one, _draw_one, state0, warm_keys, draw_keys, chains, tune
-        )
-    )
-    lam_all = np.asarray(lam_all)
-    gamma_all = np.asarray(gamma_all)
-    rho_all = np.asarray(rho_all)
-    beta_all = np.asarray(beta_all)
-    alpha_all = np.asarray(alpha_all)
-    etasel_all = np.asarray(etasel_all)
-    etacnt_all = np.asarray(etacnt_all)
+    _use_pmap = chains > 1 and jax.local_device_count() >= chains
+
+    def _pv(f):
+        return jax.pmap(f) if _use_pmap else jax.jit(jax.vmap(f))
+
+    _fn_cache = {}
+
+    def _get_fn(kind, n_iters):
+        key = (kind, n_iters)
+        if key not in _fn_cache:
+            if kind == "warm":
+                _fn_cache[key] = _pv(lambda s_, k_: _warm_chunk(s_, k_, n_iters))
+            else:
+                _fn_cache[key] = _pv(lambda s_, k_: _draw_chunk(s_, k_, n_iters))
+        return _fn_cache[key]
+
+    with GibbsProgressBarManager(
+        chains=chains,
+        draws=draws,
+        tune=tune,
+        progressbar=progressbar,
+        model_type="zinb_sar",
+    ) as pm:
+        if pm is not None:
+            for c in range(chains):
+                pm.start_chain(c)
+
+        # ── Phase 1: warmup ──
+        state = state0
+        keys = warm_keys
+        warm_window = max(1, tune // 20) if tune > 0 else 1
+        iter_done = 0
+        while iter_done < tune:
+            step = min(warm_window, tune - iter_done)
+            state, keys = _get_fn("warm", step)(state, keys)
+            jax.block_until_ready(state["rho"])
+            iter_done += step
+            if pm is not None:
+                for c in range(chains):
+                    pm.update(c, iter_done - 1, tuning=True)
+
+        # ── Phase 2: post-warmup draws ──
+        keys = draw_keys
+        draw_window = max(50, draws // 10) if draws > 0 else 50
+        iter_done = 0
+        trace_parts = []
+        while iter_done < draws:
+            step = min(draw_window, draws - iter_done)
+            state, keys, traces = _get_fn("draw", step)(state, keys)
+            jax.block_until_ready(traces[0])
+            trace_parts.append(traces)
+            iter_done += step
+            if pm is not None:
+                for c in range(chains):
+                    pm.update(c, tune + iter_done - 1, tuning=False)
+
+    def _cat(i):
+        return np.concatenate([np.asarray(t[i]) for t in trace_parts], axis=1)
+
+    lam_all = _cat(0)
+    gamma_all = _cat(1)
+    rho_all = _cat(2)
+    beta_all = _cat(3)
+    alpha_all = _cat(4)
+    etasel_all = _cat(5)
+    etacnt_all = _cat(6)
 
     sl = slice(None, None, thin) if thin > 1 else slice(None)
     y_np = np.asarray(y, dtype=np.float64)

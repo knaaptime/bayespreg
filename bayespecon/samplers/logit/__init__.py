@@ -60,6 +60,8 @@ def _run_binary_gibbs(
     pg_n_terms=25,
     n_probes=5,
     lanczos_deg=15,
+    krylov_degree=0,
+    krylov_dmax=0.4,
 ):
     """Registry runner for cross-section binary (logit) Pólya-Gamma Gibbs."""
     return model._fit_gibbs(
@@ -75,6 +77,8 @@ def _run_binary_gibbs(
         pg_n_terms=pg_n_terms,
         n_probes=n_probes,
         lanczos_deg=lanczos_deg,
+        krylov_degree=krylov_degree,
+        krylov_dmax=krylov_dmax,
     )
 
 
@@ -84,5 +88,12 @@ register(
     run=_run_binary_gibbs,
     backends={"jax", "numpy"},
     auto_backend="jax",
-    options={"return_eta", "pg_n_terms", "n_probes", "lanczos_deg"},
+    options={
+        "return_eta",
+        "pg_n_terms",
+        "n_probes",
+        "lanczos_deg",
+        "krylov_degree",
+        "krylov_dmax",
+    },
 )

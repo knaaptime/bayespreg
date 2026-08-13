@@ -3,7 +3,7 @@
 Each test generates balanced panel data from known parameters, fits the
 model once, and asserts that **all** posterior means are within tolerance
 of the true values.  This is a deliberate one-fit-per-model design to
-minimise MCMC wall time; the per-parameter splits this file used to
+minimize MCMC wall time; the per-parameter splits this file used to
 maintain were equivalent assertions on independent refits and added cost
 without coverage.
 

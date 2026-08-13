@@ -85,7 +85,7 @@ class SARLogitStructural(SpatialModel):
 
     Notes
     -----
-    The structural form parameterises the latent log-odds as
+    The structural form parameterizes the latent log-odds as
     ``eta = rho * W @ eta + X @ beta + nu`` with ``nu ~ N(0, I)``,
     and augments the logistic likelihood with Pólya–Gamma auxiliary
     variables to obtain fully conjugate Gibbs updates for η and β.
@@ -131,7 +131,7 @@ class SARLogitStructural(SpatialModel):
 
         For each ρ on a coarse grid, computes X̃ = (I − ρW)⁻¹X and
         the OLS estimate β̂ = (X̃ᵀX̃)⁻¹X̃ᵀy, then picks the (ρ, β)
-        that maximises the Gaussian log-likelihood on y (treating y as
+        that maximizes the Gaussian log-likelihood on y (treating y as
         continuous).  This places the chain near the posterior mode even
         at high ρ, where starting at ρ = 0 can leave the chain stuck in
         a wrong mode.
@@ -145,24 +145,16 @@ class SARLogitStructural(SpatialModel):
         W_csc = self._W_sparse.tocsc()
         n, k = X.shape
 
-        # --- Profile-log-likelihood initialisation ---
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                _beta_g = np.linalg.lstsq(_Xtilde_g, y, rcond=None)[0]
-                _eta_g = _Xtilde_g @ _beta_g
-                _sig2_g = float(np.mean((y - _eta_g) ** 2))
-                if _sig2_g > 1e-10:
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll:
-                        _best_ll = _ll_g
-                        _best_rho = _rho_g
-                        _best_beta = _beta_g.copy()
-            except Exception:
-                pass
+        # --- Profile-log-likelihood initialization ---
+        # Cached sparse solver: A = I - ρW shares its sparsity pattern across
+        # the grid, so the symbolic analysis is computed once (sparsax) or
+        # the pattern is pre-assembled (scipy fallback).
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(y, X, W_csc)
 
         _rho_jitter = 0.02
         beta_init = _best_beta + 0.1 * rng.standard_normal(k)
@@ -176,8 +168,8 @@ class SARLogitStructural(SpatialModel):
 
         # η₀: (I − ρ₀W)⁻¹Xβ₀ — spatially structured starting values
         try:
-            _A_init = sp.eye(n, format="csc") - rho_init * W_csc
-            eta_init = sp.linalg.spsolve(_A_init, X @ beta_init)
+            _init_solver = CachedSparseSolver([W_csc], n)
+            eta_init = _init_solver.solve([-rho_init], X @ beta_init)
         except Exception:
             eta_init = X @ beta_init
 
@@ -208,6 +200,8 @@ class SARLogitStructural(SpatialModel):
         pg_n_terms: int = 25,
         n_probes: int = 5,
         lanczos_deg: int = 15,
+        krylov_degree: int = 0,
+        krylov_dmax: float = 0.4,
     ) -> az.InferenceData:
         """Sample posterior via Pólya–Gamma block Gibbs.
 
@@ -224,7 +218,7 @@ class SARLogitStructural(SpatialModel):
         progressbar : bool
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
-            Execution backend.  ``"numpy"`` uses the CHOLMOD factorisation
+            Execution backend.  ``"numpy"`` uses the CHOLMOD factorization
             path; ``"jax"`` uses the JAX-accelerated dense path (requires
             float64; viable for n ≲ 10 000).
         return_eta : bool
@@ -239,6 +233,11 @@ class SARLogitStructural(SpatialModel):
         lanczos_deg : int, default 15
             Lanczos iteration depth for log|P| estimation.  Only used
             on the JAX path.
+        krylov_degree : int, default 12
+            Krylov basis degree for the ρ-slice factor-reuse path
+            (JAX + sparsax, or NumPy + CHOLMOD).  Set 0 to disable.
+        krylov_dmax : float, default 0.4
+            Maximum |Δρ| for the Krylov basis reuse radius.
 
         Returns
         -------
@@ -305,6 +304,8 @@ class SARLogitStructural(SpatialModel):
             solve_method=solve_method,
             logdet_P_method=logdet_P_method,
             sample_method=sample_method,
+            krylov_degree=krylov_degree,
+            krylov_dmax=krylov_dmax,
             W_sym_dense=W_sym_dense,
             WtW_dense=WtW_dense,
             logdet_jax=logdet_jax,
@@ -313,12 +314,10 @@ class SARLogitStructural(SpatialModel):
         )
 
         # Derive per-chain seeds
-        if random_seed is not None:
-            parent_ss = np.random.SeedSequence(random_seed)
-        else:
-            parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        from ...samplers._utils._seeds import seed_sequence_to_int, spawn_chain_seeds
+
+        child_seeds = spawn_chain_seeds(random_seed, chains)
+        seeds = [seed_sequence_to_int(s) for s in child_seeds]
 
         # Define the per-chain function
         _use_jax_full = sample_method in ("jax_dense", "cholmod_jax")
@@ -351,6 +350,8 @@ class SARLogitStructural(SpatialModel):
                 lanczos_deg=lanczos_deg,
                 progressbar=progressbar,
                 sparsax_pattern=sparsax_pattern,
+                krylov_degree=krylov_degree,
+                krylov_dmax=krylov_dmax,
             )
         else:
 

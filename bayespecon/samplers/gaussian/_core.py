@@ -260,7 +260,7 @@ def _sample_beta_conjugate(
     Xtr = X.T @ r
     rhs = Xtr / sigma2 + prior_prec @ prior_mean
 
-    # Cholesky factorisation: post_prec = L Lᵀ (SPD, lower-triangular L)
+    # Cholesky factorization: post_prec = L Lᵀ (SPD, lower-triangular L)
     # post_mean = post_prec⁻¹ @ rhs via two triangular solves
     # β = post_mean + L⁻ᵀ z,  z ~ N(0, I)  avoids forming inv(post_prec)
     # Cov(L⁻ᵀ z) = L⁻ᵀ L⁻¹ = (L Lᵀ)⁻¹ = post_prec⁻¹  ✓
@@ -864,7 +864,7 @@ def run_gaussian_chain(
 
         # Update progress bar
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     # Name the spatial parameter appropriately
     param_name = "rho" if model_type in ("sar", "sdm") else "lam"

@@ -5,7 +5,7 @@
     y_i \\sim \\mathrm{NegBin}(\\mu_i, \\alpha), \\quad
     \\mu_i = \\exp(x_i'\\beta)
 
-NB2 parameterisation: ``Var(y_i) = mu_i + mu_i^2 / alpha``.  The natural
+NB2 parameterization: ``Var(y_i) = mu_i + mu_i^2 / alpha``.  The natural
 count-response analogue of :class:`bayespecon.models.OLS`: no spatial
 structure, NUTS sampler.  ``W`` is optional and used only by Bayesian LM
 spatial-specification diagnostics applied after fitting.
@@ -29,7 +29,7 @@ class NegBin(SpatialModel):
         y_i \sim \mathrm{NegBin}(\mu_i, \alpha), \quad
         \mu_i = \exp(x_i'\beta)
 
-    NB2 parameterisation: :math:`\mathrm{Var}(y_i) = \mu_i + \mu_i^2 / \alpha`.
+    NB2 parameterization: :math:`\mathrm{Var}(y_i) = \mu_i + \mu_i^2 / \alpha`.
     Sampled with NUTS.  ``W`` is optional and is used only by Bayesian
     LM diagnostics to assess whether a spatial count model
     (e.g. :class:`bayespecon.models.SARNegBinStructural`) is warranted.

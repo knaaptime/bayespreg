@@ -1,6 +1,6 @@
 """Runtime configuration helpers for :mod:`bayespecon`.
 
-This module exposes opt-in helpers that tune global runtime behaviour
+This module exposes opt-in helpers that tune global runtime behavior
 (compile caches, etc.) for the JAX and PyTensor toolchains used by the
 package. Nothing in this module is invoked at import time — users must
 call the helpers explicitly.

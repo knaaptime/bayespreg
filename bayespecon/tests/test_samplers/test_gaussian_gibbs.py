@@ -1144,11 +1144,11 @@ class TestGibbsProgressBarManager:
         pm = GibbsProgressBarManager(chains=1, draws=5, tune=2, progressbar=True)
         with pm:
             task = pm._progress.tasks[pm._tasks[0]]
-            pm.update(0, 0, tuning=True, accept=None)
+            pm.update(0, 0, tuning=True)
             assert task.completed == 1
-            pm.update(0, 1, tuning=True, accept=None)
+            pm.update(0, 1, tuning=True)
             assert task.completed == 2
-            pm.update(0, 2, tuning=False, accept=True)
+            pm.update(0, 2, tuning=False)
             assert task.completed == 3
 
     def test_update_noop_when_disabled(self):
@@ -1157,20 +1157,27 @@ class TestGibbsProgressBarManager:
 
         pm = GibbsProgressBarManager(chains=1, draws=5, tune=2, progressbar=False)
         with pm:
-            pm.update(0, 0, tuning=True, accept=None)
+            pm.update(0, 0, tuning=True)
             # Should not raise
 
-    def test_accept_rate_tracking(self):
-        """Accept rate is tracked and displayed."""
+    def test_no_accept_rate_column(self):
+        """There is no accept-rate column, by design.
+
+        Every Gibbs block here is a conjugate draw or a slice step, both of
+        which accept by construction, so the column only ever showed ``--`` or
+        a vacuous 100%.  Pins the removal so it is not reintroduced.
+        """
+        import inspect
+
         from bayespecon.samplers._utils._progress import GibbsProgressBarManager
+
+        assert (
+            "accept" not in inspect.signature(GibbsProgressBarManager.update).parameters
+        )
 
         pm = GibbsProgressBarManager(chains=1, draws=5, tune=2, progressbar=True)
         with pm:
-            pm.update(0, 0, tuning=True, accept=True)
-            pm.update(0, 1, tuning=True, accept=False)
-            assert pm._accept_counts is not None
-            assert pm._accept_counts[0] == 1
-            assert pm._accept_totals[0] == 2
+            assert "accept_rate" not in pm._progress.tasks[pm._tasks[0]].fields
 
     def test_exit_forces_final_refresh(self):
         """__exit__ forces one final refresh for notebook rendering."""

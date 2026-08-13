@@ -31,7 +31,7 @@ from bayespecon.samplers.panel_flow._state import (
 
 
 def _make_symmetric_W(n: int, seed: int = 42) -> np.ndarray:
-    """Create a symmetric row-standardised W for testing."""
+    """Create a symmetric row-standardized W for testing."""
     rng = np.random.default_rng(seed)
     A = rng.random((n, n))
     A = (A + A.T) / 2.0
@@ -39,7 +39,7 @@ def _make_symmetric_W(n: int, seed: int = 42) -> np.ndarray:
     row_sums = A.sum(axis=1, keepdims=True)
     row_sums[row_sums == 0] = 1.0
     W = A / row_sums
-    # Re-symmetrise after row-standardisation
+    # Re-symmetrize after row-standardization
     W = (W + W.T) / 2.0
     return W
 

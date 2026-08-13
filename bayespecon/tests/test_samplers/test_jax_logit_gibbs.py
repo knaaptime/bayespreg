@@ -50,7 +50,7 @@ def _make_small_problem(n: int = 20, k: int = 3, rho: float = 0.3, seed: int = 4
     X = np.column_stack([np.ones(n), rng.standard_normal((n, k - 1))])
     beta = np.array([0.5, -1.0, 0.8])[:k]
 
-    # Row-standardised ring-lattice W
+    # Row-standardized ring-lattice W
     W_dense = np.zeros((n, n))
     for i in range(n):
         W_dense[i, (i + 1) % n] = 1.0

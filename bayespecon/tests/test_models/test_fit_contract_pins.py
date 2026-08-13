@@ -377,6 +377,7 @@ def test_count_xs_fit_contract(name, ctor, zi, expected, sampler):
         assert "log_likelihood" in idata.groups(), f"{name} gibbs should attach log_lik"
 
 
+@pytest.mark.requires_jax
 @pytest.mark.filterwarnings("ignore:Zero-inflated NB:UserWarning")
 def test_zinb_jax_backend_fit_contract():
     """SARZINB's opt-in JAX backend yields the same posterior contract.

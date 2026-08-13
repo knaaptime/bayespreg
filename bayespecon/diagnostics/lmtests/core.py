@@ -5,10 +5,11 @@ LM test families (cross-sectional, panel, flow):
 
 - Posterior draw extraction
 - Residual computation
-- Scalar / vector LM finalisation
+- Scalar / vector LM finalization
 - Matrix algebra utilities (_mx_quadratic, _mx_cross)
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
@@ -16,6 +17,16 @@ import numpy as np
 from scipy import stats as sp_stats
 
 from ..._lazy_deps import az
+
+# ---------------------------------------------------------------------------
+# Module constants
+# ---------------------------------------------------------------------------
+
+#: Ridge added to the diagonal before inversion in :func:`_safe_inv` / :func:`_safe_solve`.
+_INV_RIDGE = 1e-12
+
+#: Condition-number threshold above which the regularized inverse falls back to ``pinv``.
+_INV_COND_THRESHOLD = 1e12
 
 # ---------------------------------------------------------------------------
 # BayesianLMTestResult dataclass
@@ -147,11 +158,10 @@ def _finalize_lm(
 def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
     """Robust matrix inverse for LM-test information / cross-product matrices.
 
-    Adds a tiny ridge (``1e-12 * I``) to prevent exact singularity, checks the
-    condition number of the regularised matrix, and emits a ``RuntimeWarning``
-    plus falls back to ``np.linalg.pinv`` when ``cond > 1e12``. This replaces
-    the previous silent ``np.linalg.inv(M + 1e-12 * np.eye(...))`` pattern,
-    which masked rank-deficient information matrices without notice.
+    Adds a tiny ridge (``_INV_RIDGE * I``) to prevent exact singularity, checks
+    the condition number of the regularized matrix, and emits a
+    ``RuntimeWarning`` plus falls back to ``np.linalg.pinv`` when
+    ``cond > _INV_COND_THRESHOLD``.
 
     Parameters
     ----------
@@ -169,18 +179,56 @@ def _safe_inv(M: np.ndarray, label: str = "information matrix") -> np.ndarray:
     """
     M = np.asarray(M, dtype=np.float64)
     n = M.shape[0]
-    M_reg = M + 1e-12 * np.eye(n)
+    M_reg = M + _INV_RIDGE * np.eye(n)
     cond = np.linalg.cond(M_reg)
-    if not np.isfinite(cond) or cond > 1e12:
-        import warnings
-
+    if not np.isfinite(cond) or cond > _INV_COND_THRESHOLD:
         warnings.warn(
-            f"{label} is ill-conditioned (cond={cond:.2e}); falling back to pseudo-inverse.",
+            f"{label} is ill-conditioned (cond={cond:.2e}); "
+            f"ridge {_INV_RIDGE:.0e} insufficient, falling back to pseudo-inverse.",
             RuntimeWarning,
             stacklevel=2,
         )
         return np.linalg.pinv(M)
     return np.linalg.inv(M_reg)
+
+
+def _safe_solve(
+    M: np.ndarray, b: np.ndarray, label: str = "information matrix"
+) -> np.ndarray:
+    """Solve ``M x = b`` with ridge regularization and ``pinv`` fallback.
+
+    Companion to :func:`_safe_inv` for code paths that only need ``M⁻¹ @ b``
+    (avoiding the explicit inverse).  Same ridge magnitude and condition-number
+    threshold so results are consistent with :func:`_safe_inv`.
+
+    Parameters
+    ----------
+    M : np.ndarray
+        Square matrix (typically a Fisher information block or ``XᵀX``).
+    b : np.ndarray
+        Right-hand side (vector or matrix).
+    label : str
+        Human-readable label used in the warning message.
+
+    Returns
+    -------
+    np.ndarray
+        ``solve(M + ε I, b)`` (well-conditioned) or ``pinv(M) @ b``
+        (ill-conditioned).
+    """
+    M = np.asarray(M, dtype=np.float64)
+    n = M.shape[0]
+    M_reg = M + _INV_RIDGE * np.eye(n)
+    cond = np.linalg.cond(M_reg)
+    if not np.isfinite(cond) or cond > _INV_COND_THRESHOLD:
+        warnings.warn(
+            f"{label} is ill-conditioned (cond={cond:.2e}); "
+            f"ridge {_INV_RIDGE:.0e} insufficient, falling back to pseudo-inverse.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return np.linalg.pinv(M) @ b
+    return np.linalg.solve(M_reg, b)
 
 
 def _mx_quadratic(X: np.ndarray, v: np.ndarray) -> float:
@@ -459,7 +507,7 @@ def _panel_spatial_lag(W_sparse, v: np.ndarray, N: int, T: int) -> np.ndarray:
     input to ``(T, N)`` (1-D) or ``(draws*T, N)`` (2-D) and applying the
     N×N weight matrix once, then reshaping back.  This avoids the O(T)
     Python-loop overhead of the naive per-period approach and matches the
-    Phase-3 ``_batch_sparse_lag`` optimisation in the model layer.
+    Phase-3 ``_batch_sparse_lag`` optimization in the model layer.
 
     Parameters
     ----------

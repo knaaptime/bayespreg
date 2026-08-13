@@ -85,7 +85,7 @@ def test_numpy_none_auto_matches_eigenvalue(_weights):
         np.testing.assert_allclose(val, ref, atol=1e-12)
 
 
-def test_separable_factorisation_identity(_weights):
+def test_separable_factorization_identity(_weights):
     """The factory equals n*(L(rho_d) + L(rho_o)) with L the single-param logdet."""
     n, Wsym, _ = _weights
     from bayespecon._logdet._factories import make_logdet_numpy_vec_fn

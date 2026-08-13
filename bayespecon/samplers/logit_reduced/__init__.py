@@ -9,11 +9,11 @@ This sampler targets the canonical binary spatial model
 
 — the binary analogue of the reduced-form SAR Negative-Binomial: the spatial lag
 enters the *linear predictor*, so the ``|I − ρW|`` Jacobian cancels when β is
-marginalised out and the system is *linear* in ρ.  That makes the ρ conditional
-Krylov-accelerable (no per-candidate solve) and the sweep arithmetic-heavy.  It
-reuses the reduced-NB machinery almost verbatim — the shift-invert Krylov basis,
-the CHOLMOD normal-equations solver (NumPy) / sparsax sparse-LU (JAX), and the
-device-parallel ``jax.pmap`` runner.
+marginalized out and the system is *linear* in ρ.  That makes the ρ conditional
+Krylov-accelerable and the sweep arithmetic-heavy.  It reuses the reduced-NB
+machinery almost verbatim — the shift-invert Krylov basis, the CHOLMOD
+normal-equations solver (NumPy) / sparsax sparse-LU (JAX), and the device-parallel
+``jax.pmap`` runner.
 
 Differences from the count model: the Pólya–Gamma draw uses h = 1 (Bernoulli),
 the working response is κ/ω with κ = y − ½ (no ``log α`` offset), and there is no

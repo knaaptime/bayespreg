@@ -82,9 +82,9 @@ def run_chains(
         One dict per chain, each containing parameter trace arrays.
     """
     if seeds is None:
-        parent_ss = np.random.SeedSequence()
-        child_seeds = parent_ss.spawn(n_chains)
-        seeds = [int(s.generate_state(1)[0]) for s in child_seeds]
+        from .._utils._seeds import spawn_chain_seeds
+
+        seeds = spawn_chain_seeds(None, n_chains)
     elif len(seeds) != n_chains:
         raise ValueError(
             f"len(seeds) must equal n_chains, got {len(seeds)} != {n_chains}."

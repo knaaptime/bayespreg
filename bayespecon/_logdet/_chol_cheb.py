@@ -1,13 +1,13 @@
 """Cholesky-Chebyshev log-determinant for SPD ``I - ρW``.
 
-For row-standardised ``W`` with spectrum in ``[-1, 1]``, the D-symmetrised
+For row-standardized ``W`` with spectrum in ``[-1, 1]``, the D-symmetrized
 matrix ``W_sym = D^{-1/2} A D^{-1/2}`` is symmetric with the same eigenvalues
 as ``W``.  This makes ``I - ρW_sym`` **symmetric positive definite** (SPD)
-for all ``|ρ| < 1``, enabling **sparse Cholesky** factorisation:
+for all ``|ρ| < 1``, enabling **sparse Cholesky** factorization:
 
 * **Exact**: ``log|det(I - ρW)| = 2 Σ log(diag(L))`` — no stochastic noise.
 * **Fast**: CHOLMOD sparse Cholesky is ~2× faster than sparse LU for SPD.
-* **Scalable**: ``O(nnz^{1.5})`` per factorisation, no ``O(n³)`` eigendecomposition.
+* **Scalable**: ``O(nnz^{1.5})`` per factorization, no ``O(n³)`` eigendecomposition.
 * **Full range**: works for ``ρ ∈ (-1, 1)`` — the entire stable region.
   The order is selected from the interval's Bernstein-ellipse convergence
   rate (:func:`~._chebyshev.cheb_order_for_tolerance`) — its distance to the
@@ -21,7 +21,7 @@ per-``ρ`` evaluation via Clenshaw recurrence.
 
 **Symbolic reuse**: all ``I - ρW`` matrices share the same sparsity pattern,
 so CHOLMOD's symbolic analysis (AMD ordering + elimination tree) is performed
-only once and reused for all subsequent numeric factorisations via
+only once and reused for all subsequent numeric factorizations via
 ``factor.factorize()``.  This saves ~64% of per-node cost.
 
 **When to use**: ``n ∈ (500, 60000]``, any ``ρ ∈ (-1, 1)``.  For ``n ≤ 500``
@@ -103,9 +103,9 @@ class CholChebPrecompute:
 
 
 def _d_symmetrize(W: sp.csr_matrix) -> sp.csc_matrix:
-    """D-symmetrise row-standardised ``W``.
+    """D-symmetrize row-standardized ``W``.
 
-    For ``W = D⁻¹A`` (row-standardised, ``A`` symmetric adjacency),
+    For ``W = D⁻¹A`` (row-standardized, ``A`` symmetric adjacency),
     ``W_sym = D^{1/2} W D^{-1/2} = D^{-1/2} A D^{-1/2}`` is symmetric
     with the **same eigenvalues** as ``W``.
 
@@ -153,7 +153,7 @@ def _d_symmetrize(W: sp.csr_matrix) -> sp.csc_matrix:
             if W_sym is None:
                 raise ValueError(
                     "cheb_cholesky requires a D-symmetrizable W (row-"
-                    "standardised undirected graph); no valid symmetrizing "
+                    "standardized undirected graph); no valid symmetrizing "
                     'diagonal was found. Use logdet_method="aaa" for '
                     "directed or non-symmetrizable W."
                 )
@@ -173,7 +173,7 @@ def _d_symmetrize(W: sp.csr_matrix) -> sp.csc_matrix:
     D = _recover_symmetrizing_diagonal(W)
     if D is None or not np.all(np.isfinite(D)) or np.any(D <= 0):
         raise ValueError(
-            "cheb_cholesky requires a D-symmetrizable W (row-standardised "
+            "cheb_cholesky requires a D-symmetrizable W (row-standardized "
             "undirected graph); no valid symmetrizing diagonal was found. "
             'Use logdet_method="aaa" for directed or non-symmetrizable W.'
         )
@@ -274,8 +274,8 @@ class LUChebContext(_ChebContextBase):
     put a Chebyshev interpolant on them.
 
     KLU's symbolic analysis is computed once and reused for every later numeric
-    factorisation, exactly as CHOLMOD's is in :class:`CholChebContext`, since all
-    ``I - ρW`` share one sparsity pattern.  It falls back to UMFPACK/SuperLU when
+    factorization, exactly as CHOLMOD's is in :class:`CholChebContext`, since all
+    ``I - ρW`` share one sparsity pattern.  It falls back to scipy SuperLU when
     ``sksparse.klu`` is unavailable.
 
     Expect it to be slower than :class:`CholChebContext` on weights that *are*
@@ -333,14 +333,14 @@ def lu_cheb_logdet_precompute(
 
 
 class CholChebContext(_ChebContextBase):
-    """Reusable D-symmetrisation and CHOLMOD symbolic analysis for one ``W``.
+    """Reusable D-symmetrization and CHOLMOD symbolic analysis for one ``W``.
 
     Everything a Chebyshev interpolant of ``log|I - ρW|`` needs that does *not*
-    depend on the interval — the symmetrised matrix ``W_sym``, the identity, and
+    depend on the interval — the symmetrized matrix ``W_sym``, the identity, and
     CHOLMOD's symbolic analysis (AMD ordering + elimination tree) — is built
     once here and reused by every call to :meth:`coeffs_on`.  Fitting a *second*
     interpolant on a different interval therefore costs only its numeric
-    factorisations.
+    factorizations.
 
     That is what makes a warmup-adaptive refit affordable.  A sampler past
     warmup knows ρ to within a fraction of the prior's support, and a narrow
@@ -354,7 +354,7 @@ class CholChebContext(_ChebContextBase):
     Parameters
     ----------
     W : array-like or scipy.sparse matrix
-        Spatial weights matrix (dense or sparse, row-standardised).
+        Spatial weights matrix (dense or sparse, row-standardized).
 
     Raises
     ------
@@ -388,10 +388,10 @@ class CholChebContext(_ChebContextBase):
         for i, rho in enumerate(rho_nodes):
             A = sp.csc_matrix(self._eye - float(rho) * self.W_sym)
             if self._factor is None:
-                # First node ever: symbolic analysis + numeric factorisation.
+                # First node ever: symbolic analysis + numeric factorization.
                 self._factor = cholmod_cho_factor(A)
             else:
-                # Numeric factorisation only — symbolic analysis reused.
+                # Numeric factorization only — symbolic analysis reused.
                 self._factor.factorize(A)
             out[i] = self._factor.logdet()
         return out
@@ -407,23 +407,23 @@ def chol_cheb_logdet_precompute(
     """Precompute Chebyshev coefficients via sparse Cholesky log-determinant.
 
     Evaluates ``log|det(I - ρW)|`` exactly at ``order`` Chebyshev nodes
-    in ``[ρ_min, ρ_max]`` via sparse Cholesky factorisation, then fits
+    in ``[ρ_min, ρ_max]`` via sparse Cholesky factorization, then fits
     a Chebyshev polynomial in ``ρ``.
 
     **Symbolic reuse**: all ``I - ρW`` matrices share the same sparsity
     pattern, so CHOLMOD's symbolic analysis (AMD ordering + elimination
     tree) is performed only once and reused for all subsequent numeric
-    factorisations.
+    factorizations.
 
     This is a one-shot convenience wrapper over :class:`CholChebContext`.  To
     fit more than one interval for the same ``W`` — a warmup-adaptive refit —
     hold the context and call :meth:`CholChebContext.coeffs_on` repeatedly, so
-    the symmetrisation and symbolic analysis are paid once rather than per fit.
+    the symmetrization and symbolic analysis are paid once rather than per fit.
 
     Parameters
     ----------
     W : array-like or scipy.sparse matrix
-        Spatial weights matrix (dense or sparse, row-standardised).
+        Spatial weights matrix (dense or sparse, row-standardized).
     order : int or None, default None
         Chebyshev polynomial degree.  If ``None``, selected from the interval's
         Bernstein-ellipse convergence rate, ``n``, and ``tol``.

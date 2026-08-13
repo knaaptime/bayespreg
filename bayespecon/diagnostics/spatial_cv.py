@@ -6,7 +6,7 @@ Implements the refit-based spatial k-fold predictive evaluation of
 
 The estimator avoids the well-known failures of PSIS-LOO on spatially
 dependent data (importance ratios assume the per-observation likelihoods
-factorise across observations, which spatial models violate by
+factorize across observations, which spatial models violate by
 construction).  Each fold refits the model on the training subset and
 evaluates ``log p(y_test | y_train, theta)`` under the *full-data*
 joint Gaussian induced by the model:
@@ -38,8 +38,6 @@ from typing import Any, Optional
 import numpy as np
 import scipy.sparse as sp
 from scipy.special import logsumexp
-
-from .._ops._backend import _solve_sparse_vector as _backend_spsolve
 
 __all__ = ["SpatialCVResult", "spatial_kfold"]
 
@@ -159,9 +157,9 @@ def _refit_on_train(
     W_train: Optional[sp.spmatrix]
     if model._W_sparse is not None:
         W_sub = model._W_sparse[train_idx, :][:, train_idx].tocsr()
-        # Subsetting a globally row-standardised W breaks row-normalisation
-        # (some neighbours fall outside train_idx, so row sums < 1). Re-
-        # standardise rows so the training W matches the original convention.
+        # Subsetting a globally row-standardized W breaks row-normalization
+        # (some neighbors fall outside train_idx, so row sums < 1). Re-
+        # standardize rows so the training W matches the original convention.
         row_sums = np.asarray(W_sub.sum(axis=1)).ravel()
         inv = np.zeros_like(row_sums)
         nz = row_sums > 0
@@ -227,12 +225,24 @@ def _fold_elpd(
     eye_n = sp.eye(n, format="csr")
     log_p = np.empty(G, dtype=np.float64)
 
+    # Cached symbolic analysis: A = I - θ W shares one sparsity pattern
+    # across all G draws (only θ rescales the values).  When sparsax is
+    # available the fill-reducing analysis is computed once and reused; the
+    # scipy ``splu`` fallback still benefits from the precomputed pattern
+    # assembly (one numeric factorization per draw, no symbolic work).
+    from ..samplers._utils._sparsax_utils import CachedSparseSolver
+
+    cached_solver = CachedSparseSolver([W_full], n) if kind == "lag" else None
+
     for g in range(G):
         theta = float(spatial[g])
         s2 = float(sigma[g]) ** 2
-        A = eye_n - theta * W_full  # I - rho*W or I - lambda*W
         Xb = design_full @ beta[g]
-        mu = _backend_spsolve(A, Xb) if kind == "lag" else Xb
+        if kind == "lag":
+            mu = cached_solver.solve([-theta], Xb)
+        else:
+            mu = Xb
+        A = eye_n - theta * W_full  # I - rho*W or I - lambda*W
         Lam = (A.T @ A).tocsc() / s2  # full precision
         r = y_full - mu
         z = Lam @ r

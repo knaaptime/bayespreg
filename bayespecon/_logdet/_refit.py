@@ -14,19 +14,19 @@ n = 10,000 the default ``[-0.99, 0.99]`` needs 117 nodes and ``[0.1, 0.8]``
 needs 17, against 6 for a ``[0.55, 0.65]`` window.
 
 **Accuracy.**  Refitting at a tight tolerance drives the error over the region
-the posterior actually occupies down to the factorisation's own roundoff floor.
+the posterior actually occupies down to the factorization's own roundoff floor.
 That matters more than the node count, because what biases a posterior is not
 the interpolant's maximum error but its *tilt* — the variation of the error
 across the posterior's support.  An error that is constant in ρ adds a constant
 to the log posterior and cancels exactly.  On the same lattice, refitting from
 ``[0.1, 0.8]`` at 17 nodes onto a ±10-sd window at 13 nodes takes the tilt from
-~1e-5 to ~4e-12: fewer factorisations *and* six orders of magnitude less of the
+~1e-5 to ~4e-12: fewer factorizations *and* six orders of magnitude less of the
 quantity that moves inference.
 
 Both depend on the refit being cheap, which is what
 :class:`~._chol_cheb.CholChebContext` and :class:`~._aaa.AAAContext` provide:
-the symmetrisation and the symbolic factorisation are paid once, so a second fit
-costs only its numeric factorisations.
+the symmetrization and the symbolic factorization are paid once, so a second fit
+costs only its numeric factorizations.
 
 Validity
 --------
@@ -55,7 +55,7 @@ import numpy as np
 
 _log = logging.getLogger(__name__)
 
-#: Methods that own a reusable factorisation context and a ρ interval.
+#: Methods that own a reusable factorization context and a ρ interval.
 #: ``eigenvalue`` is excluded because it is already exact and interval-free;
 #: the stochastic estimators are excluded because their error is dominated by
 #: probe noise rather than by the interval, so narrowing it buys nothing.
@@ -74,7 +74,7 @@ DEFAULT_REFIT_TOL = 1e-12
 #:
 #: Deliberately loose, and this is where the refit stops being cost-neutral and
 #: starts paying.  Scouting draws are discarded, so the scouting interpolant
-#: only has to steer the chains into the right neighbourhood; it does not have
+#: only has to steer the chains into the right neighborhood; it does not have
 #: to be the interpolant anyone reports from.  A target of one log-unit is
 #: looser than every stochastic estimator this library offers, and those move a
 #: posterior mean by under a tenth of a standard deviation even when they are
@@ -83,14 +83,14 @@ DEFAULT_REFIT_TOL = 1e-12
 #: The saving is largest exactly where the un-refitted cost is worst.  On the
 #: full stability region the order rule asks for 117 nodes at n = 10,000; a
 #: scouting fit needs 37 and the refit that replaces it needs 13, so the run
-#: pays 50 factorisations rather than 117.  On an interval already narrow enough
+#: pays 50 factorizations rather than 117.  On an interval already narrow enough
 #: to be cheap there is correspondingly less to win, which is the right shape
 #: for the trade.
 DEFAULT_SCOUT_TOL = 1.0
 
 #: Skip the refit unless the window is at least this much narrower than the
 #: interval already in use — below that the accuracy gain does not repay the
-#: extra factorisations.
+#: extra factorizations.
 MIN_NARROWING = 1.25
 
 #: Narrowest window that will be accepted, in absolute ρ units.  A chain that
@@ -205,7 +205,7 @@ def boundary_warning(
 
 
 class LogdetRefitter:
-    """Holds a reusable factorisation context and refits the interpolant on it.
+    """Holds a reusable factorization context and refits the interpolant on it.
 
     Parameters
     ----------
@@ -227,7 +227,7 @@ class LogdetRefitter:
 
     Notes
     -----
-    Construction is lazy: no factorisation happens until :meth:`refit` is first
+    Construction is lazy: no factorization happens until :meth:`refit` is first
     called, so building a refitter for a run that never reaches the refit point
     costs nothing.
     """
@@ -254,11 +254,11 @@ class LogdetRefitter:
         return self.method in REFITTABLE_METHODS and self.W_sparse is not None
 
     def release(self) -> None:
-        """Drop the cached factorisation.
+        """Drop the cached factorization.
 
         The context holds a live CHOLMOD factor whose ``L`` carries the full
         Cholesky fill-in — the dominant memory of the setup, hundreds of MB at
-        n = 60,000 — plus the symmetrised matrix.  A sampler refits once and
+        n = 60,000 — plus the symmetrized matrix.  A sampler refits once and
         then runs for the rest of the chain, so holding them for that whole time
         buys nothing.
         """
@@ -295,7 +295,7 @@ class LogdetRefitter:
     # ``make_logdet_jax_fn`` does — swapping it at the refit point changes the
     # jit cache key and forces a full retrace, measured at ~1.1 s on a Gaussian
     # SAR chain.  That is more than an order of magnitude above the refit's own
-    # factorisation cost, so on this backend the naive refit is a net loss.
+    # factorization cost, so on this backend the naive refit is a net loss.
     #
     # The fix is to carry the interpolant as *traced arrays of fixed shape*:
     # zero-pad to a capacity large enough for any order the refit may select,
@@ -380,7 +380,7 @@ class LogdetRefitter:
         """Build the loose interpolant that carries warmup up to the refit.
 
         Returns ``(scalar_fn, vec_fn, order)``.  Costs
-        :meth:`scout_order` factorisations against the
+        :meth:`scout_order` factorizations against the
         :meth:`capacity` the un-refitted run would have paid, and that
         difference is the whole of the refit's speed argument — see
         :data:`DEFAULT_SCOUT_TOL`.
@@ -390,7 +390,7 @@ class LogdetRefitter:
         return scalar_fn, vec_fn, order
 
     def _numpy_fns(self, pre):
-        """NumPy ``(scalar, vectorised)`` evaluators for an already-fitted precompute."""
+        """NumPy ``(scalar, vectorized)`` evaluators for an already-fitted precompute."""
         T = self.T
         if self.method in ("cheb_cholesky", "lu_cheb"):
             # ``clenshaw_*`` already apply the panel factor, so no wrapper is
@@ -452,16 +452,16 @@ class LogdetRefitter:
         ``tol`` overrides the instance target, which is how the scouting fit of
         :data:`DEFAULT_SCOUT_TOL` is built through this same path.
 
-        Set ``with_numpy_fns`` to also get the scalar and vectorised NumPy
+        Set ``with_numpy_fns`` to also get the scalar and vectorized NumPy
         evaluators for the *same* fit — the JAX Gibbs path needs them for the
         post-chain pointwise log-likelihood, and refitting to obtain them would
-        double the factorisation count.  The return is then
+        double the factorization count.  The return is then
         ``(params, window, scalar_fn, vec_fn)`` instead of ``(params, window)``.
         """
         # x64 must be on *before* the arrays are made: this is often the first
         # JAX call in a run, and float32 params would later be replaced by
         # float64 ones at the refit, changing the traced dtype and forcing the
-        # retrace this whole parameterisation exists to avoid.
+        # retrace this whole parameterization exists to avoid.
         from .._jax_dispatch import ensure_x64
 
         ensure_x64()

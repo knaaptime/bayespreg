@@ -65,7 +65,7 @@ class SpatialMCMCReport:
         Relative change in 95 % HPDI width between the last third and
         the full post-warmup chain, in percent.  Large drift indicates
         the chain has not yet visited the tails enough times for the
-        interval estimate to stabilise.
+        interval estimate to stabilize.
     warnings_triggered : list of str
         Human-readable description of each adequacy check that failed.
     adequate : bool
@@ -187,7 +187,7 @@ def spatial_mcmc_diagnostic(
     Implements the practical recommendations of
     :cite:t:`wolf2018StochasticEfficiency`: report effective sample
     size and yield for the spatial dependence parameter, and check that
-    the posterior credible-interval width has stabilised.  When any
+    the posterior credible-interval width has stabilized.  When any
     threshold is violated, a :class:`UserWarning` is emitted (unless
     ``emit_warnings=False``) describing the failure and pointing to
     the actionable fix (longer chains or thinning).
@@ -208,7 +208,7 @@ def spatial_mcmc_diagnostic(
     max_hpdi_drift_pct : float, optional
         Maximum tolerated relative change in the 95 % HPDI width
         between the last third and the full post-warmup chain.  Large
-        drift indicates the chain has not yet stabilised and
+        drift indicates the chain has not yet stabilized and
         terminating now would understate uncertainty (Wolf et al.,
         2018, §"Impacts of small effective size and trace
         autocorrelation").
@@ -372,7 +372,7 @@ def spatial_mcmc_diagnostic(
                 f"95% HPDI width for '{name}' drifts by "
                 f"{hpdi_drift_pct[name]:.1f}% between the last third "
                 f"and the full chain (> {max_hpdi_drift_pct:g}%); the "
-                "credible interval has not yet stabilised. " + suggestion
+                "credible interval has not yet stabilized. " + suggestion
             )
             warnings_triggered.append(msg)
             adequate = False

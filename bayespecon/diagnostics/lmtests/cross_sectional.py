@@ -720,7 +720,7 @@ def _info_matrix_blocks_slx_robust(
     correction (:cite:p:`dogan2021BayesianRobust`, Proposition 3) for
     the **other** spatial parameter.  The SLX OLS normal equations zero
     out the γ-direction exactly, so the only non-trivial nuisance under
-    H_0: ρ = λ = 0 in the SDM/SDEM neighbourhood is the *opposite*
+    H_0: ρ = λ = 0 in the SDM/SDEM neighborhood is the *opposite*
     spatial parameter.  Without this correction, residuals from the SLX
     null carry an unconcentrated component of the true λ (resp. ρ) and
     bias the score upward — see the n = 1600 SDEM-DGP failure documented
@@ -1567,7 +1567,7 @@ def _sar_null_lambda_info(
     All five traces :math:`\mathrm{tr}(G)`, :math:`\mathrm{tr}(G^2)`,
     :math:`\mathrm{tr}(G^\top G)`, :math:`\mathrm{tr}(WG)` and
     :math:`\mathrm{tr}(W^\top G)` are **exact** and eigenvalue-free: a
-    single sparse factorisation of :math:`\bar A` (KLU/UMFPACK when
+    single sparse factorization of :math:`\bar A` (KLU when
     available, SuperLU otherwise) is reused for chunked column solves
     :math:`G_{:,J} = \bar A^{-1} W_{:,J}`, which yield
     :math:`\mathrm{tr}(G)`, :math:`\|G\|_F^2 = \mathrm{tr}(G^\top G)`,
@@ -1575,21 +1575,47 @@ def _sar_null_lambda_info(
     second backsolve on :math:`W G_{:,J}` yields :math:`\mathrm{tr}(G^2)`.
     This avoids both the :math:`O(n^3)` dense solve and the
     eigendecomposition (which is only exact for these transpose traces
-    when ``W`` is normal — row-standardised ``W`` generally is not).
+    when ``W`` is normal — row-standardized ``W`` generally is not).
     """
     n = W_sparse.shape[0]
 
     A_csc = _sp.eye(n, format="csc") - rho_mean * W_sparse
     W_csc = W_sparse.tocsc()
 
-    # One sparse factorisation, reused for every solve below.
-    backend = _select_sparse_backend()
-    if backend in ("klu", "umfpack"):
-        factor = _sparse_factor(A_csc, backend)
-        solve = factor.solve
+    # One sparse factorization, reused for every solve below.  Prefer
+    # sparsax's KLU (faster than scipy SuperLU for these structured systems)
+    # when available, falling back to the configured scikit-sparse / scipy
+    # backend.  sparsax's ``lu_factor`` + ``lu_solve_factor`` pair lets the
+    # numeric factor be reused across all chunked column solves; the
+    # scikit-sparse / scipy backends do the same via ``factor.solve``.
+    from bayespecon._jax_dispatch import _sparsax_available
+
+    if _sparsax_available():
+        import jax.numpy as jnp
+        import sparsax
+
+        from bayespecon._jax_dispatch import ensure_x64
+
+        ensure_x64()
+        _A_coo = A_csc.tocoo()
+        _Ai = jnp.asarray(_A_coo.row, dtype=jnp.int32)
+        _Aj = jnp.asarray(_A_coo.col, dtype=jnp.int32)
+        _Ax = jnp.asarray(_A_coo.data, dtype=jnp.float64)
+        _factor = sparsax.lu_factor(_Ai, _Aj, _Ax, n)
+
+        def solve(rhs):
+            return np.asarray(
+                sparsax.lu_solve_factor(_factor, np.asarray(rhs, dtype=np.float64)),
+                dtype=np.float64,
+            )
     else:
-        lu = _sp.linalg.splu(A_csc)
-        solve = lu.solve
+        backend = _select_sparse_backend()
+        if backend == "klu":
+            factor = _sparse_factor(A_csc, backend)
+            solve = factor.solve
+        else:
+            lu = _sp.linalg.splu(A_csc)
+            solve = lu.solve
 
     # G @ X_design = A⁻¹ (W @ X_design)
     WX_design = np.asarray(W_sparse @ X_design, dtype=np.float64)
@@ -1787,8 +1813,8 @@ def bayesian_robust_lm_error_sar_test(
     # mismatch the M_X-projected score and leave an O(n) bias under
     # rho != 0; using tr(M_X G) restores the bias-free score that the
     # Schur correction expects.  At rho = 0, G = W and tr(M_X W) = 0
-    # for row-standardised W with intercept, recovering the OLS-null
-    # behaviour.
+    # for row-standardized W with intercept, recovering the OLS-null
+    # behavior.
     g_rho_centered = g_rho - (sigma_draws**2) * tr_MxG
 
     coef = V_lr / (V_rr + 1e-12)

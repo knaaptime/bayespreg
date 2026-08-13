@@ -17,7 +17,7 @@ import scipy.sparse as sp
 from formulaic import model_matrix
 from libpysal.graph import Graph
 
-from ..._lazy_deps import az, pm
+from ..._lazy_deps import az
 from ..._logdet import (
     make_logdet_fn,
     make_logdet_grad_numpy_vec_fn,
@@ -54,7 +54,7 @@ def gelman_default_beta_prior(
         Column labels aligned with ``design``.  Used to detect
         intercept-like columns named ``"intercept"``.
     scale : float, default 2.5
-        Multiplier on the standardised prior scale.
+        Multiplier on the standardized prior scale.
 
     Returns
     -------
@@ -89,10 +89,67 @@ def gelman_default_beta_prior(
     return beta_mu, beta_sigma
 
 
+_ROW_STD_ATOL = 1e-6
+
+
+def _row_sums_csr(W_csr: sp.csr_matrix) -> np.ndarray:
+    """Row sums of ``W`` as a flat float array."""
+    return np.asarray(W_csr.sum(axis=1)).ravel()
+
+
+def _isolate_mask_csr(W_csr: sp.csr_matrix) -> np.ndarray:
+    """Boolean mask of *isolates* — units whose row sums to zero.
+
+    Isolates are units with no neighbour inside the bandwidth, a normal outcome
+    of distance-band contiguity: row-standardizing leaves their row at 0 because
+    there is nothing to divide by.  They are valid weights, but they do break
+    ``W1 = 1``, so the spatial-multiplier closed forms carry an explicit isolate
+    term rather than assuming row-stochasticity.  See
+    :meth:`SpatialEffectsMixin._batch_mean_row_sum`.
+    """
+    return np.abs(_row_sums_csr(W_csr)) <= _ROW_STD_ATOL
+
+
 def _is_row_standardized_csr(W_csr: sp.csr_matrix) -> bool:
-    """Return True when each row sum is numerically close to one."""
-    row_sums = np.asarray(W_csr.sum(axis=1)).ravel()
-    return bool(np.allclose(row_sums, 1.0, atol=1e-6))
+    """Return True when every non-isolate row sum is numerically close to one.
+
+    Isolates are accepted rather than treated as a standardization failure:
+    a distance-band ``W`` with unreachable units is correctly standardized, and
+    rejecting it would push a common, valid case onto the eigenvalue path this
+    library exists to avoid.  The closed forms stay available — they just take
+    an isolate correction (see :func:`_isolate_mask_csr`).
+
+    An all-zero ``W`` has no standardized row to judge and returns False.
+    """
+    row_sums = _row_sums_csr(W_csr)
+    connected = ~_isolate_mask_csr(W_csr)
+    return bool(
+        connected.any() and np.allclose(row_sums[connected], 1.0, atol=_ROW_STD_ATOL)
+    )
+
+
+def _check_row_standardization(W_csr: sp.csr_matrix, *, stacklevel: int = 4) -> bool:
+    """Return the row-standardization flag, warning when ``W`` looks unstandardized.
+
+    Read off the matrix rather than a :class:`~libpysal.graph.Graph`'s
+    ``transformation`` tag.  The tag records only that ``transform('r')`` was
+    called, not what came out; the matrix is the one reliable witness, and
+    checking it costs a single ``nnz``-length reduction.
+    """
+    if _is_row_standardized_csr(W_csr):
+        return True
+    warnings.warn(
+        "W does not appear to be row-standardized (row sums ∉ {0, 1}). "
+        "Most spatial models assume W is row-standardized; results may be "
+        "unreliable otherwise. For a scipy sparse matrix normalize rows "
+        "manually (divide each row by its sum). To use a libpysal.graph.Graph "
+        "set its transformation attribute: "
+        "graph = graph.transform('r'). "
+        "Rows summing to 0 are isolates — those are valid and not the problem.",
+        UserWarning,
+        stacklevel=stacklevel,
+    )
+    return False
 
 
 def resolve_W(
@@ -100,7 +157,7 @@ def resolve_W(
     n: int,
     T: int = 1,
 ) -> tuple[sp.csr_matrix, bool]:
-    """Validate and normalise a spatial weights argument to CSR.
+    """Validate and normalize a spatial weights argument to CSR.
 
     Unified W parser for cross-section (T=1) and panel (T>1) models.
     Accepts a :class:`libpysal.graph.Graph` or any :class:`scipy.sparse`
@@ -123,7 +180,7 @@ def resolve_W(
     W_csr : scipy.sparse.csr_matrix
         Row-compressed version of W.
     row_std : bool
-        Whether W appears to be row-standardised.
+        Whether W appears to be row-standardized.
 
     Raises
     ------
@@ -135,15 +192,12 @@ def resolve_W(
     Warns
     -----
     UserWarning
-        If *W* does not appear to be row-standardised.
+        If *W* does not appear to be row-standardized.
     """
     if isinstance(W, Graph):
         W_csr = W.sparse.tocsr().astype(np.float64)
-        transform = getattr(W, "transformation", None)
-        row_std = transform in ("r", "R") or _is_row_standardized_csr(W_csr)
     elif sp.issparse(W):
         W_csr = W.tocsr().astype(np.float64)
-        row_std = _is_row_standardized_csr(W_csr)
     elif hasattr(W, "sparse") and hasattr(W, "transform"):
         raise TypeError(
             "W appears to be a legacy libpysal.weights.W object. "
@@ -178,18 +232,7 @@ def resolve_W(
                 "W must be an n\u00d7n matrix."
             )
 
-    if not row_std:
-        warnings.warn(
-            "W does not appear to be row-standardised (row sums \u2260 1). "
-            "Most spatial models assume W is row-standardised; results may be "
-            "unreliable otherwise. For a scipy sparse matrix normalise rows "
-            "manually (divide each row by its sum). To use a libpysal.graph.Graph "
-            "set its transformation attribute: "
-            "graph = graph.transform('r').",
-            UserWarning,
-            stacklevel=3,
-        )
-    return W_csr, row_std
+    return W_csr, _check_row_standardization(W_csr)
 
 
 def _parse_W(
@@ -418,27 +461,28 @@ class SharedSpatialMethods:
         """
         return [self._feature_names[i] for i in self._nonintercept_indices]
 
-    def _add_nu_prior(self, model: pm.Model) -> pm.Model:
-        """Add the degrees-of-freedom prior for robust (Student-t) models.
+    @property
+    def _nu(self) -> float:
+        """Student-t degrees of freedom for robust models (a fixed constant).
 
-        Called inside ``_build_pymc_model`` when ``self.robust`` is True.
-        Uses an :math:`\\mathrm{Exp}(\\lambda_\\nu)` prior on ``nu`` with rate ``nu_lam`` (default
-        1/30, giving mean ≈ 30, favouring near-Normal tails). A lower
-        bound of 2 is enforced so that the variance exists.
+        Following LeSage (2009), :math:`\\nu` is a fixed hyperparameter (his
+        ``rval``, default 4) rather than a sampled quantity.  Fixing it is
+        what lets the NUTS and Gibbs paths target *identical* posteriors: the
+        Gibbs sampler reaches the Student-t likelihood through the scale
+        mixture :math:`\\varepsilon \\sim N(0, \\sigma^2 V)`,
+        :math:`V = \\mathrm{diag}(v_i)`, with :math:`r/v_i \\sim \\chi^2(r)`,
+        whose conditional is only conjugate for known :math:`r`.
 
-        Parameters
-        ----------
-        model : pymc.Model
-            The model context in which to add the ``nu`` prior.
-
-        Returns
-        -------
-        pymc.Model
-            The same model context (``nu`` is added as a side effect).
+        Values around 4 give genuinely fat tails (outliers are downweighted);
+        large values (≳ 30) approach the Normal.  A lower bound of 2 is
+        enforced so the variance exists.
         """
-        nu_lam = self.priors.get("nu_lam", 1.0 / 30.0)
-        pm.Truncated("nu", pm.Exponential.dist(lam=nu_lam), lower=2.0)
-        return model
+        nu = float(self.priors.get("nu", 4.0))
+        if nu <= 2.0:
+            raise ValueError(
+                f"priors['nu'] must be > 2 so the Student-t variance exists; got {nu}."
+            )
+        return nu
 
     def _beta_names(self) -> list[str]:
         """Return coefficient labels used for posterior summaries.
@@ -615,10 +659,59 @@ class SharedSpatialMethods:
         (e.g. by the eigenvalue logdet method); Chebyshev / trace / sparse-grid
         methods never trigger it.  Cross-section models return ``None`` when no
         ``W`` was supplied (panel models always have a ``W``).
+
+        Raises
+        ------
+        ValueError
+            If ``n`` exceeds ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500).
+            The eigenvalue logdet method densifies ``W`` and runs an O(n³)
+            eigendecomposition, which is prohibitively expensive for large
+            graphs.  Use ``logdet_method="cheb_cholesky"`` (symmetric ``W``)
+            or ``logdet_method="aaa"`` (non-symmetric ``W``) instead.
         """
         if self._W_sparse is None:
             return None
+        from ..._logdet._config import _eigen_hard_max_n
+
+        n = self._W_sparse.shape[0]
+        if n > _eigen_hard_max_n():
+            raise ValueError(
+                f"Eigenvalue logdet/effect computation requires densifying W "
+                f"(n={n} > BAYESPECON_LOGDET_EIGEN_HARD_MAX_N={_eigen_hard_max_n()}). "
+                f"This is O(n³) and O(n²) memory. Use "
+                f'logdet_method="cheb_cholesky" (symmetric W) or '
+                f'logdet_method="aaa" (non-symmetric W) instead, or raise '
+                f"BAYESPECON_LOGDET_EIGEN_HARD_MAX_N."
+            )
         return np.linalg.eigvals(self._W_sparse.toarray().astype(np.float64))
+
+    @cached_property
+    def _W_spectral_bounds(self) -> tuple[float, float]:
+        r"""``(λ_max, λ_min)`` bounds on ``W``'s spectrum, without densifying.
+
+        The Gibbs samplers need these only to bracket ``A_ρ = I - ρW``: the
+        SPD guard ``min(1-ρλ_max, 1-ρλ_min) > 0``, the Chebyshev interval for
+        the iterative fallback, and the Krylov convergence radius. All three
+        are correct with *bounds* — none needs the actual spectrum.
+
+        Taking them from :attr:`_W_eigs` costs a dense O(n³) eigendecomposition
+        that dominated the whole fit (89% of a 12.8 s run at n=4900) and hard
+        failed past ``BAYESPECON_LOGDET_EIGEN_HARD_MAX_N``. Avoiding it is the
+        point of the sparse factorizations.
+
+        For row-standardized ``W`` the bounds are not merely cheap but
+        *exact*: ``W1 = 1`` makes 1 an eigenvalue, and row-stochasticity puts
+        every eigenvalue in the closed unit disc, so ``λ_max = 1``. Otherwise
+        fall back to the Gershgorin/``∞``-norm bound ``|λ| ≤ max_i Σ_j |W_ij|``,
+        which is O(nnz).
+        """
+        if self._W_sparse is None:
+            return 1.0, -1.0
+        if getattr(self, "_is_row_std", False):
+            return 1.0, -1.0
+        radius = float(abs(self._W_sparse).sum(axis=1).max())
+        radius = max(radius, 1e-12)
+        return radius, -radius
 
     @cached_property
     def _T_ww(self) -> float:
@@ -665,7 +758,7 @@ class SharedSpatialMethods:
     ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, np.ndarray]]:
         r"""Compute Bayesian inference for direct, indirect, and total impacts.
 
-        Computes impact measures for each posterior draw, then summarises
+        Computes impact measures for each posterior draw, then summarizes
         the posterior distribution with means, 95% credible intervals, and
         Bayesian p-values.  This is the fully Bayesian analog of the
         simulation-based approach in :cite:t:`lesage2009IntroductionSpatial`
@@ -675,7 +768,7 @@ class SharedSpatialMethods:
         Models without a spatial lag on y do not exhibit global
         feedback propagation through :math:`(I-\\rho W)^{-1}`. However,
         models with spatially lagged covariates (SLX, SDEM) can still
-        have non-zero neighbour spillovers captured in the indirect term.
+        have non-zero neighbor spillovers captured in the indirect term.
 
         Parameters
         ----------
@@ -826,7 +919,7 @@ class SharedSpatialMethods:
 
     @cached_property
     def _logdet_numpy_vec_fn(self):
-        """Vectorised pure-numpy logdet evaluator (lazy)."""
+        """Vectorized pure-numpy logdet evaluator (lazy)."""
         self._require_W()
         return make_logdet_numpy_vec_fn(
             self._W_sparse,
@@ -839,7 +932,7 @@ class SharedSpatialMethods:
 
     @cached_property
     def _logdet_grad_numpy_vec_fn(self):
-        """Vectorised ``(rho_arr) -> g(ρ)`` gradient of the **N×N** logdet (lazy).
+        """Vectorized ``(rho_arr) -> g(ρ)`` gradient of the **N×N** logdet (lazy).
 
         Built with ``T=1`` even for panels — the direct-effect trace is a
         per-period property of the N×N spatial multiplier, independent of
@@ -885,12 +978,30 @@ class SharedSpatialMethods:
         spatial weights matrix was supplied.
 
         Eigenvalues are sorted by real part (descending) for numerical
-        stability.  Row-standardised W is generally non-symmetric, so V
+        stability.  Row-standardized W is generally non-symmetric, so V
         and Vinv are complex; taking ``.real`` prematurely drops imaginary
         parts and produces wrong results for spatial effects.
+
+        Raises
+        ------
+        ValueError
+            If ``n`` exceeds ``BAYESPECON_LOGDET_EIGEN_MAX_N`` (default 500).
+            See :attr:`_W_eigs` for details and alternatives.
         """
         if self._W_sparse is None:
             return None
+        from ..._logdet._config import _eigen_hard_max_n
+
+        n = self._W_sparse.shape[0]
+        if n > _eigen_hard_max_n():
+            raise ValueError(
+                f"Eigenvalue logdet/effect computation requires densifying W "
+                f"(n={n} > BAYESPECON_LOGDET_EIGEN_HARD_MAX_N={_eigen_hard_max_n()}). "
+                f"This is O(n³) and O(n²) memory. Use "
+                f'logdet_method="cheb_cholesky" (symmetric W) or '
+                f'logdet_method="aaa" (non-symmetric W) instead, or raise '
+                f"BAYESPECON_LOGDET_EIGEN_HARD_MAX_N."
+            )
         W_dense = np.asarray(self._W_sparse.toarray(), dtype=np.float64)
         eigs, V = np.linalg.eig(W_dense)
         Vinv = np.linalg.inv(V)
@@ -936,6 +1047,39 @@ class SharedSpatialMethods:
         g = np.asarray(self._logdet_grad_numpy_vec_fn(rho_draws), dtype=np.float64)
         return -g / n
 
+    @cached_property
+    def _isolate_mask(self) -> np.ndarray:
+        """Boolean mask of units with no neighbours — see :func:`_isolate_mask_csr`.
+
+        Isolates are valid weights but break ``W1 = 1``, so the closed forms
+        below carry an explicit isolate term.  Detecting them is one
+        ``nnz``-length reduction; the alternative — routing every isolate-bearing
+        ``W`` to :attr:`_W_eigendecomposition` — is O(n³) and would defeat the
+        sparse factorizations this library is built on.
+        """
+        if self._W_sparse is None:
+            return np.zeros(0, dtype=bool)
+        return _isolate_mask_csr(self._W_sparse)
+
+    @cached_property
+    def _n_isolates(self) -> int:
+        """Number of units with no neighbours."""
+        return int(self._isolate_mask.sum())
+
+    def _multiplier_row_sums(self, rho: float) -> np.ndarray:
+        """Per-unit row sums of ``(I - ρW)⁻¹`` for row-standardized ``W``.
+
+        ``1/(1 − ρ)`` on connected units, and exactly 1 on isolates, whose row
+        of the multiplier is just ``e_i``.  O(n) and factorization-free — the
+        alternative is carrying an extra ``ones`` column through the sparse
+        solve on every draw.
+        """
+        n = int(self._W_sparse.shape[0])
+        out = np.full(n, 1.0 / (1.0 - float(rho)), dtype=np.float64)
+        if self._n_isolates:
+            out[self._isolate_mask] = 1.0
+        return out
+
     def _batch_mean_row_sum(self, rho_draws: np.ndarray) -> np.ndarray:
         """Compute mean row sum of (I - rho*W)^{-1} for each posterior draw.
 
@@ -943,8 +1087,14 @@ class SharedSpatialMethods:
         (N·T)×(N·T) Kronecker product), because spatial effects are defined
         in terms of the cross-sectional spatial multiplier.
 
-        For row-standardised W this is the scalar ``1/(1 - rho)``.
-        For non-row-standardised W the eigenvalue decomposition is used:
+        For row-standardized W this is ``1/(1 - rho)`` on the connected units.
+        An isolate's row of ``(I - rho*W)^{-1}`` is just ``e_i``, so its row sum
+        is exactly 1 — giving ``((n - m)/(1 - rho) + m)/n`` for ``m`` isolates.
+        Still O(1) per draw: isolates cost a count, not a decomposition.  The
+        ratio ``(n - m)/n`` is invariant to the Kronecker form, so this is
+        correct whether ``_W_sparse`` is the N×N or the (N·T)×(N·T) matrix.
+
+        For non-row-standardized W the eigenvalue decomposition is used:
         ``mean_row_sum = (1/n) * ones' V diag(1/(1-rho*omega)) V^{-1} ones``,
         where the vector ``c = V^{-1} ones`` is pre-computed once.
 
@@ -959,7 +1109,11 @@ class SharedSpatialMethods:
             Mean row sum for each draw.
         """
         if self._is_row_std:
-            return 1.0 / (1.0 - rho_draws)
+            m = self._n_isolates
+            if m == 0:
+                return 1.0 / (1.0 - rho_draws)
+            n = int(self._W_sparse.shape[0])
+            return ((n - m) / (1.0 - rho_draws) + m) / n
 
         # Eigenvalue-based computation using shared eigendecomposition cache.
         decomp = self._W_eigendecomposition
@@ -983,11 +1137,16 @@ class SharedSpatialMethods:
         (N·T)×(N·T) Kronecker product), because spatial effects are defined
         in terms of the cross-sectional spatial multiplier.
 
-        For row-standardised W this equals ``1/(1 - rho)`` (same as
+        For row-standardized W this equals ``1/(1 - rho)`` (same as
         ``_batch_mean_row_sum``) because row sums of M@W = row sums of M
-        when W is row-standardised.
+        when W is row-standardized.
 
-        For non-row-standardised W the eigenvalue decomposition is used:
+        Isolates differ here.  Since ``M W = (M - I)/rho``, a connected row of
+        ``M@W`` still sums to ``1/(1 - rho)`` but an isolate row sums to
+        ``(1 - 1)/rho = 0`` — so the mean is ``(n - m)/(n(1 - rho))``, *not* the
+        same as :meth:`_batch_mean_row_sum`.  Still O(1) per draw.
+
+        For non-row-standardized W the eigenvalue decomposition is used:
         ``mean_row_sum_MW = (1/n) * ones' V diag(omega/(1-rho*omega)) V^{-1} ones``.
 
         Parameters
@@ -1001,7 +1160,11 @@ class SharedSpatialMethods:
             Mean row sum of M@W for each draw.
         """
         if self._is_row_std:
-            return 1.0 / (1.0 - rho_draws)
+            m = self._n_isolates
+            if m == 0:
+                return 1.0 / (1.0 - rho_draws)
+            n = int(self._W_sparse.shape[0])
+            return (n - m) / (n * (1.0 - rho_draws))
 
         # Eigenvalue-based computation using shared eigendecomposition cache.
         decomp = self._W_eigendecomposition

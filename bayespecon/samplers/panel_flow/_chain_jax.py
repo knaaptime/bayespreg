@@ -130,7 +130,7 @@ def run_gaussian_panel_flow_chain_jax(
     y : array_like of shape (n, n, T) or (n², T)
         Observed flow matrix over time.
     W : array_like of shape (n, n)
-        Row-standardised spatial weights matrix.
+        Row-standardized spatial weights matrix.
     X : array_like of shape (n², k) or (n², T, k)
         Covariate array. If time-invariant, shape (n², k).
     n_draws : int

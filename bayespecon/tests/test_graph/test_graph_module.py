@@ -13,7 +13,7 @@ from libpysal.graph import Graph
 
 
 def _make_ring_graph(n: int) -> Graph:
-    """Build a simple ring-contiguity Graph for n units (row-standardised)."""
+    """Build a simple ring-contiguity Graph for n units (row-standardized)."""
     focal = np.concatenate([np.arange(n), np.arange(n)])
     neighbor = np.concatenate([np.roll(np.arange(n), 1), np.roll(np.arange(n), -1)])
     weight = np.ones(len(focal), dtype=float)
@@ -42,12 +42,12 @@ class TestValidateGraph:
         with pytest.raises(TypeError, match="libpysal.graph.Graph"):
             _graph_to_csr(np.eye(4))
 
-    def test_warns_if_not_row_standardised(self):
+    def test_warns_if_not_row_standardized(self):
         from bayespecon.models._base._shared import resolve_W
 
-        # Build a non-row-standardised graph by using "b" transformation
+        # Build a non-row-standardized graph by using "b" transformation
         G = _make_ring_graph(5).transform("b")
-        with pytest.warns(UserWarning, match="row-standardised"):
+        with pytest.warns(UserWarning, match="row-standardized"):
             resolve_W(G, n=5)
 
 
@@ -110,7 +110,7 @@ class TestWeightMatrixShapes:
 
 class TestWeightMatrixKronecker:
     def test_network_equals_dest_at_origin(self):
-        """W_w = W_d @ W_o / (row normalisation) for row-stochastic W."""
+        """W_w = W_d @ W_o / (row normalization) for row-stochastic W."""
         from bayespecon.graph import (
             destination_weights,
             network_weights,

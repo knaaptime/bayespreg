@@ -3,7 +3,7 @@
 This module provides:
 
 - A small ``TreeNode`` dataclass that represents the Koley & Bera / stge_kb
-  decision trees as data, parameterised per starting model type.
+  decision trees as data, parameterized per starting model type.
 - ``evaluate(node, sig_lookup, predicate_lookup)`` which walks the tree and
   returns the recommended model name plus the traversed path.
 - ``render_ascii`` and ``render_graphviz`` which render the tree (with the
@@ -241,7 +241,7 @@ def render_graphviz(
 ) -> Any:
     """Render the decision tree as a ``graphviz.Digraph``.
 
-    The traversed path is drawn with thicker, coloured edges and filled
+    The traversed path is drawn with thicker, colored edges and filled
     nodes; the chosen leaf is highlighted.  Three built-in themes are
     provided (``"default"``, ``"minimal"``, ``"dark"``) and users may
     supply a custom :class:`~bayespecon.diagnostics._decision_style.GraphTheme`
@@ -461,7 +461,7 @@ def _sar_spec() -> TreeNode:
     # from a robust test.
     #
     # WX channel: if naive ``LM-WX`` from the SAR fit fires AND the robust
-    # version survives the ρ-orthogonalisation, the omitted block is WX
+    # version survives the ρ-orthogonalization, the omitted block is WX
     # (→ SDM).  If naive LM-WX is silent, or fires but the robust check
     # clears it, fall through to the error channel.
     #
@@ -507,7 +507,7 @@ def _sem_spec() -> TreeNode:
     # label, see SEM diagnostic suite) settles the ambiguity.
     #
     # Robust-after-naive precondition: a naive precursor (``LM-Lag`` or
-    # ``LM-WX``) must fire before consulting its Schur-orthogonalised
+    # ``LM-WX``) must fire before consulting its Schur-orthogonalized
     # robust counterpart.  When both naive precursors fire AND both robust
     # tests survive, ``Robust-LM-Lag`` p vs ``Robust-LM-WX`` p settles
     # which direction the SEM fit is missing the most evidence in:
@@ -1082,12 +1082,12 @@ def _ols_flow_spec() -> TreeNode:
 
 
 def _sar_flow_spec() -> TreeNode:
-    """SARFlow decision tree (Neyman-orthogonalised robust marginals).
+    """SARFlow decision tree (Neyman-orthogonalized robust marginals).
 
     Robust marginals are queried in sequence (destination → origin →
     network); each is tested only once the previous has been checked.  Any
     significant direction confirms the SARFlow fit is warranted.  If none
-    survive the orthogonalisation the simpler OLSFlow is preferred.
+    survive the orthogonalization the simpler OLSFlow is preferred.
     """
     return TreeNode(
         kind="test",

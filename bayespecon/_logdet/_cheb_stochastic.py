@@ -44,7 +44,7 @@ The power traces need at most two sparse-sparse products (``tr(W³) = ⟨W², W�
 ``tr(W⁴) = ‖W²‖_F²``, ``tr(W⁵) = ⟨W², W³ᵀ⟩``, ``tr(W⁶) = ‖W³‖_F²``), so ``d ≤ 2``
 is free, ``d ≤ 4`` costs one product and ``d ≤ 6`` two.  Fill-in makes those
 products expensive on high-degree graphs, so :func:`_resolve_exact_depth`
-degrades ``d`` to 2 above ``max_degree`` mean neighbours.
+degrades ``d`` to 2 above ``max_degree`` mean neighbors.
 
 **Control variates only reduce variance**, so they are wasted — and near
 ``ρ = 1`` actively harmful — when Chebyshev *truncation* is the binding error
@@ -58,7 +58,7 @@ pinned ``order`` is too low for the requested interval.
 **Deflation** (optional): When ``n_deflate > 0`` *and* ``W`` is symmetrizable
 (undirected graph), the top-``n_deflate`` **eigenpairs** (by magnitude) of the
 D-symmetrized, rescaled operator ``W̃_sym = D^{1/2} W̃ D^{-1/2}`` are captured
-exactly via ``eigsh`` (applied matrix-free, never materialised) and removed
+exactly via ``eigsh`` (applied matrix-free, never materialized) and removed
 from the residual; stochastic Chebyshev then runs only on the deflated
 residual, whose Frobenius norm — and hence Hutchinson variance — is smaller.
 Because Chebyshev traces are similarity-invariant, ``tr(T_j(W̃_sym)) =
@@ -144,7 +144,7 @@ def _estimate_spectral_bounds(
 ) -> tuple[float, float]:
     """Estimate [λ_min, λ_max] of W.
 
-    For row-standardised W, λ_max = 1 (Perron) and |λ| ≤ ‖W‖_∞ = 1
+    For row-standardized W, λ_max = 1 (Perron) and |λ| ≤ ‖W‖_∞ = 1
     (Gershgorin), so the conservative bracket [-1, 1] is always valid.
     We use power iteration to tighten λ_max, and Gershgorin for λ_min.
 
@@ -175,10 +175,10 @@ def _estimate_spectral_bounds(
         v /= norm
     lam_max = float(np.real(v @ (W @ v)))
 
-    # For row-standardised W, λ_max = 1 (Perron).  Be slightly conservative.
+    # For row-standardized W, λ_max = 1 (Perron).  Be slightly conservative.
     lam_max = max(lam_max, 1.0)
 
-    # Gershgorin bound: |λ| ≤ ‖W‖_∞ = max row sum = 1 for row-standardised
+    # Gershgorin bound: |λ| ≤ ‖W‖_∞ = max row sum = 1 for row-standardized
     # Conservative: lam_min = -lam_max
     lam_min = -lam_max
 
@@ -282,6 +282,31 @@ def _resolve_exact_depth(
 # Order selection against the probe-noise floor
 # ---------------------------------------------------------------------------
 
+_POLE_MARGIN = 1e-6
+"""Relative margin holding ρ off the stability boundary ``1/λ``."""
+
+
+def _clamp_off_pole(rho: float, lam_min: float, lam_max: float) -> float:
+    """Pull ``rho`` just inside the stability interval ``(1/λ_min, 1/λ_max)``.
+
+    ``log|1 − ρλ|`` has a logarithmic pole at ``ρ = 1/λ``, and the
+    Clenshaw-Curtis nodes of :func:`_log_cheb_coeffs` include both spectral
+    endpoints, so ρ exactly on the boundary makes the very first node diverge.
+    Row-standardized ``W`` puts that boundary at ρ = 1 — which is also the
+    default ``rho_max`` — so the untreated endpoint is the *common* case, not a
+    rare one.  Clamping costs nothing statistically: ρ = 1/λ_max is a unit root,
+    outside the stationary region the expansion is meant to cover.  Clamping the
+    argument keeps the exact coefficients of a neighbouring ρ, rather than
+    fabricating a finite value at a genuine pole the way flooring the log would.
+
+    This is the stochastic-Chebyshev counterpart of
+    :func:`.._chol_cheb._clamp_interval`, which does the same job for the
+    Cholesky/LU interpolants.
+    """
+    hi = (1.0 - _POLE_MARGIN) / lam_max if lam_max > 0.0 else np.inf
+    lo = (1.0 - _POLE_MARGIN) / lam_min if lam_min < 0.0 else -np.inf
+    return float(min(max(float(rho), lo), hi))
+
 
 def _probe_noise_rtol(rho: float, n: int, n_probes: int) -> float:
     """Target truncation, relative to ``n``, that sits under the probe noise.
@@ -330,6 +355,12 @@ def cheb_stochastic_order(
     r = max(abs(float(rho_min)), abs(float(rho_max)))
     if r <= 0.0:
         return int(floor)
+    # Both the target and the coefficients must refer to the same ρ, so clamp
+    # once here rather than leaving each to its own guard.  Without this the
+    # default interval (rho_max = 1, λ_max = 1) lands exactly on the pole, the
+    # tail bound comes back inf, no order clears it, and the selection below
+    # silently falls through to ``cap`` — safe, but not a selection.
+    r = _clamp_off_pole(r, lam_min, lam_max)
     target = _probe_noise_rtol(r, n, n_probes)
     coeffs = np.abs(_log_cheb_coeffs(r, lam_min, lam_max, probe_order))
     tail = np.cumsum(coeffs[::-1])[::-1]
@@ -444,7 +475,7 @@ def _deflated_moments(
     Captures the top-``r`` eigenpairs (by magnitude) of the D-symmetrized,
     rescaled operator ``W̃_sym`` exactly and estimates the remaining moments
     on the deflated residual.  Both operators are applied matrix-free — the
-    ``n × n`` low-rank correction is never materialised.
+    ``n × n`` low-rank correction is never materialized.
 
     Combination (deflated directions sit at eigenvalue 0 in the residual)::
 
@@ -532,7 +563,8 @@ def _log_cheb_coeffs(
     Parameters
     ----------
     rho : float
-        Spatial autoregressive parameter.
+        Spatial autoregressive parameter.  Clamped into the pole-free interval
+        ``(1/λ_min, 1/λ_max)`` by :func:`_clamp_off_pole` before use.
     lam_min, lam_max : float
         Spectral bounds of W.
     order : int
@@ -543,6 +575,10 @@ def _log_cheb_coeffs(
     np.ndarray, shape (order + 1,)
         Chebyshev coefficients ``c_0, c_1, ..., c_order``.
     """
+    # The nodes below include x = ±1, i.e. λ = λ_max and λ = λ_min, so ρ on the
+    # stability boundary would evaluate log(0).  Clamp inside it first.
+    rho = _clamp_off_pole(rho, lam_min, lam_max)
+
     a = 1.0 - rho * (lam_max + lam_min) / 2.0
     b = rho * (lam_max - lam_min) / 2.0
 
@@ -604,7 +640,7 @@ def cheb_stochastic_logdet_precompute(
         Number of leading moments to replace with exact, probe-free values
         (Hutchinson control variates).  ``-1`` auto-selects
         :data:`DEFAULT_N_EXACT`; ``0``/``1`` reproduce the historical
-        behaviour.  Depths above 2 need sparse-sparse products and are
+        behavior.  Depths above 2 need sparse-sparse products and are
         degraded to 2 on graphs denser than ``max_degree``.  A depth above 1
         is also degraded to 1 when ``order`` is explicitly pinned too low for
         ``[rho_min, rho_max]``, since control variates cannot help when

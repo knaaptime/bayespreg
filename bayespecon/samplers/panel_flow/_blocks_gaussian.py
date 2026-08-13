@@ -19,6 +19,7 @@ bayespecon.samplers.panel_flow._state
 from __future__ import annotations
 
 import numpy as np
+import scipy.linalg
 from scipy.stats import truncnorm as _truncnorm
 
 from .._utils._slice import SliceWidthState, slice_sample_1d_adaptive
@@ -171,15 +172,17 @@ def _sample_beta_panel(
             XtX_sum += Xt_slice.T @ Xt_slice
             XtEta += Xt_slice.T @ eta[:, t]
 
-    # Posterior precision and mean
+    # Posterior precision and mean — use Cholesky for stability and speed.
     prec_post = cache.beta_prior_prec + XtX_sum / sigma2_u
-    cov_post = np.linalg.inv(prec_post)
-    mean_post = cov_post @ (
-        cache.beta_prior_prec @ cache.beta_prior_mean + XtEta / sigma2_u
-    )
+    L_prec = np.linalg.cholesky(prec_post)  # prec_post = L L'
+    rhs = cache.beta_prior_prec @ cache.beta_prior_mean + XtEta / sigma2_u
+    mean_post = scipy.linalg.cho_solve((L_prec, True), rhs)
 
-    # Draw
-    beta_new = rng.multivariate_normal(mean_post, cov_post)
+    # Draw: β = mean + (L_prec')⁻¹ z  (cov = (L L')⁻¹ = (L')⁻¹ L⁻¹)
+    z = rng.standard_normal(len(state.beta))
+    beta_new = mean_post + scipy.linalg.solve_triangular(
+        L_prec, z, lower=True, trans="T"
+    )
     return beta_new
 
 

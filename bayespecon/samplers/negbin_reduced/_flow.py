@@ -16,7 +16,7 @@ The sampler has four blocks per sweep:
 
 1. **ω** — Pólya–Gamma augmentation (shared with SAR-NB core).
 2. **β** — Conjugate Gaussian given :math:`\\tilde X = A^{-1} X`.
-3. **ρ** — 1-D adaptive slice on each spatial parameter (β marginalised).
+3. **ρ** — 1-D adaptive slice on each spatial parameter (β marginalized).
 4. **α** — 1-D slice on log(α) (shared with SAR-NB core).
 
 There is no :math:`\\sigma` parameter — spatial dependence enters only
@@ -70,7 +70,7 @@ class FlowReducedGibbsState:
         Cross spatial parameter (None for separable models where
         rho_w = -rho_d * rho_o is deterministic).
     alpha : float
-        NB dispersion (NB2 parameterisation).
+        NB dispersion (NB2 parameterization).
     omega : ndarray, shape (N,)
         Pólya–Gamma auxiliary variables (N = n²).
     """
@@ -91,12 +91,12 @@ class FlowReducedGibbsCache:
     Wd, Wo, Ww : scipy.sparse.csr_matrix, shape (N, N)
         Flow weight matrices (destination, origin, cross).
     W_csc : scipy.sparse.csc_matrix, shape (n, n)
-        Row-standardised regional weights in CSC format (for the
+        Row-standardized regional weights in CSC format (for the
         separable Kronecker solve and Krylov basis).
     n : int
         Number of regions (A is N×N where N = n²).
     separable : bool
-        If True, use Kronecker factorisation (rho_w = -rho_d * rho_o).
+        If True, use Kronecker factorization (rho_w = -rho_d * rho_o).
     rho_lower, rho_upper : float
         Support bounds for each ρ.
     krylov_degree : int
@@ -154,7 +154,7 @@ class FlowReducedGibbsCache:
         self.krylov_reuse_threshold = krylov_reuse_threshold
 
         # Eigenvalue bounds for the regional W (n×n).
-        # For row-standardised W: eigenvalues in [-1, 1].
+        # For row-standardized W: eigenvalues in [-1, 1].
         try:
             eigvals = sp.linalg.eigsh(W_csc.astype(np.float64), k=1, which="LM")
             self.W_eig_max = float(np.max(np.abs(eigvals[0])))
@@ -194,7 +194,7 @@ def _assemble_A_unrestricted(
 def _stack_periods(X: np.ndarray, Nf: int, T: int) -> np.ndarray:
     """Reshape a time-first stacked ``(Nf·T, k)`` RHS to ``(Nf, T·k)``.
 
-    Lets one factorisation of the per-period ``A`` (``Nf × Nf``) cover all
+    Lets one factorization of the per-period ``A`` (``Nf × Nf``) cover all
     ``T`` period blocks in a single batched backsolve.
     """
     k = X.shape[1]
@@ -215,8 +215,8 @@ def _solve_A_unrestricted(
     """Solve (I_T ⊗ A) η = X via sparse LU, returning η = A⁻¹X per period.
 
     ``A`` is the per-period ``Nf × Nf`` system matrix; ``X`` is the
-    time-first stacked ``(Nf·T, k)`` RHS.  One factorisation covers all
-    periods.  Uses KLU/UMFPACK (scikit-sparse) when available, falling
+    time-first stacked ``(Nf·T, k)`` RHS.  One factorization covers all
+    periods.  Uses KLU (scikit-sparse) when available, falling
     back to scipy SuperLU.
     """
     from ..._ops._backend import _solve_sparse_matrix
@@ -362,7 +362,7 @@ def _compute_eta_unrestricted(
 ) -> np.ndarray:
     """Compute η = A⁻¹ Xβ (per period) for the unrestricted model.
 
-    Uses KLU/UMFPACK (scikit-sparse) when available, falling back to
+    Uses KLU (scikit-sparse) when available, falling back to
     scipy SuperLU.
     """
     from ..._ops._backend import _solve_sparse_vector
@@ -387,7 +387,7 @@ def _compute_eta_separable(
 
 
 # ---------------------------------------------------------------------------
-# ρ slice density (β-marginalised)
+# ρ slice density (β-marginalized)
 # ---------------------------------------------------------------------------
 
 
@@ -403,7 +403,7 @@ def _rho_log_density_marginal_flow(
     basis: Optional[object] = None,
     intercept_col: int = -1,
 ) -> float:
-    r"""β-marginalised conditional log-density for one ρ parameter.
+    r"""β-marginalized conditional log-density for one ρ parameter.
 
     For the unrestricted model, each ρ_k is sliced while holding the
     other two fixed.  The system matrix A depends on all three ρ's,
@@ -434,7 +434,7 @@ def _rho_log_density_marginal_flow(
 
     if not cache.separable:
         # Joint stability wall: |ρ_d|+|ρ_o|+|ρ_w| < 1 is the sufficient
-        # invertibility bound for row-standardised weights.  Without it the
+        # invertibility bound for row-standardized weights.  Without it the
         # box prior admits a near-singular likelihood ridge (e.g. large ρ_w
         # with negative ρ_d/ρ_o) that the NUTS path excludes by prior.
         if abs(rho_d) + abs(rho_o) + abs(rho_w) >= cache.rho_upper:
@@ -528,7 +528,7 @@ def _sample_rho_k(
     basis: Optional[object] = None,
     intercept_col: int = -1,
 ) -> float:
-    """1-D adaptive slice on one ρ parameter with β marginalised."""
+    """1-D adaptive slice on one ρ parameter with β marginalized."""
     rho_lower = cache.rho_lower
     rho_upper = cache.rho_upper
     if cache.positive and not cache.separable:
@@ -682,7 +682,7 @@ def run_chain_unrestricted(
         Xtilde = None
 
         for _cycle in range(_n_cycles):
-            # --- ρ_d | ω, α, y (β marginalised) ---
+            # --- ρ_d | ω, α, y (β marginalized) ---
             state.rho_d = _sample_rho_k(
                 "rho_d",
                 state,
@@ -696,7 +696,7 @@ def run_chain_unrestricted(
                 intercept_col=intercept_col,
             )
 
-            # --- ρ_o | ω, α, y (β marginalised) ---
+            # --- ρ_o | ω, α, y (β marginalized) ---
             state.rho_o = _sample_rho_k(
                 "rho_o",
                 state,
@@ -710,7 +710,7 @@ def run_chain_unrestricted(
                 intercept_col=intercept_col,
             )
 
-            # --- ρ_w | ω, α, y (β marginalised) ---
+            # --- ρ_w | ω, α, y (β marginalized) ---
             state.rho_w = _sample_rho_k(
                 "rho_w",
                 state,
@@ -773,7 +773,7 @@ def run_chain_unrestricted(
                 log_lik_samples[idx] = _nb_loglik_pointwise(y, eta, state.alpha)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     return {
         "rho_d": rho_d_samples,
@@ -814,7 +814,7 @@ def run_chain_separable(
     X : ndarray, shape (N, k)
         Design matrix.
     W_csc : scipy.sparse.csc_matrix, shape (n, n)
-        Row-standardised regional weights.
+        Row-standardized regional weights.
     n : int
         Number of regions.
     priors : FlowReducedGibbsPriors
@@ -947,7 +947,7 @@ def run_chain_separable(
                 _prev_rho_o = state.rho_o
 
         for _cycle in range(_n_cycles):
-            # --- ρ_d | ω, α, y (β marginalised) ---
+            # --- ρ_d | ω, α, y (β marginalized) ---
             state.rho_d = _sample_rho_k(
                 "rho_d",
                 state,
@@ -962,7 +962,7 @@ def run_chain_separable(
                 intercept_col=intercept_col,
             )
 
-            # --- ρ_o | ω, α, y (β marginalised) ---
+            # --- ρ_o | ω, α, y (β marginalized) ---
             state.rho_o = _sample_rho_k(
                 "rho_o",
                 state,
@@ -1025,7 +1025,7 @@ def run_chain_separable(
                 log_lik_samples[idx] = _nb_loglik_pointwise(y, eta, state.alpha)
 
         if progress_manager is not None:
-            progress_manager.update(chain_id, i, tuning=i < tune, accept=None)
+            progress_manager.update(chain_id, i, tuning=i < tune)
 
     return {
         "rho_d": rho_d_samples,

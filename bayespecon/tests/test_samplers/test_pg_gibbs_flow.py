@@ -365,8 +365,13 @@ class TestNegativeBinomialSARFlowGibbs:
             assert np.isfinite(idata.posterior[v].to_numpy()).all()
         assert "log_likelihood" in idata.groups()
 
+    @pytest.mark.requires_jax
     def test_separable_jax_backend_works(self):
         """The separable Kronecker model now supports the JAX backend."""
+        import importlib.util
+
+        if importlib.util.find_spec("sparsax") is None:
+            pytest.skip("sparsax not installed")
         from bayespecon.models.flow._flow import SARNegBinFlowSeparable
 
         data = _make_flow_data()

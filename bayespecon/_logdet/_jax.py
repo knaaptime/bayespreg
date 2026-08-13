@@ -7,10 +7,10 @@ Supports ``"eigenvalue"``, ``"chebyshev"``, ``"cheb_stochastic"``,
 ``"cheb_cholesky"``, ``"aaa"``, and ``"slq"``.  The stochastic Chebyshev
 method precomputes moments in numpy and evaluates via JAX-native Clenshaw.
 SLQ consumes the numpy :func:`slq_logdet_precompute` quadrature rules
-(sparse batched D-symmetrised Lanczos, canonical ``n·v₁²`` weights; complex
+(sparse batched D-symmetrized Lanczos, canonical ``n·v₁²`` weights; complex
 bilinear ``γ`` for the directed-``W`` Arnoldi fallback) and evaluates the
 ρ-dependent quadrature in JAX — differentiable and JIT-compatible, with no
-dense ``W`` materialisation.  ``cheb_cholesky`` precomputes Chebyshev
+dense ``W`` materialization.  ``cheb_cholesky`` precomputes Chebyshev
 coefficients via sparse Cholesky in numpy and evaluates via JAX-native
 Clenshaw.  ``aaa`` precomputes support points and barycentric weights via
 sparse LU in numpy and evaluates via JAX-native barycentric formula.
@@ -37,14 +37,14 @@ def jax_logdet_chebyshev_traced(rho, coeffs, rmin, rmax):
 
     It is not fine for a warmup-adaptive refit, which replaces the interpolant
     partway through a run.  On a Gibbs chain the retrace costs on the order of a
-    second — an order of magnitude more than the refit's own factorisations —
+    second — an order of magnitude more than the refit's own factorizations —
     which would make the refit a net loss on this backend.  This variant keeps
     everything traced and drives the recurrence with ``lax.fori_loop`` over a
     fixed-capacity array, so a refit changes array *values* only and the
     compiled step is reused unchanged.
 
     Zero-padding is exact, not an approximation: Clenshaw's ``b`` terms are
-    initialised to zero and a run of zero coefficients leaves them at zero, so
+    initialized to zero and a run of zero coefficients leaves them at zero, so
     padding a degree-``m`` series out to capacity ``M`` reproduces the same
     ``b_m = b_{m+1} = 0`` the unpadded recurrence starts from.  Pass a capacity
     at least as large as any order the refit may select.
@@ -122,7 +122,7 @@ def make_logdet_jax_param_fn(method: str, T: int = 1):
         ``"chol_aaa"`` (barycentric support points, values and weights).  The
         two AAA variants differ only in the factorizer used to obtain the
         support values at precompute time — LU versus Cholesky — and share one
-        evaluation form, so they share this parameterisation.
+        evaluation form, so they share this parameterization.
     T : int, default 1
         Panel replication factor applied to the result.
 
@@ -160,7 +160,7 @@ def make_logdet_jax_param_fn(method: str, T: int = 1):
     raise ValueError(
         f"make_logdet_jax_param_fn does not support method {method!r}; "
         "only 'cheb_cholesky', 'lu_cheb', 'aaa' and 'chol_aaa' carry a refittable "
-        "parameterisation."
+        "parameterization."
     )
 
 
@@ -248,12 +248,12 @@ def make_logdet_jax_fn(
             raise ValueError(
                 "SLQ requires the weight matrix W, not a 1-D eigenvalue array."
             )
-        # Consume the numpy sparse SLQ rules: batched D-symmetrised Lanczos
+        # Consume the numpy sparse SLQ rules: batched D-symmetrized Lanczos
         # (real nodes θ and real n·v₁² weights) for undirected W, or Arnoldi
         # (complex Ritz values θ and complex bilinear weights γ) for directed
         # W.  Evaluate the ρ-dependent quadrature in JAX via the complex log;
         # the Lanczos case is the zero-imaginary special case of the same
-        # formula.  No dense W is materialised — the precompute is matvec-only.
+        # formula.  No dense W is materialized — the precompute is matvec-only.
         pre = slq_logdet_precompute(W_sparse)
         nodes = np.asarray(pre.nodes)
         weights = np.asarray(pre.weights)
@@ -341,7 +341,7 @@ def make_logdet_jax_fn(
     if method == "chol_aaa":
         from ._aaa import chol_aaa_logdet_precompute
 
-        # Same as "aaa" but precompute via sparse Cholesky of the D-symmetrised
+        # Same as "aaa" but precompute via sparse Cholesky of the D-symmetrized
         # system (~2× cheaper than KLU for symmetrizable W).
         pre = chol_aaa_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
         sp_z = pre.support_points.astype(np.float64)
@@ -359,7 +359,7 @@ def make_logdet_jax_fn(
 
     if method == "cholmod":
         # JAX-native exact logdet via sparsax sparse CHOLMOD.
-        # Requires W to be D-symmetrizable (row-standardised undirected
+        # Requires W to be D-symmetrizable (row-standardized undirected
         # graph): W = D⁻¹A with symmetric A → W_sym = D^{1/2} W D^{-1/2}
         # is symmetric with the same eigenvalues, so I−ρW_sym is SPD
         # for |ρ| < 1 and sparsax.logdet applies directly.
@@ -375,7 +375,7 @@ def make_logdet_jax_fn(
 
         from ._chol_cheb import _d_symmetrize
 
-        # D-symmetrise: raises ValueError if W is not symmetrizable.
+        # D-symmetrize: raises ValueError if W is not symmetrizable.
         W_sym_sp = _d_symmetrize(W_sparse)  # csc_matrix, symmetric
 
         # Build the COO pattern for I − ρW_sym.

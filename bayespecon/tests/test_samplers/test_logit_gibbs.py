@@ -51,7 +51,7 @@ def _make_small_problem(n=20, k=3, rho=0.3, seed=42):
     X = np.column_stack([np.ones(n), rng.standard_normal((n, k - 1))])
     beta = np.array([0.5, -1.0, 0.8])[:k]
 
-    # Row-standardised W (ring lattice)
+    # Row-standardized W (ring lattice)
     W_dense = np.zeros((n, n))
     for i in range(n):
         W_dense[i, (i + 1) % n] = 1.0
@@ -405,7 +405,7 @@ def _make_small_sem_problem(n=20, k=3, lam=0.3, seed=42):
     X = np.column_stack([np.ones(n), rng.standard_normal((n, k - 1))])
     beta = np.array([0.5, -1.0, 0.8])[:k]
 
-    # Row-standardised W (ring lattice)
+    # Row-standardized W (ring lattice)
     W_dense = np.zeros((n, n))
     for i in range(n):
         W_dense[i, (i + 1) % n] = 1.0

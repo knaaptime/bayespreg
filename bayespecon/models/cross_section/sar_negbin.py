@@ -135,7 +135,7 @@ class SARNegBin(SpatialModel):
 
             # Jacobian: log|I - ρW| — required for the reduced form
             # (unlike the structural form where it cancels with the MVN
-            # normalisation constant).
+            # normalization constant).
             pm.Potential("jacobian", self._logdet_pytensor_fn(rho))
 
         return model
@@ -181,7 +181,7 @@ class SARNegBin(SpatialModel):
             Show per-chain progress bars.
         backend : {"numpy", "jax"}
             Execution backend.  ``"numpy"`` uses the CHOLMOD/SPLU
-            factorisation path with adaptive slice sampling for ρ (the
+            factorization path with adaptive slice sampling for ρ (the
             default); ``"jax"`` uses the JAX-accelerated dense path with
             slice+Krylov sampling (requires float64; viable for n ≲ 10 000).
         init_jitter : float, default 0.1
@@ -250,29 +250,19 @@ class SARNegBin(SpatialModel):
 
             # Smart initialization (same as NumPy path)
             _log_y = np.log(self._y + 0.5)
-            _rho_grid = np.arange(0.05, 0.96, 0.05)
-            _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-            for _rho_g in _rho_grid:
-                try:
-                    _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                    _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                    _beta_g = np.linalg.lstsq(_Xtilde_g, _log_y, rcond=None)[0]
-                    _eta_g = _Xtilde_g @ _beta_g
-                    _sig2_g = float(np.mean((_log_y - _eta_g) ** 2))
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll:
-                        _best_ll = _ll_g
-                        _best_rho = _rho_g
-                        _best_beta = _beta_g.copy()
-                except Exception:
-                    pass
+            from ...samplers._utils._sparsax_utils import (
+                CachedSparseSolver,
+                profile_loglik_rho_grid,
+            )
+
+            _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(_log_y, X, W_csc)
             _rho_init_mle = float(
                 np.clip(_best_rho, rho_lower + 0.05, rho_upper - 0.05)
             )
             _beta_init_mle = _best_beta
             try:
-                _A_init = sp.eye(n, format="csc") - _rho_init_mle * W_csc
-                _Xtilde_init = sp.linalg.spsolve(_A_init, X)
+                _init_solver = CachedSparseSolver([W_csc], n)
+                _Xtilde_init = _init_solver.solve([-_rho_init_mle], X)
                 _eta_init = _Xtilde_init @ _beta_init_mle
                 _resid2 = float(np.mean((_log_y - _eta_init) ** 2))
                 _alpha_init_mle = float(np.clip(1.0 / max(_resid2, 0.01), 0.5, 50.0))
@@ -359,19 +349,16 @@ class SARNegBin(SpatialModel):
             return idata
 
         # ── NumPy / SciPy factorize path ──
-        # Eigenvalue bounds for CG iterative solver.
         # For A_ρ = I − ρW: λ_min(A_ρ) = 1 − ρ·λ_max(W), λ_max(A_ρ) = 1 − ρ·λ_min(W).
-        if self._W_eigs is not None:
-            W_eig_max = float(np.max(np.abs(self._W_eigs)))
-            W_eig_min = float(np.min(np.real(self._W_eigs)))
-        else:
-            W_eig_max = 1.0
-            W_eig_min = -1.0
+        # Spectrum bounds for the solve path.  Deliberately *not* from
+        # ``_W_eigs``: that densifies W for an O(n^3) eigendecomposition, and
+        # only bounds are needed here.  See ``_W_spectral_bounds``.
+        W_eig_max, W_eig_min = self._W_spectral_bounds
 
         # Precompute CHOLMOD pattern for the normal-equations matrix
         # A^T A = I − ρ(W+W^T) + ρ² W^T W  (SPD for any valid ρ).
         # When CHOLMOD is available, the sampler uses this instead of
-        # ``splu`` (UMFPACK) to avoid Apple Accelerate BLAS deadlocks
+        # ``splu`` (scipy SuperLU) to avoid Apple Accelerate BLAS deadlocks
         # on macOS under concurrent process access.
         #
         # IMPORTANT: We pass the *pattern matrix* (a sparse CSC matrix)
@@ -395,28 +382,18 @@ class SARNegBin(SpatialModel):
         # chain at (ρ ≈ 0, β ≈ 0) places it in a completely wrong
         # mode that the Gibbs sampler cannot escape.
         #
-        # We use a profile-log-likelihood initialisation on log(y+0.5):
+        # We use a profile-log-likelihood initialization on log(y+0.5):
         #   1. For each ρ on a coarse grid, compute
         #      X̃ = (I − ρW)⁻¹ X and OLS β̂ = (X̃ᵀX̃)⁻¹ X̃ᵀ log(y)
-        #   2. Pick the (ρ, β) that maximises the Gaussian log-lik
+        #   2. Pick the (ρ, β) that maximizes the Gaussian log-lik
         #   3. Estimate α from method-of-moments on Pearson residuals
         _log_y = np.log(self._y + 0.5)
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                _beta_g = np.linalg.lstsq(_Xtilde_g, _log_y, rcond=None)[0]
-                _eta_g = _Xtilde_g @ _beta_g
-                _sig2_g = float(np.mean((_log_y - _eta_g) ** 2))
-                _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                if _ll_g > _best_ll:
-                    _best_ll = _ll_g
-                    _best_rho = _rho_g
-                    _best_beta = _beta_g.copy()
-            except Exception:
-                pass
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(_log_y, X, W_csc)
         _rho_init_mle = float(np.clip(_best_rho, rho_lower + 0.05, rho_upper - 0.05))
         _beta_init_mle = _best_beta
         # Estimate α from the Pearson dispersion of the Gaussian fit
@@ -425,8 +402,8 @@ class SARNegBin(SpatialModel):
         # For NB data: Var(log y) ≈ 1/α + 1/(2μ) (delta method), so
         # α ≈ 1/σ² when μ is large.  Cap at a reasonable range.
         try:
-            _A_init = sp.eye(n, format="csc") - _rho_init_mle * W_csc
-            _Xtilde_init = sp.linalg.spsolve(_A_init, X)
+            _init_solver = CachedSparseSolver([W_csc], n)
+            _Xtilde_init = _init_solver.solve([-_rho_init_mle], X)
             _eta_init = _Xtilde_init @ _beta_init_mle
             _resid2 = float(np.mean((_log_y - _eta_init) ** 2))
             _alpha_init_mle = float(np.clip(1.0 / max(_resid2, 0.01), 0.5, 50.0))
@@ -604,7 +581,7 @@ class SARNegBin(SpatialModel):
 
         For n ≤ ``_COUNT_EFFECTS_EIGEN_MAX_N`` (default 2000), this uses
         the shared eigendecomposition cache (:attr:`_W_eigendecomposition`)
-        to avoid per-draw sparse LU factorisation, reducing complexity from
+        to avoid per-draw sparse LU factorization, reducing complexity from
         :math:`O(\text{nnz}^{1.5})` per draw to :math:`O(n^2)` per draw.
 
         For n > ``_COUNT_EFFECTS_EIGEN_MAX_N``, this uses sparse solves
@@ -647,7 +624,7 @@ class SARNegBin(SpatialModel):
         total_samples = np.empty((n_draws, n_effects), dtype=np.float64)
 
         # Use shared eigendecomposition cache (complex128 throughout).
-        # Row-standardised W is generally non-symmetric, so V and Vinv
+        # Row-standardized W is generally non-symmetric, so V and Vinv
         # are complex.  Taking .real prematurely drops imaginary parts and
         # produces wrong results for eta, diag, and row sums.
         decomp = self._W_eigendecomposition
@@ -682,9 +659,7 @@ class SARNegBin(SpatialModel):
             )  # (n,)
 
             if self._is_row_std:
-                multiplier_row_sums = np.full(
-                    n, 1.0 / (1.0 - float(rho)), dtype=np.float64
-                )
+                multiplier_row_sums = self._multiplier_row_sums(rho)
             else:
                 # row_sum_i = (V @ diag(inv_eigs) @ Vinv @ 1)_i
                 multiplier_row_sums = (V_c @ (inv_eigs_c * Vinv_ones)).real.astype(
@@ -758,8 +733,8 @@ class SARNegBin(SpatialModel):
 
         For large W where eigendecomposition is infeasible, this method uses:
 
-        - A single sparse LU factorisation of :math:`A = I - \rho W` per draw
-          (UMFPACK when available, SuperLU otherwise), reused for the
+        - A single sparse LU factorization of :math:`A = I - \rho W` per draw
+          (KLU when available, SuperLU otherwise), reused for the
           :math:`\eta` solve, the Hutchinson probes, and the row-sum solve.
         - **Batched** matrix solve: the right-hand sides for :math:`\eta`,
           the optional row-sum vector :math:`\mathbf{1}`, and the
@@ -767,7 +742,7 @@ class SARNegBin(SpatialModel):
           stacked into a single ``(n, 22)`` RHS and resolved with one
           ``solver.solve`` call per draw.
         - Hutchinson diagonal estimator for :math:`\operatorname{diag}(A^{-1})`.
-        - Closed-form :math:`1/(1-\rho)` row sums for row-standardised :math:`W`,
+        - Closed-form :math:`1/(1-\rho)` row sums for row-standardized :math:`W`,
           one extra sparse solve otherwise.
 
         Complexity is one LU factor plus a single batched triangular solve
@@ -797,7 +772,7 @@ class SARNegBin(SpatialModel):
         n_probes = 20
 
         # Pre-sample all Hutchinson probes up front so the per-draw RHS
-        # assembly is purely vectorised.
+        # assembly is purely vectorized.
         Z = rng.choice(
             np.array([-1.0, 1.0], dtype=np.float64),
             size=(n, n_probes),
@@ -812,7 +787,7 @@ class SARNegBin(SpatialModel):
             rho_f = float(rho)
             A = (I_n - rho_f * W).tocsc()
 
-            # Factorise A once and reuse for all per-draw RHSes.
+            # Factorize A once and reuse for all per-draw RHSes.
             solver = _make_cached_sparse_solver(A)
             if solver is None:
                 solver = sp.linalg.splu(A)
@@ -827,7 +802,7 @@ class SARNegBin(SpatialModel):
                 sol = np.asarray(solver.solve(rhs), dtype=np.float64)
                 eta = sol[:, 0]
                 AinvZ = sol[:, 1:]
-                multiplier_row_sums = np.full(n, 1.0 / (1.0 - rho_f), dtype=np.float64)
+                multiplier_row_sums = self._multiplier_row_sums(rho_f)
             else:
                 rhs = np.empty((n, 2 + n_probes), dtype=np.float64)
                 rhs[:, 0] = Xbeta
@@ -875,7 +850,7 @@ class SARNegBin(SpatialModel):
             it requires the diagonal of the spatial multiplier for each
             posterior draw.
         method : {"auto", "eigen", "sparse"}, default "auto"
-            Only used when ``scale="count"``. ``"eigen"`` materialises the
+            Only used when ``scale="count"``. ``"eigen"`` materializes the
             eigendecomposition of :math:`W` (fast for small :math:`n` but
             O(n³) memory/time); ``"sparse"`` uses one sparse LU per draw
             plus a Hutchinson diagonal estimator; ``"auto"`` picks sparse

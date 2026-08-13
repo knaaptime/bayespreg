@@ -8,13 +8,13 @@ r"""Reduced-form SAR-logit with Pólya–Gamma Gibbs sampler.
 This is the canonical spatial binary model: the spatial lag enters the
 *linear predictor* as a deterministic mean-propagator (there is **no**
 latent noise field, so σ does not appear).  The ``|I − ρW|`` Jacobian
-cancels when β is marginalised out, making the ρ conditional linear and
+cancels when β is marginalized out, making the ρ conditional linear and
 Krylov-accelerable.  The Pólya–Gamma augmentation yields fully conjugate
 Gibbs updates for β and ρ (via a collapsed slice sampler).
 
 Both backends fit the same model: ``gibbs_backend="jax"`` (the default via
 ``"auto"``) runs each chain on its own CPU device via ``jax.pmap``;
-``"numpy"`` uses the CHOLMOD factorisation path.  For the *structural*
+``"numpy"`` uses the CHOLMOD factorization path.  For the *structural*
 latent-field SAR-logit, use :class:`SARLogitStructural`.
 
 Use this model when:
@@ -94,11 +94,11 @@ class SARLogit(SpatialModel):
 
     Notes
     -----
-    The reduced form parameterises the log-odds as the deterministic
+    The reduced form parameterizes the log-odds as the deterministic
     mean-propagator ``eta = (I - rho * W)^{-1} X @ beta`` (no latent noise
     field), and augments the logistic likelihood with Pólya–Gamma auxiliary
     variables to obtain fully conjugate Gibbs updates for β and a
-    β-marginalised collapsed slice update for ρ (the ``|I − ρW|`` Jacobian
+    β-marginalized collapsed slice update for ρ (the ``|I − ρW|`` Jacobian
     cancels, so ρ is Krylov-accelerable).
 
     The sampler bypasses PyMC's NUTS entirely. It produces an
@@ -156,24 +156,16 @@ class SARLogit(SpatialModel):
         W_csc = self._W_sparse.tocsc()
         n, k = X.shape
 
-        # --- Profile-log-likelihood initialisation ---
-        _rho_grid = np.arange(0.05, 0.96, 0.05)
-        _best_rho, _best_beta, _best_ll = 0.0, np.zeros(k), -np.inf
-        for _rho_g in _rho_grid:
-            try:
-                _A_g = sp.eye(n, format="csc") - _rho_g * W_csc
-                _Xtilde_g = sp.linalg.spsolve(_A_g, X)
-                _beta_g = np.linalg.lstsq(_Xtilde_g, y, rcond=None)[0]
-                _eta_g = _Xtilde_g @ _beta_g
-                _sig2_g = float(np.mean((y - _eta_g) ** 2))
-                if _sig2_g > 1e-10:
-                    _ll_g = -0.5 * n * np.log(_sig2_g) - 0.5 * n
-                    if _ll_g > _best_ll:
-                        _best_ll = _ll_g
-                        _best_rho = _rho_g
-                        _best_beta = _beta_g.copy()
-            except Exception:
-                pass
+        # --- Profile-log-likelihood initialization ---
+        # Cached sparse solver: A = I - ρW shares its sparsity pattern across
+        # the grid, so the symbolic analysis is computed once (sparsax) or
+        # the pattern is pre-assembled (scipy fallback).
+        from ...samplers._utils._sparsax_utils import (
+            CachedSparseSolver,
+            profile_loglik_rho_grid,
+        )
+
+        _best_rho, _best_beta, _best_ll = profile_loglik_rho_grid(y, X, W_csc)
 
         # Jitter around the profile-loglik estimates (smaller for ρ — the
         # posterior is extremely peaked in ρ at high spatial autocorrelation).
@@ -189,8 +181,8 @@ class SARLogit(SpatialModel):
 
         # ω₀: draw from PG(1, η) at the profile η.
         try:
-            _A_init = sp.eye(n, format="csc") - rho_init * W_csc
-            eta_init = sp.linalg.spsolve(_A_init, X @ beta_init)
+            _init_solver = CachedSparseSolver([W_csc], n)
+            eta_init = _init_solver.solve([-rho_init], X @ beta_init)
         except Exception:
             eta_init = X @ beta_init
         from ...samplers._utils._polyagamma import sample_polyagamma
@@ -238,7 +230,7 @@ class SARLogit(SpatialModel):
         backend : {"numpy", "jax"}
             Execution backend.  ``"jax"`` (the default via ``"auto"``) runs
             each chain on its own CPU device via ``jax.pmap``; ``"numpy"``
-            uses the CHOLMOD factorisation path with adaptive slice sampling.
+            uses the CHOLMOD factorization path with adaptive slice sampling.
         init_jitter : float, default 0.1
             Std-dev of the Gaussian jitter applied to the profile-loglik
             initial state.
@@ -319,11 +311,10 @@ class SARLogit(SpatialModel):
         else:
             # ── NumPy / CHOLMOD path ──
             W_csc = self._W_sparse.tocsc()
-            if self._W_eigs is not None:
-                W_eig_max = float(np.max(np.abs(self._W_eigs)))
-                W_eig_min = float(np.min(np.real(self._W_eigs)))
-            else:
-                W_eig_max, W_eig_min = 1.0, -1.0
+            # Spectrum bounds for the solve path.  Deliberately *not* from
+            # ``_W_eigs``: that densifies W for an O(n^3) eigendecomposition, and
+            # only bounds are needed here.  See ``_W_spectral_bounds``.
+            W_eig_max, W_eig_min = self._W_spectral_bounds
             W_sym, WtW, cholmod_pattern = _make_cholmod_pattern(W_csc, n)
 
             def _run_one_chain(chain_id, seed, progress_manager=None, chain_id_kw=None):
@@ -541,9 +532,7 @@ class SARLogit(SpatialModel):
 
             multiplier_diag = ((V_c * Vinv_c.T) @ inv_eigs_c).real.astype(np.float64)
             if self._is_row_std:
-                multiplier_row_sums = np.full(
-                    n, 1.0 / (1.0 - float(rho)), dtype=np.float64
-                )
+                multiplier_row_sums = self._multiplier_row_sums(rho)
             else:
                 multiplier_row_sums = (V_c @ (inv_eigs_c * Vinv_ones)).real.astype(
                     np.float64
@@ -596,7 +585,7 @@ class SARLogit(SpatialModel):
             rho_f = float(rho)
             A = (I_n - rho_f * W).tocsc()
 
-            # KLU/UMFPACK reusable factor when available, else scipy SuperLU.
+            # KLU reusable factor when available, else scipy SuperLU.
             solver = _make_cached_sparse_solver(A)
             if solver is None:
                 solver = sp.linalg.splu(A)
@@ -609,7 +598,7 @@ class SARLogit(SpatialModel):
                 sol = np.asarray(solver.solve(rhs), dtype=np.float64)
                 eta = sol[:, 0]
                 AinvZ = sol[:, 1:]
-                multiplier_row_sums = np.full(n, 1.0 / (1.0 - rho_f), dtype=np.float64)
+                multiplier_row_sums = self._multiplier_row_sums(rho_f)
             else:
                 rhs = np.empty((n, 2 + n_probes), dtype=np.float64)
                 rhs[:, 0] = Xbeta

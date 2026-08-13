@@ -119,7 +119,7 @@ class FlowKron:
 
         ``W_Fᵀ = ρ_d(I⊗Wᵀ) + ρ_o(Wᵀ⊗I) + ρ_w(Wᵀ⊗Wᵀ)`` which, using
         ``kron(A, B)`` on CSR matrices, is a sparse N×N matrix with
-        ``O(n²·nnz(W))`` nonzeros.  Used for KLU factorisation when
+        ``O(n²·nnz(W))`` nonzeros.  Used for KLU factorization when
         the dense N×N system is too large but the sparse pattern is
         manageable.
         """
@@ -238,7 +238,7 @@ def flow_logdet_grad(
     Parameters
     ----------
     W : array or sparse
-        The ``n x n`` (row-standardised, possibly directed) weights matrix.
+        The ``n x n`` (row-standardized, possibly directed) weights matrix.
     rho_d, rho_o, rho_w : float
         Flow spatial parameters.
     n_probes : int
@@ -279,7 +279,7 @@ def flow_logdet_grad(
     acc = np.zeros(3, dtype=np.float64)
 
     # Solver priority for the numpy path:
-    #   1. sksparse KLU / UMFPACK (factorize once, solve P vectors sequentially)
+    #   1. sksparse KLU (factorize once, solve P vectors sequentially)
     #   2. sparsax (batched solve, but requires JAX array conversion overhead)
     #   3. GMRES (iterative fallback)
     # The JAX-native path (_make_flow_kron_jax) uses sparsax directly without
@@ -287,7 +287,7 @@ def flow_logdet_grad(
     from bayespecon._ops._backend import _select_sparse_backend, _sparse_factor
 
     backend = _select_sparse_backend()
-    if backend in ("klu", "umfpack"):
+    if backend == "klu":
         A_csc = kron.resolvent_T_sparse(rho_d, rho_o, rho_w)
         factor = _sparse_factor(A_csc, backend)
         for p in range(P):

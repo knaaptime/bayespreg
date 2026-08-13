@@ -51,8 +51,8 @@ def kron_solve_matrix(
     r"""Solve :math:`(L_o \otimes L_d)\,H = B` for a matrix RHS via batched two-step solve.
 
     Applies the same Kronecker algorithm as :func:`kron_solve_vec` to all
-    *k* columns of *B* simultaneously using a single :math:`L_d` factorisation
-    and a single :math:`L_o^\top` factorisation (both of size :math:`n \times n`).
+    *k* columns of *B* simultaneously using a single :math:`L_d` factorization
+    and a single :math:`L_o^\top` factorization (both of size :math:`n \times n`).
 
     Parameters
     ----------

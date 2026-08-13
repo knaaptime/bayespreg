@@ -1,7 +1,7 @@
 """Pointwise log-likelihood for Gaussian spatial models.
 
 Unlike the NB Gibbs sampler (where the Jacobian cancels in the
-non-centred parameterisation), Gaussian SAR/SEM/SDM/SDEM models
+non-centred parameterization), Gaussian SAR/SEM/SDM/SDEM models
 require the spatial Jacobian log|I - ρW| (or log|I - λW|)
 as part of the complete log-likelihood.
 

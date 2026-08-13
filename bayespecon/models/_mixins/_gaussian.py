@@ -9,10 +9,20 @@ the mixin supplies the full ``_build_pymc_model`` implementation.
 Three likelihood branches are dispatched based on ``_jacobian_param``:
 
 * ``None``  (OLS, SLX):  ``mu = Z @ β``,  ``pm.Normal/StudentT``, no potential.
-* ``"rho"`` (SAR, SDM):  ``mu = ρ·Wy + Z @ β``,  ``pm.Normal/StudentT``,
-  ``pm.Potential("jacobian", logdet(ρ))``.
+* ``"rho"`` (SAR, SDM):  ``mu = ρ·Wy + Z @ β``, as ``pm.Normal/StudentT`` plus
+  ``pm.Potential("jacobian", logdet(ρ))``, or — when a pointwise
+  log-likelihood is requested — as a ``pm.CustomDist`` with the Jacobian
+  folded in.
 * ``"lam"`` (SEM, SDEM):  spatially-filtered residual via ``pm.CustomDist``
-  (JAX path) or ``pm.Potential`` (default path), plus Jacobian.
+  (JAX path, or when a pointwise log-likelihood is requested) or
+  ``pm.Potential`` (default path), plus Jacobian.
+
+Because ``pm.Potential`` terms are invisible to PyMC's log-likelihood
+machinery (it iterates ``observed_RVs``), the Jacobian must live inside an
+observed RV for the captured group to be complete.  Folding it in costs
+nothing — ``logdet`` is evaluated once per logp call either way — but the
+Potential form remains the default because it is the benchmarked-fast graph
+for the C/Numba backend.
 
 The ``_spatial_lag(X)`` hook abstracts the W@X product so the same mixin
 works for both cross-section (``self._W_sparse @ X``) and panel
@@ -46,7 +56,7 @@ class GaussianLikelihoodMixin:
 
     * ``_gelman_default_beta_prior(design, names)`` → ``(mu, sigma)``
     * ``_model_coords()`` → dict of coordinate arrays
-    * ``_add_nu_prior(model)`` → adds ``nu`` to a ``pm.Model``
+    * ``_nu`` → fixed Student-t degrees of freedom (robust models)
     * ``_logdet_pytensor_fn``: pytensor log-determinant callable
 
     The ``_spatial_lag(X)`` method defaults to ``self._W_sparse @ X``
@@ -132,20 +142,28 @@ class GaussianLikelihoodMixin:
         Parameters
         ----------
         compute_log_likelihood : bool, default False
-            Passed through to SAR/SDM models.  Ignored by OLS/SLX/SEM/SDEM.
+            When ``True``, SAR/SDM/SEM/SDEM register the likelihood as an
+            observed ``pm.CustomDist`` with the Jacobian folded in, so PyMC
+            captures a complete pointwise log-likelihood natively.  Ignored by
+            OLS/SLX, which have no Jacobian and capture it natively anyway.
         nuts_sampler : str, default ``"pymc"``
             Passed through to SEM/SDEM models to select JAX vs Potential path.
             Ignored by OLS/SLX/SAR/SDM.
         """
         jacobian_param = self._jacobian_param
         if jacobian_param is None:
+            # No Jacobian: the observed RV carries the whole likelihood.
+            self._native_log_likelihood = True
             return self._build_pymc_model_no_jacobian()
         elif jacobian_param == "rho":
             return self._build_pymc_model_rho(
                 compute_log_likelihood=compute_log_likelihood,
             )
         elif jacobian_param == "lam":
-            return self._build_pymc_model_lam(nuts_sampler=nuts_sampler)
+            return self._build_pymc_model_lam(
+                nuts_sampler=nuts_sampler,
+                compute_log_likelihood=compute_log_likelihood,
+            )
         else:
             raise ValueError(
                 f"Unknown _jacobian_param={jacobian_param!r}; "
@@ -205,8 +223,7 @@ class GaussianLikelihoodMixin:
             sigma = pm.Deterministic("sigma", pt.sqrt(sigma2))
             mu = pt.dot(Z, beta)
             if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
+                nu = self._nu
                 pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y)
             else:
                 pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y)
@@ -222,13 +239,37 @@ class GaussianLikelihoodMixin:
         *,
         compute_log_likelihood: bool = False,
     ) -> pm.Model:
-        """Build PyMC model for SAR or SDM (spatial lag with ρ Jacobian)."""
+        """Build PyMC model for SAR or SDM (spatial lag with ρ Jacobian).
+
+        Two formulations of an identical total log-density:
+
+        * ``compute_log_likelihood=False`` (default) — observed
+          ``pm.Normal``/``pm.StudentT`` plus a separate
+          ``pm.Potential("jacobian", logdet(ρ))``.  PyMC's log-likelihood
+          machinery walks ``observed_RVs`` only, so the Potential is invisible
+          to it and any captured group would be missing ``log|I - ρW|/n``.
+        * ``compute_log_likelihood=True`` — the Jacobian is folded into an
+          observed ``pm.CustomDist`` (spread uniformly across the ``n``
+          observations, the same convention as the λ branch), so PyMC captures
+          a *complete* pointwise log-likelihood natively and no post-hoc
+          reconstruction is needed.
+
+        Both forms evaluate ``logdet(ρ)`` exactly once per logp call, so the
+        Jacobian is moved rather than duplicated and the posterior is
+        unchanged.  The Potential form stays the default because it is the
+        benchmarked-fast graph for the C/Numba backend.
+        """
         import pytensor.tensor as pt
 
         self._validate_wx_columns()
         Z = self._design_matrix()
         names = self._design_names()
         priors = self._gaussian_priors(Z, names)
+
+        logdet_fn = self._logdet_pytensor_fn
+        n_obs = int(self._y.shape[0])
+        native_ll = bool(compute_log_likelihood)
+        self._native_log_likelihood = native_ll
 
         with pm.Model(coords=self._model_coords()) as model:
             rho = pm.Uniform(
@@ -249,17 +290,62 @@ class GaussianLikelihoodMixin:
             )
             sigma = pm.Deterministic("sigma", pt.sqrt(sigma2))
 
-            # mu = rho * Wy + Z @ beta
-            mu = rho * self._Wy + pt.dot(Z, beta)
-            if self.robust:
-                self._add_nu_prior(model)
-                nu = model["nu"]
-                pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y)
-            else:
-                pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y)
+            if native_ll:
+                # Constants folded into the logp closure so the graph matches
+                # the Potential form term for term.
+                Wy_const = pt.as_tensor_variable(self._Wy)
+                Z_const = pt.as_tensor_variable(Z)
+                inv_n = 1.0 / n_obs
 
-            # Jacobian: log|I - rho*W|
-            pm.Potential("jacobian", self._logdet_pytensor_fn(rho))
+                if self.robust:
+                    nu = self._nu
+
+                    def _logp(value, rho_, beta_, sigma_, nu_):
+                        mu_ = rho_ * Wy_const + pt.dot(Z_const, beta_)
+                        log_dens = pm.logp(
+                            pm.StudentT.dist(nu=nu_, mu=mu_, sigma=sigma_),
+                            value,
+                        )
+                        return log_dens + logdet_fn(rho_) * inv_n
+
+                    pm.CustomDist(
+                        "obs",
+                        rho,
+                        beta,
+                        sigma,
+                        nu,
+                        logp=_logp,
+                        observed=self._y,
+                    )
+                else:
+
+                    def _logp(value, rho_, beta_, sigma_):
+                        mu_ = rho_ * Wy_const + pt.dot(Z_const, beta_)
+                        log_dens = pm.logp(
+                            pm.Normal.dist(mu=mu_, sigma=sigma_),
+                            value,
+                        )
+                        return log_dens + logdet_fn(rho_) * inv_n
+
+                    pm.CustomDist(
+                        "obs",
+                        rho,
+                        beta,
+                        sigma,
+                        logp=_logp,
+                        observed=self._y,
+                    )
+            else:
+                # mu = rho * Wy + Z @ beta
+                mu = rho * self._Wy + pt.dot(Z, beta)
+                if self.robust:
+                    nu = self._nu
+                    pm.StudentT("obs", nu=nu, mu=mu, sigma=sigma, observed=self._y)
+                else:
+                    pm.Normal("obs", mu=mu, sigma=sigma, observed=self._y)
+
+                # Jacobian: log|I - rho*W|
+                pm.Potential("jacobian", logdet_fn(rho))
 
         return model
 
@@ -267,8 +353,21 @@ class GaussianLikelihoodMixin:
     # Branch 3: λ Jacobian (SEM, SDEM)
     # ------------------------------------------------------------------
 
-    def _build_pymc_model_lam(self, *, nuts_sampler: str = "pymc") -> pm.Model:
-        """Build PyMC model for SEM or SDEM (spatial error with λ Jacobian)."""
+    def _build_pymc_model_lam(
+        self,
+        *,
+        nuts_sampler: str = "pymc",
+        compute_log_likelihood: bool = False,
+    ) -> pm.Model:
+        """Build PyMC model for SEM or SDEM (spatial error with λ Jacobian).
+
+        The ``pm.CustomDist`` form is used when the JAX samplers require an
+        observed RV (their log-likelihood path iterates ``observed_RVs`` and
+        crashes on an empty list) *or* when a pointwise log-likelihood is
+        requested — in the latter case it lets PyMC capture a complete group
+        natively instead of reconstructing it afterwards.  Otherwise the
+        benchmarked ``pm.Potential`` formulation is used.
+        """
         import pytensor.tensor as pt
 
         self._validate_wx_columns()
@@ -290,7 +389,8 @@ class GaussianLikelihoodMixin:
         WZ = getattr(self, cache_attr)
 
         n_obs = int(self._y.shape[0])
-        jax_logp = use_jax_likelihood(nuts_sampler)
+        jax_logp = use_jax_likelihood(nuts_sampler) or bool(compute_log_likelihood)
+        self._native_log_likelihood = jax_logp
 
         with pm.Model(coords=self._model_coords()) as model:
             lam = pm.Uniform(
@@ -311,9 +411,6 @@ class GaussianLikelihoodMixin:
             )
             sigma = pm.Deterministic("sigma", pt.sqrt(sigma2))
 
-            if self.robust:
-                self._add_nu_prior(model)
-
             if jax_logp:
                 # JAX path: register an observed RV via pm.CustomDist so PyMC
                 # can capture ``log_likelihood`` natively.
@@ -323,7 +420,7 @@ class GaussianLikelihoodMixin:
                 inv_n = 1.0 / n_obs
 
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
 
                     def _logp(value, lam_, beta_, sigma_, nu_):
                         y_star = value - lam_ * Wy_const
@@ -370,7 +467,7 @@ class GaussianLikelihoodMixin:
                 Z_star = Z - lam * WZ
                 eps = y_star - pt.dot(Z_star, beta)
                 if self.robust:
-                    nu = model["nu"]
+                    nu = self._nu
                     logp_eps = pm.logp(
                         pm.StudentT.dist(nu=nu, mu=0.0, sigma=sigma),
                         eps,
