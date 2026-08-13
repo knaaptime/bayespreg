@@ -140,7 +140,7 @@ class TestSARNegBinStructuralRecovery:
             random_seed=42,
             n_jobs=1,
             progressbar=False,
-            gibbs_backend='numpy'
+            gibbs_backend="numpy",
         )
 
         assert "posterior" in idata
