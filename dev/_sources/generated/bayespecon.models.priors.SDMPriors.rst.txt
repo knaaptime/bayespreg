@@ -25,7 +25,7 @@
    
       ~SDMPriors.beta_mu
       ~SDMPriors.beta_sigma
-      ~SDMPriors.nu_lam
+      ~SDMPriors.nu
       ~SDMPriors.rho_lower
       ~SDMPriors.rho_upper
       ~SDMPriors.sigma2_alpha

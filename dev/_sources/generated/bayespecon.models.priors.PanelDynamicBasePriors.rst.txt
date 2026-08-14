@@ -25,6 +25,7 @@
    
       ~PanelDynamicBasePriors.beta_mu
       ~PanelDynamicBasePriors.beta_sigma
+      ~PanelDynamicBasePriors.nu
       ~PanelDynamicBasePriors.phi_lower
       ~PanelDynamicBasePriors.phi_upper
       ~PanelDynamicBasePriors.sigma2_alpha

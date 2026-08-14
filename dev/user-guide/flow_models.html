@@ -1948,8 +1948,10 @@ the latent scale, so we fit on <code class="docutils literal notranslate"><span 
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 63s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">128</span> draws/s<span style="font-weight: bold">)</span>
+<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Gibbs sampling <span style="font-weight: bold">(</span>flow<span style="font-weight: bold">)</span>: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draw iterations <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> = <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">8</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total<span style="font-weight: bold">)</span>
+</pre>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling took 85s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">94</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div></div>
 </div>
@@ -1968,9 +1970,9 @@ the latent scale, so we fit on <code class="docutils literal notranslate"><span 
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlow: spatial autoregressive parameters ===
         mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  r_hat
-rho_d  0.319  0.062   0.196    0.433      0.003    0.002     423.0     597.0   1.02
-rho_o  0.146  0.067   0.011    0.258      0.005    0.002     173.0     539.0   1.03
-rho_w  0.162  0.078   0.019    0.295      0.005    0.003     217.0     376.0   1.02
+rho_d  0.313  0.060   0.199    0.422      0.003    0.002     327.0     689.0   1.02
+rho_o  0.145  0.063   0.017    0.249      0.004    0.002     256.0     320.0   1.01
+rho_w  0.170  0.080   0.020    0.309      0.006    0.003     177.0     461.0   1.01
 
 True values:  rho_d=0.35  rho_o=0.25  rho_w=0.1
 </code></pre></div>
@@ -1989,16 +1991,16 @@ True values:  rho_d=0.35  rho_o=0.25  rho_w=0.1
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlow: regression coefficients ===
                   mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  r_hat
-intercept        0.308  0.215  -0.111    0.688      0.005    0.003    2067.0    3598.0   1.00
-intra_indicator  0.249  0.332  -0.367    0.862      0.006    0.004    2751.0    3659.0   1.00
-dest_x0          1.117  0.113   0.901    1.325      0.007    0.002     248.0     709.0   1.02
-dest_x1         -0.629  0.086  -0.790   -0.469      0.004    0.001     501.0    1252.0   1.01
-orig_x0          0.496  0.083   0.335    0.641      0.003    0.002     768.0    1336.0   1.01
-orig_x1          0.330  0.074   0.188    0.463      0.002    0.001    2200.0    3274.0   1.01
-intra_x0         0.052  0.302  -0.489    0.644      0.005    0.004    4026.0    3796.0   1.00
-intra_x1        -0.145  0.324  -0.740    0.466      0.005    0.004    4079.0    3881.0   1.00
-log_distance    -0.874  0.199  -1.265   -0.522      0.006    0.003    1177.0    2484.0   1.01
-sigma            0.987  0.035   0.924    1.054      0.001    0.000    3820.0    3891.0   1.00
+intercept        0.312  0.210  -0.081    0.706      0.004    0.003    2849.0    3626.0   1.00
+intra_indicator  0.230  0.321  -0.387    0.820      0.006    0.004    3211.0    3553.0   1.00
+dest_x0          1.118  0.106   0.925    1.320      0.006    0.002     340.0     633.0   1.01
+dest_x1         -0.632  0.086  -0.802   -0.478      0.003    0.001     673.0    1453.0   1.00
+orig_x0          0.501  0.084   0.338    0.657      0.003    0.001     663.0    1283.0   1.00
+orig_x1          0.332  0.073   0.196    0.471      0.002    0.001    1783.0    3593.0   1.00
+intra_x0         0.060  0.305  -0.482    0.673      0.005    0.003    4179.0    3932.0   1.00
+intra_x1        -0.152  0.328  -0.780    0.444      0.005    0.004    3859.0    3732.0   1.00
+log_distance    -0.880  0.189  -1.232   -0.525      0.004    0.003    1811.0    2779.0   1.01
+sigma            0.987  0.035   0.923    1.056      0.001    0.000    3891.0    3524.0   1.00
 </code></pre></div>
 </div>
 </div>
@@ -2018,7 +2020,7 @@ sigma            0.987  0.035   0.924    1.054      0.001    0.000    3820.0    
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/5a3e36df6aa7fb81fc10e0027aff7cafbc39b74ecd0762f4ae37f34ccd2de325.png" src="../_images/5a3e36df6aa7fb81fc10e0027aff7cafbc39b74ecd0762f4ae37f34ccd2de325.png" />
+<img alt="../_images/1f5d2d5f746c8fd35108eb11188be959f799cba785530437612541a082106946.png" src="../_images/1f5d2d5f746c8fd35108eb11188be959f799cba785530437612541a082106946.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -2047,7 +2049,7 @@ sigma            0.987  0.035   0.924    1.054      0.001    0.000    3820.0    
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>findfont: Failed to find font weight semibold, now using 700.
 </code></pre></div>
 </div>
-<img alt="../_images/238056a3b398d701db80f8f768efd28935911840e008df8c3dd25c6617d4162c.png" src="../_images/238056a3b398d701db80f8f768efd28935911840e008df8c3dd25c6617d4162c.png" />
+<img alt="../_images/7f2c2f73680545784281b15995de425ed403d4b9f30a8e83b3e4d31073948399.png" src="../_images/7f2c2f73680545784281b15995de425ed403d4b9f30a8e83b3e4d31073948399.png" />
 </div>
 </div>
 <h2 id="sarflowseparable-constrained-model">3  <code class="docutils literal notranslate"><span class="pre">SARFlowSeparable</span></code>: Constrained model<a class="headerlink" href="#sarflowseparable-constrained-model" title="Link to this heading">¶</a></h2>
@@ -2124,7 +2126,7 @@ y_sep summary:  min=-9.82  mean=-3.48  max=1.70
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (4 chains in 2 jobs)
 NUTS: [rho_d, rho_o, beta, sigma]
-Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws total) took 12 seconds.
+Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws total) took 17 seconds.
 </code></pre></div>
 </div>
 <div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
@@ -2145,8 +2147,8 @@ Sampling 4 chains for 1_000 tune and 1_000 draw iterations (4_000 + 4_000 draws 
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlowSeparable: spatial autoregressive parameters ===
         mean     sd  hdi_3%  hdi_97%  mcse_mean  mcse_sd  ess_bulk  ess_tail  r_hat
-rho_d  0.377  0.050   0.277    0.465      0.001    0.001    3244.0    2843.0    1.0
-rho_o  0.240  0.064   0.120    0.363      0.001    0.001    2650.0    2473.0    1.0
+rho_d  0.378  0.050   0.281    0.467      0.001    0.001    3673.0    2888.0    1.0
+rho_o  0.243  0.067   0.106    0.360      0.001    0.001    2219.0    2448.0    1.0
 
 True values:  rho_d=0.4  rho_o=0.3  (rho_w = -rho_d*rho_o = -0.1200 is derived)
 </code></pre></div>
@@ -2167,7 +2169,7 @@ True values:  rho_d=0.4  rho_o=0.3  (rho_w = -rho_d*rho_o = -0.1200 is derived)
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/123d35dd80b5729e27a7ab69c73c8e7a61a95dd001359e34fecb98b4d768fee5.png" src="../_images/123d35dd80b5729e27a7ab69c73c8e7a61a95dd001359e34fecb98b4d768fee5.png" />
+<img alt="../_images/0905522a84e6cec0e92dc96ecdb14715d7ff271707dd858a4592bcf50edae5a0.png" src="../_images/0905522a84e6cec0e92dc96ecdb14715d7ff271707dd858a4592bcf50edae5a0.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -2186,7 +2188,7 @@ True values:  rho_d=0.4  rho_o=0.3  (rho_w = -rho_d*rho_o = -0.1200 is derived)
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/88b15cdeca8e576ee3cad1157e3540e44f7ee0cb89fd1b8903ff78390952c265.png" src="../_images/88b15cdeca8e576ee3cad1157e3540e44f7ee0cb89fd1b8903ff78390952c265.png" />
+<img alt="../_images/c0d2186c255b6dcb732b594ab4ec3565b2d87f1b757dbbe932ad7cbd91dbe6af.png" src="../_images/c0d2186c255b6dcb732b594ab4ec3565b2d87f1b757dbbe932ad7cbd91dbe6af.png" />
 </div>
 </div>
 <h2 id="design-matrix-details">4  Design Matrix Details<a class="headerlink" href="#design-matrix-details" title="Link to this heading">¶</a></h2>
@@ -2448,91 +2450,91 @@ Three modes are supported:</p>
       <th>x0</th>
       <th>combined</th>
       <th>origin</th>
-      <td>0.8209</td>
-      <td>0.6054</td>
-      <td>1.0664</td>
+      <td>0.8199</td>
+      <td>0.6010</td>
+      <td>1.0638</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>origin</th>
-      <td>0.4374</td>
-      <td>0.2334</td>
-      <td>0.6382</td>
+      <td>0.4369</td>
+      <td>0.2349</td>
+      <td>0.6355</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>destination</th>
-      <td>1.4037</td>
-      <td>1.2050</td>
-      <td>1.6299</td>
+      <td>1.4025</td>
+      <td>1.2158</td>
+      <td>1.6234</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>destination</th>
-      <td>-0.7548</td>
-      <td>-0.9251</td>
-      <td>-0.5809</td>
+      <td>-0.7563</td>
+      <td>-0.9354</td>
+      <td>-0.5765</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>intra</th>
-      <td>0.1136</td>
-      <td>0.0830</td>
-      <td>0.1454</td>
+      <td>0.1139</td>
+      <td>0.0836</td>
+      <td>0.1455</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>intra</th>
-      <td>-0.0225</td>
-      <td>-0.0540</td>
-      <td>0.0094</td>
-      <td>0.1735</td>
+      <td>-0.0230</td>
+      <td>-0.0552</td>
+      <td>0.0101</td>
+      <td>0.1635</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>network</th>
-      <td>2.1894</td>
-      <td>0.9906</td>
-      <td>4.1182</td>
+      <td>2.1788</td>
+      <td>1.1150</td>
+      <td>4.1739</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>network</th>
-      <td>-0.5265</td>
-      <td>-1.1873</td>
-      <td>-0.1270</td>
-      <td>0.0040</td>
+      <td>-0.5188</td>
+      <td>-1.1128</td>
+      <td>-0.1353</td>
+      <td>0.0065</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>total</th>
-      <td>4.5276</td>
-      <td>3.0743</td>
-      <td>6.8435</td>
+      <td>4.5152</td>
+      <td>3.1753</td>
+      <td>6.9056</td>
       <td>0.0000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>total</th>
-      <td>-0.8663</td>
-      <td>-1.7775</td>
-      <td>-0.2220</td>
-      <td>0.0050</td>
+      <td>-0.8613</td>
+      <td>-1.7017</td>
+      <td>-0.2431</td>
+      <td>0.0090</td>
     </tr>
   </tbody>
 </table>
@@ -2629,127 +2631,127 @@ symmetric_xo_xd = False
       <th>x0</th>
       <th>dest</th>
       <th>origin</th>
-      <td>0.6407</td>
-      <td>0.1341</td>
-      <td>2.7536</td>
+      <td>0.8639</td>
+      <td>0.1220</td>
+      <td>4.5386</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>origin</th>
-      <td>-0.3109</td>
-      <td>-1.2943</td>
-      <td>-0.0501</td>
+      <td>-0.4406</td>
+      <td>-2.3335</td>
+      <td>-0.0409</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>destination</th>
-      <td>1.3593</td>
-      <td>0.7385</td>
-      <td>3.3307</td>
+      <td>1.5925</td>
+      <td>0.6672</td>
+      <td>5.3836</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>destination</th>
-      <td>-0.8402</td>
-      <td>-1.9548</td>
-      <td>-0.4994</td>
+      <td>-0.9555</td>
+      <td>-2.9956</td>
+      <td>-0.4835</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>intra</th>
-      <td>0.3730</td>
-      <td>0.1542</td>
-      <td>0.8771</td>
+      <td>0.4293</td>
+      <td>0.1625</td>
+      <td>1.4062</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>intra</th>
-      <td>-0.1529</td>
-      <td>-0.4432</td>
-      <td>-0.0477</td>
-      <td>0.000</td>
+      <td>-0.1834</td>
+      <td>-0.6497</td>
+      <td>-0.0457</td>
+      <td>0.005</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>network</th>
-      <td>2.4404</td>
-      <td>0.4961</td>
-      <td>10.2273</td>
+      <td>3.3702</td>
+      <td>0.4702</td>
+      <td>17.9371</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>network</th>
-      <td>-1.4535</td>
-      <td>-5.8711</td>
-      <td>-0.3281</td>
+      <td>-1.9205</td>
+      <td>-9.7012</td>
+      <td>-0.2627</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>dest</th>
       <th>total</th>
-      <td>4.8133</td>
-      <td>1.6992</td>
-      <td>17.2895</td>
+      <td>6.2560</td>
+      <td>1.5125</td>
+      <td>29.2656</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>dest</th>
       <th>total</th>
-      <td>-2.7574</td>
-      <td>-9.4475</td>
-      <td>-0.9954</td>
+      <td>-3.5000</td>
+      <td>-15.7285</td>
+      <td>-0.8825</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">y0</th>
       <th rowspan="5" valign="top">orig</th>
       <th>origin</th>
-      <td>0.6754</td>
-      <td>0.1902</td>
-      <td>1.4498</td>
+      <td>0.7439</td>
+      <td>0.2929</td>
+      <td>1.7716</td>
       <td>0.005</td>
     </tr>
     <tr>
       <th>destination</th>
-      <td>0.1229</td>
-      <td>0.0044</td>
-      <td>0.6378</td>
+      <td>0.1984</td>
+      <td>0.0146</td>
+      <td>1.1404</td>
       <td>0.005</td>
     </tr>
     <tr>
       <th>intra</th>
-      <td>0.1689</td>
-      <td>0.0475</td>
-      <td>0.3624</td>
+      <td>0.1860</td>
+      <td>0.0732</td>
+      <td>0.4429</td>
       <td>0.005</td>
     </tr>
     <tr>
       <th>network</th>
-      <td>0.4915</td>
-      <td>0.0177</td>
-      <td>2.5512</td>
+      <td>0.7935</td>
+      <td>0.0583</td>
+      <td>4.5615</td>
       <td>0.005</td>
     </tr>
     <tr>
       <th>total</th>
-      <td>1.4587</td>
-      <td>0.3168</td>
-      <td>4.9573</td>
+      <td>1.9217</td>
+      <td>0.4900</td>
+      <td>7.9506</td>
       <td>0.005</td>
     </tr>
   </tbody>
@@ -2809,7 +2811,7 @@ expressions in Table 83.1 (with <span class="math notranslate nohighlight">\(A =
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [beta, sigma]
-Sampling 2 chains for 200 tune and 200 draw iterations (400 + 400 draws total) took 4 seconds.
+Sampling 2 chains for 200 tune and 200 draw iterations (400 + 400 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 The rhat statistic is larger than 1.01 for some parameters. This indicates problems during sampling. See https://arxiv.org/abs/1903.08008 for details
 </code></pre></div>
@@ -2854,35 +2856,35 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
       <th>x0</th>
       <th>combined</th>
       <th>origin</th>
-      <td>0.6475</td>
-      <td>0.5086</td>
-      <td>0.7942</td>
+      <td>0.6429</td>
+      <td>0.4863</td>
+      <td>0.7943</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>origin</th>
-      <td>0.4868</td>
-      <td>0.3394</td>
-      <td>0.6387</td>
+      <td>0.4854</td>
+      <td>0.3417</td>
+      <td>0.6274</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x0</th>
       <th>combined</th>
       <th>destination</th>
-      <td>1.2129</td>
-      <td>1.0806</td>
-      <td>1.3536</td>
+      <td>1.2125</td>
+      <td>1.0833</td>
+      <td>1.3515</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>destination</th>
-      <td>-0.6890</td>
-      <td>-0.8422</td>
+      <td>-0.6857</td>
+      <td>-0.8401</td>
       <td>-0.5414</td>
       <td>0.000</td>
     </tr>
@@ -2890,19 +2892,19 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
       <th>x0</th>
       <th>combined</th>
       <th>intra</th>
-      <td>0.0975</td>
-      <td>0.0629</td>
-      <td>0.1302</td>
+      <td>0.0983</td>
+      <td>0.0633</td>
+      <td>0.1297</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>intra</th>
-      <td>-0.0124</td>
-      <td>-0.0453</td>
-      <td>0.0258</td>
-      <td>0.515</td>
+      <td>-0.0133</td>
+      <td>-0.0457</td>
+      <td>0.0212</td>
+      <td>0.475</td>
     </tr>
     <tr>
       <th>x0</th>
@@ -2926,19 +2928,19 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
       <th>x0</th>
       <th>combined</th>
       <th>total</th>
-      <td>1.9578</td>
-      <td>1.7636</td>
-      <td>2.1686</td>
+      <td>1.9536</td>
+      <td>1.7522</td>
+      <td>2.1744</td>
       <td>0.000</td>
     </tr>
     <tr>
       <th>x1</th>
       <th>combined</th>
       <th>total</th>
-      <td>-0.2146</td>
-      <td>-0.4296</td>
-      <td>-0.0108</td>
-      <td>0.050</td>
+      <td>-0.2135</td>
+      <td>-0.4224</td>
+      <td>-0.0063</td>
+      <td>0.045</td>
     </tr>
   </tbody>
 </table>
@@ -2961,13 +2963,13 @@ The rhat statistic is larger than 1.01 for some parameters. This indicates probl
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>SARFlow                    r_hat&lt;1.01: False   ess_bulk&gt;400: False
         mean     sd  hdi_3%  hdi_97%  ess_bulk  r_hat
-rho_d  0.319  0.062   0.196    0.433     423.0   1.02
-rho_o  0.146  0.067   0.011    0.258     173.0   1.03
+rho_d  0.313  0.060   0.199    0.422     327.0   1.02
+rho_o  0.145  0.063   0.017    0.249     256.0   1.01
 
 SARFlowSeparable           r_hat&lt;1.01: True   ess_bulk&gt;400: True
         mean     sd  hdi_3%  hdi_97%  ess_bulk  r_hat
-rho_d  0.377  0.050   0.277    0.465    3244.0    1.0
-rho_o  0.240  0.064   0.120    0.363    2650.0    1.0
+rho_d  0.378  0.050   0.281    0.467    3673.0    1.0
+rho_o  0.243  0.067   0.106    0.360    2219.0    1.0
 </code></pre></div>
 </div>
 </div>
@@ -3027,32 +3029,32 @@ ESS, sampler yield, <span class="math notranslate nohighlight">\(\hat{R}\)</span
   <tbody>
     <tr>
       <th>rho_d</th>
-      <td>423.473944</td>
-      <td>596.711080</td>
-      <td>1.022417</td>
-      <td>0.003021</td>
-      <td>10.586849</td>
-      <td>1.091193</td>
+      <td>326.837267</td>
+      <td>689.222240</td>
+      <td>1.024057</td>
+      <td>0.003344</td>
+      <td>8.170932</td>
+      <td>1.277443</td>
       <td>False</td>
     </tr>
     <tr>
       <th>rho_o</th>
-      <td>172.645167</td>
-      <td>538.891556</td>
-      <td>1.031210</td>
-      <td>0.005107</td>
-      <td>4.316129</td>
-      <td>4.103705</td>
+      <td>256.333288</td>
+      <td>319.731237</td>
+      <td>1.010657</td>
+      <td>0.003934</td>
+      <td>6.408332</td>
+      <td>10.306177</td>
       <td>False</td>
     </tr>
     <tr>
       <th>rho_w</th>
-      <td>217.041141</td>
-      <td>376.042525</td>
-      <td>1.021515</td>
-      <td>0.005428</td>
-      <td>5.426029</td>
-      <td>4.453957</td>
+      <td>176.760903</td>
+      <td>461.355518</td>
+      <td>1.009437</td>
+      <td>0.006062</td>
+      <td>4.419023</td>
+      <td>3.938083</td>
       <td>False</td>
     </tr>
   </tbody>
@@ -3085,8 +3087,10 @@ ESS, sampler yield, <span class="math notranslate nohighlight">\(\hat{R}\)</span
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total took 61s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">132</span> draws/s<span style="font-weight: bold">)</span>
+<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Gibbs sampling <span style="font-weight: bold">(</span>flow<span style="font-weight: bold">)</span>: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draw iterations <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">2</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> = <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">8</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> draws total<span style="font-weight: bold">)</span>
+</pre>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling took 83s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">97</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div></div>
 </div>
@@ -3114,8 +3118,8 @@ ESS, sampler yield, <span class="math notranslate nohighlight">\(\hat{R}\)</span
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>LOO-CV model comparison:
                     elpd_loo      p_loo  elpd_diff    weight         se  warning
-SARFlow (3 ρ)    -561.410884  11.326398   0.000000  0.562678  14.375271    False
-SARFlowSeparable -561.546383  10.483965   0.135499  0.437322  13.873524    False
+SARFlowSeparable -561.643244  10.568139   0.000000  0.591269  13.892452    False
+SARFlow (3 ρ)    -561.849743  11.090395   0.206499  0.408731  14.347747    False
 </code></pre></div>
 </div>
 </div>
@@ -3149,24 +3153,26 @@ SARFlowSeparable -561.546383  10.483965   0.135499  0.437322  13.873524    False
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
-</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">800</span> draw iterations, <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">800</span> draws total took 59s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">122</span> draws/s<span style="font-weight: bold">)</span>
+<div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Gibbs sampling <span style="font-weight: bold">(</span>flow<span style="font-weight: bold">)</span>: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> chains for <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">000</span> tune and <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">800</span> draw iterations <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">4</span> x <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">800</span> = <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">7</span>,<span style="color: #008080; text-decoration-color: #008080; font-weight: bold">200</span> draws total<span style="font-weight: bold">)</span>
+</pre>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"></pre>
+</div><div class="output text_html"><pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace">Sampling took 80s <span style="font-weight: bold">(</span><span style="color: #008080; text-decoration-color: #008080; font-weight: bold">90</span> draws/s<span style="font-weight: bold">)</span>
 </pre>
 </div><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>=== SARFlow (restrict_positive=False) ===
                   mean     sd  hdi_3%  hdi_97%  r_hat
-rho_d            0.320  0.065   0.196    0.434   1.01
-rho_o            0.148  0.075   0.006    0.285   1.07
-rho_w            0.154  0.096  -0.021    0.337   1.06
-sigma            0.987  0.035   0.924    1.056   1.00
-intercept        0.310  0.215  -0.088    0.705   1.00
-intra_indicator  0.248  0.319  -0.385    0.812   1.00
-dest_x0          1.115  0.121   0.886    1.334   1.05
-dest_x1         -0.627  0.092  -0.808   -0.466   1.02
-orig_x0          0.496  0.086   0.344    0.663   1.01
-orig_x1          0.330  0.076   0.190    0.470   1.00
-intra_x0         0.048  0.303  -0.503    0.632   1.00
-intra_x1        -0.135  0.319  -0.702    0.508   1.00
-log_distance    -0.878  0.196  -1.235   -0.503   1.00
+rho_d            0.314  0.063   0.181    0.422   1.02
+rho_o            0.150  0.069   0.020    0.273   1.02
+rho_w            0.156  0.090  -0.006    0.333   1.05
+sigma            0.988  0.035   0.924    1.055   1.00
+intercept        0.323  0.212  -0.056    0.726   1.00
+intra_indicator  0.229  0.322  -0.408    0.777   1.00
+dest_x0          1.113  0.112   0.894    1.315   1.01
+dest_x1         -0.628  0.087  -0.794   -0.468   1.00
+orig_x0          0.499  0.086   0.347    0.666   1.01
+orig_x1          0.333  0.073   0.190    0.467   1.00
+intra_x0         0.053  0.302  -0.501    0.640   1.00
+intra_x1        -0.144  0.317  -0.722    0.440   1.00
+log_distance    -0.889  0.191  -1.218   -0.513   1.00
 </code></pre></div>
 </div>
 </div>
@@ -3259,20 +3265,20 @@ Proposition 3).</p>
     <tr>
       <th>0</th>
       <td>rho_d | (rho_o, rho_w)</td>
-      <td>1.6403</td>
-      <td>0.2003</td>
+      <td>1.7619</td>
+      <td>0.1844</td>
     </tr>
     <tr>
       <th>1</th>
       <td>rho_o | (rho_d, rho_w)</td>
-      <td>0.7989</td>
-      <td>0.3714</td>
+      <td>0.8135</td>
+      <td>0.3671</td>
     </tr>
     <tr>
       <th>2</th>
       <td>rho_w | (rho_d, rho_o)</td>
-      <td>0.8129</td>
-      <td>0.3673</td>
+      <td>0.8485</td>
+      <td>0.3570</td>
     </tr>
   </tbody>
 </table>

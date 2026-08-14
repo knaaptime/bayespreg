@@ -25,6 +25,7 @@
    
       ~PanelSDMRDynamicPriors.beta_mu
       ~PanelSDMRDynamicPriors.beta_sigma
+      ~PanelSDMRDynamicPriors.nu
       ~PanelSDMRDynamicPriors.phi_lower
       ~PanelSDMRDynamicPriors.phi_upper
       ~PanelSDMRDynamicPriors.rho_lower

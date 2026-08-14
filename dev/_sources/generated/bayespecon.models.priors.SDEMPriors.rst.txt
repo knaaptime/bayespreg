@@ -27,7 +27,7 @@
       ~SDEMPriors.beta_sigma
       ~SDEMPriors.lam_lower
       ~SDEMPriors.lam_upper
-      ~SDEMPriors.nu_lam
+      ~SDEMPriors.nu
       ~SDEMPriors.sigma2_alpha
       ~SDEMPriors.sigma2_beta
       ~SDEMPriors.sigma_sigma

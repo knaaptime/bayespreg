@@ -25,6 +25,7 @@
    
       ~PanelSARREPriors.beta_mu
       ~PanelSARREPriors.beta_sigma
+      ~PanelSARREPriors.nu
       ~PanelSARREPriors.rho_lower
       ~PanelSARREPriors.rho_upper
       ~PanelSARREPriors.sigma2_alpha

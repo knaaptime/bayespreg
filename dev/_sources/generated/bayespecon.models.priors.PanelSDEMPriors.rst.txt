@@ -27,6 +27,7 @@
       ~PanelSDEMPriors.beta_sigma
       ~PanelSDEMPriors.lam_lower
       ~PanelSDEMPriors.lam_upper
+      ~PanelSDEMPriors.nu
       ~PanelSDEMPriors.sigma2_alpha
       ~PanelSDEMPriors.sigma2_beta
       ~PanelSDEMPriors.sigma_sigma

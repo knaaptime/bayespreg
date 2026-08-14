@@ -26,7 +26,7 @@
       ~SDMTobitPriors.beta_mu
       ~SDMTobitPriors.beta_sigma
       ~SDMTobitPriors.censor_sigma
-      ~SDMTobitPriors.nu_lam
+      ~SDMTobitPriors.nu
       ~SDMTobitPriors.rho_lower
       ~SDMTobitPriors.rho_upper
       ~SDMTobitPriors.sigma2_alpha

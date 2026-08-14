@@ -27,7 +27,7 @@
       ~SEMPriors.beta_sigma
       ~SEMPriors.lam_lower
       ~SEMPriors.lam_upper
-      ~SEMPriors.nu_lam
+      ~SEMPriors.nu
       ~SEMPriors.sigma2_alpha
       ~SEMPriors.sigma2_beta
       ~SEMPriors.sigma_sigma

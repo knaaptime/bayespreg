@@ -25,6 +25,7 @@
    
       ~PanelSLXDynamicPriors.beta_mu
       ~PanelSLXDynamicPriors.beta_sigma
+      ~PanelSLXDynamicPriors.nu
       ~PanelSLXDynamicPriors.phi_lower
       ~PanelSLXDynamicPriors.phi_upper
       ~PanelSLXDynamicPriors.sigma2_alpha

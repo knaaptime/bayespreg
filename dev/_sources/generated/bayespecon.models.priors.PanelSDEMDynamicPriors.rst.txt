@@ -27,6 +27,7 @@
       ~PanelSDEMDynamicPriors.beta_sigma
       ~PanelSDEMDynamicPriors.lam_lower
       ~PanelSDEMDynamicPriors.lam_upper
+      ~PanelSDEMDynamicPriors.nu
       ~PanelSDEMDynamicPriors.phi_lower
       ~PanelSDEMDynamicPriors.phi_upper
       ~PanelSDEMDynamicPriors.sigma2_alpha

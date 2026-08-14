@@ -25,6 +25,7 @@
    
       ~PanelOLSDynamicPriors.beta_mu
       ~PanelOLSDynamicPriors.beta_sigma
+      ~PanelOLSDynamicPriors.nu
       ~PanelOLSDynamicPriors.phi_lower
       ~PanelOLSDynamicPriors.phi_upper
       ~PanelOLSDynamicPriors.sigma2_alpha

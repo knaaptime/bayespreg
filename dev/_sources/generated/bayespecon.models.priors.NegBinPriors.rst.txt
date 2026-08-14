@@ -27,7 +27,7 @@
       ~NegBinPriors.alpha_sigma
       ~NegBinPriors.beta_mu
       ~NegBinPriors.beta_sigma
-      ~NegBinPriors.nu_lam
+      ~NegBinPriors.nu
       ~NegBinPriors.sigma2_alpha
       ~NegBinPriors.sigma2_beta
       ~NegBinPriors.sigma_sigma

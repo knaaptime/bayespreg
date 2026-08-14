@@ -1341,8 +1341,8 @@
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Collecting git+https://github.com/ljwolf/geovalidate/
-  Cloning https://github.com/ljwolf/geovalidate/ to /tmp/pip-req-build-5863rqyn
-  Running command git clone --filter=blob:none --quiet https://github.com/ljwolf/geovalidate/ /tmp/pip-req-build-5863rqyn
+  Cloning https://github.com/ljwolf/geovalidate/ to /tmp/pip-req-build-xb4qsg31
+  Running command git clone --filter=blob:none --quiet https://github.com/ljwolf/geovalidate/ /tmp/pip-req-build-xb4qsg31
   Resolved https://github.com/ljwolf/geovalidate/ to commit ab72fa3336a6bcecefd4b69184a06307df1fe24e
   Installing build dependencies ... ?25l-
  \
@@ -1352,8 +1352,8 @@
 ?25h  Preparing metadata (pyproject.toml) ... ?25ldone
 ?25hBuilding wheels for collected packages: geovalidate
   Building wheel for geovalidate (pyproject.toml) ... ?25ldone
-?25h  Created wheel for geovalidate: filename=geovalidate-0.1.0-py3-none-any.whl size=68551 sha256=a9febcdc0590154c0dd09f9add0e9684247f3d0d7c2d5a27ef7d3d9f2dd90a7e
-  Stored in directory: /tmp/pip-ephem-wheel-cache-fdc2ytek/wheels/07/e1/1c/505deea87953881f24f62e5ffe6dc847b905492d550844705a
+?25h  Created wheel for geovalidate: filename=geovalidate-0.1.0-py3-none-any.whl size=68550 sha256=43e0c8f91651d462b49af93d6acbc12ecb4d5c3e95b986a96387cffd2bb6c1d7
+  Stored in directory: /tmp/pip-ephem-wheel-cache-4ppr16o8/wheels/07/e1/1c/505deea87953881f24f62e5ffe6dc847b905492d550844705a
 Successfully built geovalidate
 Installing collected packages: geovalidate
 Successfully installed geovalidate-0.1.0
@@ -1397,10 +1397,6 @@ Successfully installed geovalidate-0.1.0
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>n = 144, true rho = 0.6, columns = [&#39;y&#39;, &#39;X_0&#39;, &#39;X_1&#39;, &#39;X_2&#39;, &#39;geometry&#39;]
 </code></pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>/home/runner/micromamba/envs/test/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-  from .autonotebook import tqdm as notebook_tqdm
-</code></pre></div>
-</div>
 </div>
 </div>
 <h2 id="fit-candidate-models">Fit candidate models<a class="headerlink" href="#fit-candidate-models" title="Link to this heading">¶</a></h2>
@@ -1432,12 +1428,12 @@ Successfully installed geovalidate-0.1.0
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><code>Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [beta, sigma2]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 4 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 Initializing NUTS using jitter+adapt_diag...
 Multiprocess sampling (2 chains in 2 jobs)
 NUTS: [beta, sigma2]
-Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 4 seconds.
+Sampling 2 chains for 400 tune and 400 draw iterations (800 + 800 draws total) took 5 seconds.
 We recommend running at least 4 chains for robust computation of convergence diagnostics
 /home/runner/micromamba/envs/test/lib/python3.14/site-packages/bayespecon/_logdet/_jax.py:188: ComplexWarning: Casting complex values to real discards the imaginary part
   W_arr = np.asarray(W, dtype=np.float64)
@@ -1496,8 +1492,8 @@ We recommend running at least 4 chains for robust computation of convergence dia
   <tbody>
     <tr>
       <th>SAR</th>
-      <td>-210.503349</td>
-      <td>1.641558</td>
+      <td>-210.455318</td>
+      <td>1.722710</td>
       <td>5</td>
       <td>0.000000</td>
     </tr>
@@ -1506,21 +1502,21 @@ We recommend running at least 4 chains for robust computation of convergence dia
       <td>-236.216386</td>
       <td>2.348071</td>
       <td>5</td>
-      <td>-25.713037</td>
+      <td>-25.761069</td>
     </tr>
     <tr>
       <th>SEM</th>
-      <td>-239.369351</td>
-      <td>1.326354</td>
+      <td>-239.714462</td>
+      <td>1.364624</td>
       <td>5</td>
-      <td>-28.866001</td>
+      <td>-29.259144</td>
     </tr>
     <tr>
       <th>OLS</th>
       <td>-282.428976</td>
       <td>2.467718</td>
       <td>5</td>
-      <td>-71.925627</td>
+      <td>-71.973659</td>
     </tr>
   </tbody>
 </table>
@@ -1584,31 +1580,31 @@ We recommend running at least 4 chains for robust computation of convergence dia
   <tbody>
     <tr>
       <th>SAR</th>
-      <td>-207.632492</td>
-      <td>0.869222</td>
+      <td>-207.191256</td>
+      <td>0.906427</td>
       <td>HilbertKFold</td>
       <td>0.000000</td>
     </tr>
     <tr>
       <th>SEM</th>
-      <td>-226.743214</td>
-      <td>1.561786</td>
+      <td>-226.684752</td>
+      <td>1.638514</td>
       <td>HilbertKFold</td>
-      <td>-19.110721</td>
+      <td>-19.493496</td>
     </tr>
     <tr>
       <th>SLX</th>
       <td>-237.219069</td>
       <td>1.038330</td>
       <td>HilbertKFold</td>
-      <td>-29.586576</td>
+      <td>-30.027812</td>
     </tr>
     <tr>
       <th>OLS</th>
       <td>-280.125493</td>
       <td>1.441062</td>
       <td>HilbertKFold</td>
-      <td>-72.493000</td>
+      <td>-72.934237</td>
     </tr>
   </tbody>
 </table>

@@ -25,6 +25,7 @@
    
       ~PanelOLSPriors.beta_mu
       ~PanelOLSPriors.beta_sigma
+      ~PanelOLSPriors.nu
       ~PanelOLSPriors.sigma2_alpha
       ~PanelOLSPriors.sigma2_beta
       ~PanelOLSPriors.sigma_sigma

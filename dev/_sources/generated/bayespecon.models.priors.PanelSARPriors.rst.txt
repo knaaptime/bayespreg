@@ -25,6 +25,7 @@
    
       ~PanelSARPriors.beta_mu
       ~PanelSARPriors.beta_sigma
+      ~PanelSARPriors.nu
       ~PanelSARPriors.rho_lower
       ~PanelSARPriors.rho_upper
       ~PanelSARPriors.sigma2_alpha

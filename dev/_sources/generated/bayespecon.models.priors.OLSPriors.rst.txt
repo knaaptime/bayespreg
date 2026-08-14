@@ -25,7 +25,7 @@
    
       ~OLSPriors.beta_mu
       ~OLSPriors.beta_sigma
-      ~OLSPriors.nu_lam
+      ~OLSPriors.nu
       ~OLSPriors.sigma2_alpha
       ~OLSPriors.sigma2_beta
       ~OLSPriors.sigma_sigma

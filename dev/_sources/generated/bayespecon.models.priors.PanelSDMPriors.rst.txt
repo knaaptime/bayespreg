@@ -25,6 +25,7 @@
    
       ~PanelSDMPriors.beta_mu
       ~PanelSDMPriors.beta_sigma
+      ~PanelSDMPriors.nu
       ~PanelSDMPriors.rho_lower
       ~PanelSDMPriors.rho_upper
       ~PanelSDMPriors.sigma2_alpha

@@ -25,6 +25,7 @@
    
       ~PanelBasePriors.beta_mu
       ~PanelBasePriors.beta_sigma
+      ~PanelBasePriors.nu
       ~PanelBasePriors.sigma2_alpha
       ~PanelBasePriors.sigma2_beta
       ~PanelBasePriors.sigma_sigma

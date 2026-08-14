@@ -28,7 +28,7 @@
       ~SEMTobitPriors.censor_sigma
       ~SEMTobitPriors.lam_lower
       ~SEMTobitPriors.lam_upper
-      ~SEMTobitPriors.nu_lam
+      ~SEMTobitPriors.nu
       ~SEMTobitPriors.sigma2_alpha
       ~SEMTobitPriors.sigma2_beta
       ~SEMTobitPriors.sigma_sigma

@@ -2625,7 +2625,7 @@
 <p>Implements the practical recommendations of
 <span class="bibtex-citation" id="id1">Wolf <em>et al.</em> [<a class="reference internal" href="#id57" title="Levi John Wolf, Luc Anselin, and Daniel Arribas-Bel. Stochastic Efficiency of Bayesian Markov Chain Monte Carlo in Spatial Econometric Models: An Empirical Comparison of Exact Sampling Methods. Geographical Analysis, 50(1):97–119, 2018. URL: https://onlinelibrary.wiley.com/doi/abs/10.1111/gean.12135 (visited on 2026-04-20), doi:10.1111/gean.12135.">2018</a>]</span>: report effective sample
 size and yield for the spatial dependence parameter, and check that
-the posterior credible-interval width has stabilised.  When any
+the posterior credible-interval width has stabilized.  When any
 threshold is violated, a <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#UserWarning" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">UserWarning</span></code></a> is emitted (unless
 <code class="docutils literal notranslate"><span class="pre">emit_warnings=False</span></code>) describing the failure and pointing to
 the actionable fix (longer chains or thinning).</p>
@@ -2645,7 +2645,7 @@ reported in Wolf et al. (2018), Table 1.</p>
 </dd>
 <dt id="bayespecon.diagnostics.spatial_mcmc_diagnostic.max_hpdi_drift_pct"><span class="sig-name descname">max_hpdi_drift_pct</span><span class="p"> : </span><span class="desctype"><span class="desctype"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>, optional</span></span><a class="headerlink" href="#bayespecon.diagnostics.spatial_mcmc_diagnostic.max_hpdi_drift_pct" title="Permalink to this definition">¶</a></dt><dd><p>Maximum tolerated relative change in the 95 % HPDI width
 between the last third and the full post-warmup chain.  Large
-drift indicates the chain has not yet stabilised and
+drift indicates the chain has not yet stabilized and
 terminating now would understate uncertainty (Wolf et al.,
 2018, §”Impacts of small effective size and trace
 autocorrelation”).</p>

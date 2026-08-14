@@ -26,7 +26,7 @@
       ~SARTobitPriors.beta_mu
       ~SARTobitPriors.beta_sigma
       ~SARTobitPriors.censor_sigma
-      ~SARTobitPriors.nu_lam
+      ~SARTobitPriors.nu
       ~SARTobitPriors.rho_lower
       ~SARTobitPriors.rho_upper
       ~SARTobitPriors.sigma2_alpha

@@ -25,7 +25,7 @@
    
       ~SARPriors.beta_mu
       ~SARPriors.beta_sigma
-      ~SARPriors.nu_lam
+      ~SARPriors.nu
       ~SARPriors.rho_lower
       ~SARPriors.rho_upper
       ~SARPriors.sigma2_alpha

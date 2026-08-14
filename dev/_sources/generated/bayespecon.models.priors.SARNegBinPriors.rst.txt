@@ -27,7 +27,7 @@
       ~SARNegBinPriors.alpha_sigma
       ~SARNegBinPriors.beta_mu
       ~SARNegBinPriors.beta_sigma
-      ~SARNegBinPriors.nu_lam
+      ~SARNegBinPriors.nu
       ~SARNegBinPriors.rho_lower
       ~SARNegBinPriors.rho_upper
       ~SARNegBinPriors.sigma2_alpha

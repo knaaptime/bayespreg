@@ -25,6 +25,7 @@
    
       ~PanelSLXPriors.beta_mu
       ~PanelSLXPriors.beta_sigma
+      ~PanelSLXPriors.nu
       ~PanelSLXPriors.sigma2_alpha
       ~PanelSLXPriors.sigma2_beta
       ~PanelSLXPriors.sigma_sigma
