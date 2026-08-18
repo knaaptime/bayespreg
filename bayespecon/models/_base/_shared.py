@@ -7,6 +7,7 @@ to avoid circular imports and code duplication.
 
 from __future__ import annotations
 
+import inspect
 import warnings
 from functools import cached_property, partial
 from typing import Any, Optional, Union
@@ -17,7 +18,12 @@ import scipy.sparse as sp
 from formulaic import model_matrix
 from libpysal.graph import Graph
 
-from ..._lazy_deps import az
+from ..._backends.sampler_helpers import (
+    prepare_compile_kwargs,
+    prepare_idata_kwargs,
+    use_jax_likelihood,
+)
+from ..._lazy_deps import az, pm
 from ..._logdet import (
     make_logdet_fn,
     make_logdet_grad_numpy_vec_fn,
@@ -462,6 +468,42 @@ class SharedSpatialMethods:
         return [self._feature_names[i] for i in self._nonintercept_indices]
 
     @property
+    def _beta_nonintercept_indices(self) -> list[int]:
+        """Indices into the *posterior beta* for non-intercept columns.
+
+        When the intercept is present in beta (NUTS or cross-section models),
+        these are the same as ``_nonintercept_indices``.
+        When the intercept was dropped (Gibbs + FE), the indices are
+        shifted to account for the missing column.
+
+        Returns
+        -------
+        list[int]
+        """
+        if not getattr(self, "_intercept_dropped", False):
+            return list(self._nonintercept_indices)
+        ni = self._nonintercept_indices
+        n_const = ni[0] if ni else 0
+        return [i - n_const for i in ni]
+
+    @property
+    def _beta_wx_column_indices(self) -> list[int]:
+        """Indices into the *posterior beta1* (first k cols) for WX columns.
+
+        When the intercept is present, same as ``_wx_column_indices``.
+        When dropped (Gibbs + FE), shifted to account for the missing column.
+
+        Returns
+        -------
+        list[int]
+        """
+        if not getattr(self, "_intercept_dropped", False):
+            return list(getattr(self, "_wx_column_indices", []))
+        ni = self._nonintercept_indices
+        n_const = ni[0] if ni else 0
+        return [i - n_const for i in getattr(self, "_wx_column_indices", [])]
+
+    @property
     def _nu(self) -> float:
         """Student-t degrees of freedom for robust models (a fixed constant).
 
@@ -487,22 +529,185 @@ class SharedSpatialMethods:
     def _beta_names(self) -> list[str]:
         """Return coefficient labels used for posterior summaries.
 
+        For models with ``_has_wx_in_beta=True`` (SLX, SDM, SDEM), appends
+        ``W*{name}`` labels for the spatially-lagged covariates.
+
         Returns
         -------
         list[str]
             Coefficient labels aligned with the ``beta`` parameter.
         """
-        return list(self._feature_names)
+        names = list(self._feature_names)
+        if getattr(self, "_has_wx_in_beta", False) and getattr(
+            self, "_wx_feature_names", None
+        ):
+            names += [f"W*{name}" for name in self._wx_feature_names]
+        return names
 
-    def _model_coords(self) -> dict[str, list[str]]:
+    def _model_coords(self, extra: Optional[dict] = None) -> dict[str, list[str]]:
         """Return PyMC coordinate labels for named dimensions.
+
+        Parameters
+        ----------
+        extra : dict, optional
+            Additional coordinates to merge into the result.
 
         Returns
         -------
         dict[str, list[str]]
             Coordinates passed to :class:`pymc.Model`.
         """
-        return {"coefficient": self._beta_names()}
+        coords: dict[str, list[str]] = {"coefficient": self._beta_names()}
+        if extra:
+            coords.update(extra)
+        return coords
+
+    # ------------------------------------------------------------------
+    # Shared spatial-effects helpers
+    # ------------------------------------------------------------------
+    # These centralise the repeated direct/indirect/total effects formulas
+    # used by SAR, SEM, SLX/SDEM, and SDM models (cross-section and panel).
+    # Each returns ``(direct, indirect, total)`` arrays of shape ``(G, k)``.
+
+    def _sar_effects(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """SAR impacts: ``Direct = mean_diag(S)·β``, ``Total = mean_rowsum(S)·β``.
+
+        Uses the resolvent trace identities — no O(n³) eigendecomposition.
+        """
+        from ...diagnostics.lmtests import _get_posterior_draws
+
+        idata = self.inference_data
+        rho_draws = _get_posterior_draws(idata, "rho")
+        beta_draws = _get_posterior_draws(idata, "beta")
+
+        mean_diag = self._batch_mean_diag(rho_draws)
+        mean_row_sum = self._batch_mean_row_sum(rho_draws)
+
+        ni = self._beta_nonintercept_indices
+        direct = mean_diag[:, None] * beta_draws[:, ni]
+        total = mean_row_sum[:, None] * beta_draws[:, ni]
+        indirect = total - direct
+        return direct, indirect, total
+
+    def _sem_effects(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """SEM impacts: ``Direct = β``, ``Indirect = 0``, ``Total = β``.
+
+        The spatial-error filter does not affect partial derivatives of
+        :math:`y` w.r.t. :math:`X`.
+        """
+        from ...diagnostics.lmtests import _get_posterior_draws
+
+        idata = self.inference_data
+        beta_draws = _get_posterior_draws(idata, "beta")
+
+        ni = self._beta_nonintercept_indices
+        direct = beta_draws[:, ni].copy()
+        indirect = np.zeros_like(direct)
+        total = direct.copy()
+        return direct, indirect, total
+
+    def _slx_effects(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """SLX/SDEM impacts: linear in β₁ and β₂ via W diagonal/row-sum means.
+
+        ``Direct = β₁ + mean_diag(W)·β₂``, ``Total = β₁ + mean_rowsum(W)·β₂``.
+        """
+        from ...diagnostics.lmtests import _get_posterior_draws
+
+        idata = self.inference_data
+        beta_draws = _get_posterior_draws(idata, "beta")
+
+        if getattr(self, "_intercept_dropped", False):
+            k = len(self._beta_nonintercept_indices)
+        else:
+            k = self._X.shape[1]
+        kw = self._WX.shape[1]
+
+        beta1 = beta_draws[:, :k]
+        beta2 = beta_draws[:, k : k + kw]
+
+        mean_diag_w = float(self._W_sparse.diagonal().mean())
+        mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
+
+        wx_idx = self._beta_wx_column_indices
+        direct = beta1[:, wx_idx] + mean_diag_w * beta2
+        total = beta1[:, wx_idx] + mean_row_sum_w * beta2
+        indirect = total - direct
+        return direct, indirect, total
+
+    def _sdm_effects(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """SDM impacts: multiplier acts on both X and WX.
+
+        ``Direct = mean_diag(M)·β₁ + mean_diag(MW)·β₂``,
+        ``Total = mean_rowsum(M)·β₁ + mean_rowsum(MW)·β₂``.
+        """
+        from ...diagnostics.lmtests import _get_posterior_draws
+
+        idata = self.inference_data
+        rho_draws = _get_posterior_draws(idata, "rho")
+        beta_draws = _get_posterior_draws(idata, "beta")
+
+        if getattr(self, "_intercept_dropped", False):
+            k = len(self._beta_nonintercept_indices)
+        else:
+            k = self._X.shape[1]
+        kw = self._WX.shape[1]
+
+        beta1 = beta_draws[:, :k]
+        beta2 = beta_draws[:, k : k + kw]
+
+        mean_diag_M = self._batch_mean_diag(rho_draws)
+        mean_diag_MW = self._batch_mean_diag_MW(rho_draws)
+        mean_row_sum_M = self._batch_mean_row_sum(rho_draws)
+        mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)
+
+        wx_idx = self._beta_wx_column_indices
+        direct = mean_diag_M[:, None] * beta1[:, wx_idx] + mean_diag_MW[:, None] * beta2
+        total = (
+            mean_row_sum_M[:, None] * beta1[:, wx_idx]
+            + mean_row_sum_MW[:, None] * beta2
+        )
+        indirect = total - direct
+        return direct, indirect, total
+
+    # ------------------------------------------------------------------
+    # Default fitted values at posterior mean
+    # ------------------------------------------------------------------
+
+    def _fitted_mean_from_posterior(self) -> np.ndarray:
+        """Compute fitted values at posterior mean parameters.
+
+        Dispatches on ``_jacobian_param`` and ``_has_wx_in_beta``:
+
+        * **SAR/SDM** (``_jacobian_param == "rho"``): ``ρ·Wy + Z·β``
+        * **SEM/SDEM** (``_jacobian_param == "lam"`` or ``None``): ``Z·β``
+        * Models with ``_has_wx_in_beta``: ``Z = [X, WX]``, else ``Z = X``
+        * Panel FE with ``_intercept_dropped``: subset X columns
+
+        Subclasses with random effects (panel RE) or dynamic terms
+        override this method.
+        """
+        beta = self._posterior_mean("beta")
+
+        if self._has_wx_in_beta:
+            if getattr(self, "_intercept_dropped", False):
+                ni = self._beta_nonintercept_indices
+                Z = np.hstack([self._X[:, ni], self._WX])
+            else:
+                Z = np.hstack([self._X, self._WX])
+        else:
+            if getattr(self, "_intercept_dropped", False):
+                ni = self._beta_nonintercept_indices
+                Z = self._X[:, ni]
+            else:
+                Z = self._X
+
+        fitted = Z @ beta
+
+        if self._jacobian_param == "rho":
+            rho = float(self._posterior_mean("rho"))
+            fitted = rho * self._Wy + fitted
+
+        return fitted
 
     @staticmethod
     def _rename_summary_index(summary_df: pd.DataFrame) -> pd.DataFrame:
@@ -556,6 +761,149 @@ class SharedSpatialMethods:
         Jacobian-corrected pointwise log-likelihood for information criteria.
         """
         return idata
+
+    # ------------------------------------------------------------------
+    # Shared NUTS sampling path
+    # ------------------------------------------------------------------
+
+    def _fit_nuts(
+        self,
+        *,
+        draws: int,
+        tune: int,
+        chains: int,
+        target_accept: float = 0.9,
+        random_seed: Optional[int],
+        progressbar: bool,
+        nuts_sampler: str = "pymc",
+        idata_kwargs: dict[str, Any] | None = None,
+        compute_log_likelihood: bool = False,
+        sample_kwargs: dict[str, Any] | None = None,
+    ) -> tuple["az.InferenceData", bool]:
+        """Shared NUTS sampling path used by model-specific ``fit`` methods.
+
+        Inspects ``_build_pymc_model`` for optional ``compute_log_likelihood``
+        and ``nuts_sampler`` parameters, builds the model, runs ``pm.sample``,
+        and returns ``(idata, compute_log_likelihood)`` where the boolean
+        reflects the post-policy value after :func:`prepare_idata_kwargs`.
+
+        Returns
+        -------
+        tuple[arviz.InferenceData, bool]
+        """
+        sample_kwargs = dict(sample_kwargs or {})
+        idata_kwargs = dict(idata_kwargs or {})
+
+        build_kwargs: dict[str, Any] = {}
+        build_sig = inspect.signature(self._build_pymc_model)
+        if "compute_log_likelihood" in build_sig.parameters:
+            build_kwargs["compute_log_likelihood"] = compute_log_likelihood
+        if "nuts_sampler" in build_sig.parameters:
+            build_kwargs["nuts_sampler"] = nuts_sampler
+
+        model = self._build_pymc_model(**build_kwargs)
+        self._pymc_model = model
+
+        idata_kwargs = prepare_idata_kwargs(idata_kwargs, model, nuts_sampler)
+        compute_log_likelihood = bool(idata_kwargs.get("log_likelihood", False))
+        sample_kwargs = prepare_compile_kwargs(sample_kwargs, nuts_sampler)
+
+        with model:
+            self._idata = pm.sample(
+                draws=draws,
+                tune=tune,
+                chains=chains,
+                target_accept=target_accept,
+                random_seed=random_seed,
+                idata_kwargs=idata_kwargs,
+                nuts_sampler=nuts_sampler,
+                progressbar=progressbar,
+                **sample_kwargs,
+            )
+
+        return self._idata, compute_log_likelihood
+
+    # ------------------------------------------------------------------
+    # Shared Gaussian log-likelihood reconstruction
+    # ------------------------------------------------------------------
+
+    def _reconstruct_gaussian_log_likelihood(
+        self,
+        *,
+        spatial_param: str,
+        nuts_sampler: str,
+        spatial_lag_fn=None,
+        alpha_component: Optional[np.ndarray] = None,
+    ) -> None:
+        """Rebuild complete pointwise log-likelihood for Gaussian spatial models.
+
+        Shared core for cross-sectional and panel models.  Dispatches by
+        spatial term type (``rho`` vs ``lam``), computes per-draw residuals,
+        applies the Jacobian correction, and writes back to ``idata``.
+
+        Parameters
+        ----------
+        spatial_param : str
+            Either ``"rho"`` (SAR/SDM) or ``"lam"`` (SEM/SDEM).
+        nuts_sampler : str
+            NUTS sampler name — JAX backends already capture the complete
+            log-likelihood for SEM, so reconstruction is skipped.
+        spatial_lag_fn : callable, optional
+            Function ``f(resid) -> W_resid`` for the SEM whitening step.
+            If ``None``, uses ``self._spatial_lag`` (which delegates to the
+            model's ``_structure``).
+        alpha_component : np.ndarray, optional
+            Random-effects contribution for panel RE models, shape
+            ``(n_draws, n_obs)``.  Added to the mean for ``rho`` models and
+            subtracted from residuals for ``lam`` models.
+        """
+        if not hasattr(self, "_idata"):
+            return
+
+        if spatial_param not in {"rho", "lam"}:
+            return
+
+        if getattr(self, "_native_log_likelihood", False):
+            return
+
+        if spatial_param == "lam" and use_jax_likelihood(nuts_sampler):
+            return
+
+        idata = self._idata
+        n = int(self._y.shape[0])
+        Z = np.hstack([self._X, self._WX]) if self._has_wx_in_beta else self._X
+
+        spatial_draws = idata.posterior[spatial_param].values.reshape(-1)
+        beta_draws = idata.posterior["beta"].values.reshape(-1, Z.shape[1])
+        sigma_draws = idata.posterior["sigma"].values.reshape(-1)
+        nu_draws = np.full(spatial_draws.shape[0], self._nu) if self.robust else None
+
+        if spatial_param == "rho":
+            mu = spatial_draws[:, None] * self._Wy[None, :] + (beta_draws @ Z.T)
+            if alpha_component is not None:
+                mu = mu + alpha_component
+            eps = self._y[None, :] - mu
+        else:
+            resid = self._y[None, :] - (beta_draws @ Z.T)
+            if alpha_component is not None:
+                resid = resid - alpha_component
+            if spatial_lag_fn is not None:
+                W_resid = spatial_lag_fn(resid)
+            else:
+                # Cross-section default: (W @ resid.T).T for batch (draws, n).
+                W_resid = np.asarray(self._W_sparse @ resid.T, dtype=np.float64).T
+            eps = resid - spatial_draws[:, None] * W_resid
+
+        ll_data = _pointwise_gaussian_loglik(eps, sigma_draws, nu_draws)
+        jacobian = self._logdet_numpy_vec_fn(spatial_draws)
+        ll_total = ll_data + jacobian[:, None] / n
+
+        n_chains = idata.posterior.sizes["chain"]
+        n_draws_per_chain = idata.posterior.sizes["draw"]
+        _write_log_likelihood_to_idata(
+            idata,
+            ll_total.reshape(n_chains, n_draws_per_chain, n),
+        )
 
     @staticmethod
     def _spatial_lag_column_indices(

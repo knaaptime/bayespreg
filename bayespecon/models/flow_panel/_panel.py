@@ -11,18 +11,13 @@ stacked to length n^2 * T.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
 import pytensor.tensor as pt
 import scipy.sparse as sp
 
-from ..._backends.sampler_helpers import (
-    enforce_c_backend,
-    prepare_compile_kwargs,
-    prepare_idata_kwargs,
-)
 from ..._lazy_deps import az, pm
 from ..._logdet import (
     make_flow_separable_logdet,
@@ -30,14 +25,16 @@ from ..._logdet import (
 )
 from ..._ops import kron_solve_matrix
 from ...graph import _weights_to_csr, flow_trace_blocks, flow_weight_matrices
+from .._mixins._flow_shared import FlowSharedMethods
 from ..flow import (
     _build_flow_effect_masks,
     _compute_flow_effects_lesage,
+    _compute_ols_flow_effects,
 )
 from ..panel_base import SpatialPanelModel, _demean_panel
 
 
-class FlowPanelModel(SpatialPanelModel):
+class FlowPanelModel(FlowSharedMethods, SpatialPanelModel):
     """Abstract base class for balanced panel spatial flow models.
 
     Parameters
@@ -294,278 +291,11 @@ class FlowPanelModel(SpatialPanelModel):
     ) -> dict[str, np.ndarray]:
         """Compute posterior effects per draw."""
 
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Posterior-mean fitted values on transformed scale."""
-        raise NotImplementedError(
-            "Fitted values not yet implemented for flow panel models."
-        )
-
-    def _posterior_var_names(
-        self,
-        model: pm.Model,
-        *,
-        store_lambda: bool,
-    ) -> list[str]:
-        names = [rv.name for rv in model.free_RVs]
-        names.extend(
-            var.name
-            for var in model.deterministics
-            if store_lambda or var.name != "lambda"
-        )
-        return list(dict.fromkeys(name for name in names if name is not None))
-
-    def fit(
-        self,
-        draws: int = 2000,
-        tune: int = 1000,
-        chains: int = 4,
-        random_seed: Optional[int] = None,
-        store_lambda: bool = False,
-        idata_kwargs: Optional[dict] = None,
-        progressbar: bool = True,
-        **sample_kwargs,
-    ) -> az.InferenceData:
-        """Draw samples from the posterior via PyMC NUTS.
-
-        Models with a resolvent-gradient path (``SARFlowPanel``, ``SEMFlowPanel``)
-        override ``fit`` via :class:`_ResolventFlowPanelMixin` to add
-        ``sampler="gibbs"`` support; this base method is the NUTS-only path.
-        """
-        idata_kwargs = dict(idata_kwargs) if idata_kwargs else {}
-        idata_kwargs.setdefault("log_likelihood", True)
-        compute_log_likelihood = bool(idata_kwargs.get("log_likelihood", False))
-        nuts_sampler = sample_kwargs.pop("nuts_sampler", "pymc")
-        target_accept = sample_kwargs.pop("target_accept", 0.9)
-        nuts_sampler = enforce_c_backend(
-            nuts_sampler,
-            requires_c_backend=getattr(self, "_requires_c_backend", False),
-            model_name=type(self).__name__,
-        )
-
-        model = self._build_pymc_model()
-        self._pymc_model = model
-        if "var_names" not in sample_kwargs and not store_lambda:
-            sample_kwargs["var_names"] = self._posterior_var_names(
-                model,
-                store_lambda=False,
-            )
-        idata_kwargs = prepare_idata_kwargs(idata_kwargs, model, nuts_sampler)
-        sample_kwargs = prepare_compile_kwargs(sample_kwargs, nuts_sampler)
-        with model:
-            self._idata = pm.sample(
-                draws=draws,
-                tune=tune,
-                chains=chains,
-                target_accept=target_accept,
-                random_seed=random_seed,
-                idata_kwargs=idata_kwargs,
-                progressbar=progressbar,
-                nuts_sampler=nuts_sampler,
-                **sample_kwargs,
-            )
-        if compute_log_likelihood:
-            self._attach_complete_log_likelihood(self._idata)
-        return self._idata
-
-    def spatial_diagnostics_decision(
-        self, alpha: float = 0.05, format: str = "graphviz"
-    ) -> Any:
-        """Return a model-selection decision from Bayesian LM test results.
-
-        Walks the panel-flow decision tree using Bayesian p-values from
-        :meth:`spatial_diagnostics` and recommends either ``OLSFlowPanel``
-        (no spatial dependence detected) or ``SARFlowPanel`` (at least one
-        direction is significant).
-
-        Parameters
-        ----------
-        alpha : float, default 0.05
-            Significance level for the Bayesian p-values.
-        format : {"graphviz", "ascii", "model"}, default "graphviz"
-            Output format.  ``"model"`` returns the recommended model name
-            string.  ``"ascii"`` returns an indented box-drawing tree.
-            ``"graphviz"`` returns a :class:`graphviz.Digraph` (with ASCII
-            fallback if graphviz is not installed).
-
-        Returns
-        -------
-        str or graphviz.Digraph
-        """
-        from ...diagnostics import _decision_trees as _dt
-
-        diag = self.spatial_diagnostics()
-        model_type = self.__class__.__name__
-
-        def _sig(test_name: str) -> bool:
-            if test_name not in diag.index:
-                return False
-            pval = diag.loc[test_name, "p_value"]
-            return not np.isnan(pval) and pval < alpha
-
-        spec = _dt.get_panel_flow_spec(model_type)
-        decision, path = _dt.evaluate(spec, sig_lookup=_sig)
-
-        p_values: dict[str, float] = {}
-        for test_name in diag.index:
-            pv = diag.loc[test_name, "p_value"]
-            if not np.isnan(pv):
-                p_values[str(test_name)] = float(pv)
-
-        return _dt.render(
-            spec,
-            path,
-            decision,
-            p_values=p_values,
-            alpha=alpha,
-            fmt=format,
-            title=f"{model_type} decision tree (alpha={alpha})",
-        )
-
-    def _get_decision_spec(self, model_type: str):
-        """Return the panel-flow decision-tree spec for this model type.
-
-        Overrides :meth:`SpatialPanelModel._get_decision_spec` to use
-        :func:`get_panel_flow_spec` instead of :func:`get_panel_spec`.
-        """
-        from ...diagnostics import _decision_trees as _dt
-
-        return _dt.get_panel_flow_spec(model_type)
-
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean parameters.
-
-        Flow panel models override this in subclasses when fitted values
-        are needed.  The base implementation raises ``NotImplementedError``.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement fitted_values()."
-        )
-
-    def _model_coords(self, extra: Optional[dict] = None) -> dict:
-        """Return named dimensions for PyMC model coordinates."""
-        coords = {"coefficient": self._feature_names}
-        if extra:
-            coords.update(extra)
-        return coords
-
-    @property
-    def _nonintercept_indices(self) -> list[int]:
-        """Return indices of non-constant (non-intercept) columns in X.
-
-        This is used to exclude the intercept from impact measures, since
-        the intercept has no meaningful spatial effect interpretation.
-
-        Returns
-        -------
-        list[int]
-            Column indices of X that are not constant/intercept columns.
-        """
-        indices: list[int] = []
-        for j, name in enumerate(self._feature_names):
-            column = self._X[:, j]
-            is_named_intercept = name.lower() == "intercept"
-            is_constant = np.allclose(column, column[0])
-            if not (is_named_intercept or is_constant):
-                indices.append(j)
-        return indices
-
     # ------------------------------------------------------------------
-    # Pointwise log-likelihood (with Jacobian correction for SAR variants)
+    # Public API (fit, spatial_diagnostics_decision, etc.) and sparse filter
+    # helpers (_assemble_A, _A_solver, _solve_A, _attach_complete_log_likelihood,
+    # etc.) inherited from FlowSharedMethods — see .._mixins._flow_shared
     # ------------------------------------------------------------------
-
-    def _compute_jacobian_log_det(self, posterior) -> Optional[np.ndarray]:
-        """Per-draw :math:`T \\cdot \\log|I_N - \\rho_d W_d - \\rho_o W_o - \\rho_w W_w|`.
-
-        Returns ``None`` (the default) when no Jacobian correction is
-        required — for OLS / NB panel baselines (``A = I_N``) and the
-        NB SAR variants (Negative-Binomial observation density on counts is
-        already captured exactly).  Subclasses with a Gaussian observation
-        model and a ``pm.Potential("jacobian", T * log|A|)`` term must
-        override this to return the per-draw value of that potential.
-        """
-        return None
-
-    def _attach_complete_log_likelihood(self, idata) -> None:
-        """Add Jacobian contribution to the pointwise log-likelihood.
-
-        See :meth:`FlowModel._attach_complete_log_likelihood` for details.
-        """
-        if idata is None or not hasattr(idata, "log_likelihood"):
-            return
-        if "obs" not in idata.log_likelihood.data_vars:
-            return
-
-        jacobian_draws = self._compute_jacobian_log_det(idata.posterior)
-        if jacobian_draws is None:
-            return
-
-        import xarray as xr
-
-        ll_da = idata.log_likelihood["obs"]
-        n_chains = ll_da.sizes["chain"]
-        n_draws_per_chain = ll_da.sizes["draw"]
-        n_obs = int(np.prod(ll_da.shape[2:]))
-
-        ll_array = ll_da.values.reshape(n_chains * n_draws_per_chain, n_obs)
-        jacobian_draws = np.asarray(jacobian_draws, dtype=np.float64).reshape(-1)
-        if jacobian_draws.shape[0] != ll_array.shape[0]:
-            raise RuntimeError(
-                "Posterior draw count does not match log-likelihood shape: "
-                f"{jacobian_draws.shape[0]} vs {ll_array.shape[0]}."
-            )
-
-        ll_array = ll_array + jacobian_draws[:, None] / n_obs
-        ll_array = ll_array.reshape(n_chains, n_draws_per_chain, n_obs)
-
-        new_da = xr.DataArray(ll_array, dims=("chain", "draw", "obs_dim"), name="obs")
-        idata["log_likelihood"] = xr.Dataset({"obs": new_da})
-
-    def _attach_flow_log_abs_det(self, idata, *, n_probes: int = 16, n_quad: int = 6):
-        """Record per-draw ``T·log|A(ρ)|`` in ``idata.sample_stats`` as a diagnostic.
-
-        Used by the count (NB) flow panel models: the discrete likelihood carries no
-        ``|A|`` change-of-variables term (so it must not enter the LOO
-        ``log_likelihood``), but the spatial-filter log-determinant is still exposed
-        for inspection — computed with the scalable resolvent value estimator and
-        scaled by the panel length ``T``.
-        """
-        from ...samplers.gaussian._flow_resolvent import attach_flow_log_abs_det
-
-        attach_flow_log_abs_det(
-            idata,
-            self._W_sparse,
-            T=int(getattr(self, "_T", 1)),
-            n_probes=n_probes,
-            n_quad=n_quad,
-        )
-        return idata
-
-    def _assemble_A(self, rho_d: float, rho_o: float, rho_w: float) -> sp.csr_matrix:
-        """Assemble A = I - rho_d*Wd - rho_o*Wo - rho_w*Ww for one period."""
-        eye_n = sp.eye(self._N_flow, format="csr", dtype=np.float64)
-        return eye_n - rho_d * self._Wd - rho_o * self._Wo - rho_w * self._Ww
-
-    @property
-    def _A_solver(self):
-        """Lazily-built :class:`CachedSparseSolver` over ``[Wd, Wo, Ww]``.
-
-        ``A = I - ρ_d W_d - ρ_o W_o - ρ_w W_w`` has a fixed sparsity pattern
-        across draws — only the three ρ values rescale.  sparsax (when
-        installed) caches the fill-reducing symbolic analysis keyed on the
-        merged COO pattern, so repeated solves across posterior draws /
-        posterior-predictive / LeSage effects pay the symbolic cost once.
-        """
-        cached = getattr(self, "_cached_A_solver", None)
-        if cached is None:
-            from ...samplers._utils._sparsax_utils import CachedSparseSolver
-
-            cached = CachedSparseSolver([self._Wd, self._Wo, self._Ww], self._N_flow)
-            self._cached_A_solver = cached
-        return cached
-
-    def _solve_A(self, rho_d, rho_o, rho_w, rhs):
-        """Solve ``A(ρ_d, ρ_o, ρ_w) x = rhs`` using the cached symbolic analysis."""
-        return self._A_solver.solve([-rho_d, -rho_o, -rho_w], rhs)
 
     def _sparse_flow_panel_lag(
         self, v: np.ndarray, W_flow: sp.csr_matrix
@@ -2259,7 +1989,7 @@ class SEMFlowPanel(_ResolventFlowPanelMixin, _SEMFlowPanelMixin, FlowPanelModel)
         """Closed-form effects (delegates to OLSFlowPanel logic)."""
         if self._idata is None:
             raise RuntimeError("Model has not been fit yet. Call fit() first.")
-        return _ols_panel_effects(
+        return _compute_ols_flow_effects(
             self._idata,
             n=self._n,
             k_d=self._k_d,
@@ -2430,7 +2160,7 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
     ) -> dict[str, np.ndarray]:
         if self._idata is None:
             raise RuntimeError("Model has not been fit yet. Call fit() first.")
-        return _ols_panel_effects(
+        return _compute_ols_flow_effects(
             self._idata,
             n=self._n,
             k_d=self._k_d,
@@ -2439,66 +2169,3 @@ class SEMFlowSeparablePanel(_SEMFlowPanelMixin, FlowPanelModel):
             intra_idx=self._intra_idx,
             draws=draws,
         )
-
-
-def _ols_panel_effects(
-    idata: az.InferenceData,
-    *,
-    n: int,
-    k_d: int,
-    k_o: int,
-    feature_names: list[str],
-    intra_idx: Optional[np.ndarray],
-    draws: Optional[int],
-) -> dict[str, np.ndarray]:
-    """Closed-form Thomas-Agnan & LeSage (2014, Table 83.1) effects.
-
-    Shared between :class:`OLSFlowPanel`, :class:`SEMFlowPanel`, and
-    :class:`SEMFlowSeparablePanel` — all of which have :math:`\\mathbb{E}[y]
-    = X\\beta` (no :math:`X`-mediated spillovers).
-    """
-    from ..flow import _EFFECT_KEYS
-
-    beta_draws = idata.posterior["beta"].values.reshape(-1, len(feature_names))
-
-    dest_start = 2
-    orig_start = 2 + k_d
-    intra_start = 2 + k_d + k_o
-    has_intra = intra_idx is not None and beta_draws.shape[1] >= intra_start + k_d
-
-    n_draws_total = beta_draws.shape[0]
-    if draws is not None:
-        n_draws_total = min(draws, n_draws_total)
-        beta_draws = beta_draws[:n_draws_total]
-
-    bd = beta_draws[:, dest_start : dest_start + k_d]
-    bo = beta_draws[:, orig_start : orig_start + k_o]
-    bi = (
-        beta_draws[:, intra_start : intra_start + k_d]
-        if has_intra
-        else np.zeros((n_draws_total, k_d), dtype=np.float64)
-    )
-
-    zeros_d = np.zeros_like(bd)
-    zeros_o = np.zeros_like(bo)
-    out: dict[str, np.ndarray] = {}
-    out["dest_total"] = bd + bi / n
-    out["dest_destination"] = bd * (n - 1) / n
-    out["dest_intra"] = (bd + bi) / n
-    out["dest_origin"] = zeros_d.copy()
-    out["dest_network"] = zeros_d.copy()
-
-    out["orig_total"] = bo
-    out["orig_origin"] = bo * (n - 1) / n
-    out["orig_intra"] = bo / n
-    out["orig_destination"] = zeros_o.copy()
-    out["orig_network"] = zeros_o.copy()
-
-    if k_d == k_o:
-        for eff in _EFFECT_KEYS:
-            out[eff] = out[f"dest_{eff}"] + out[f"orig_{eff}"]
-    else:
-        for eff in _EFFECT_KEYS:
-            out[eff] = np.concatenate([out[f"dest_{eff}"], out[f"orig_{eff}"]], axis=1)
-
-    return out

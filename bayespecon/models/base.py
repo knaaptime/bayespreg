@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Any, Optional, Union
@@ -12,12 +11,7 @@ import pandas as pd
 import scipy.sparse as sp
 from libpysal.graph import Graph
 
-from .._backends.sampler_helpers import (
-    jax_available,
-    prepare_compile_kwargs,
-    prepare_idata_kwargs,
-    use_jax_likelihood,
-)
+from .._backends.sampler_helpers import jax_available
 from .._lazy_deps import az, pm
 from .._logdet import (
     resolve_logdet_bounds,
@@ -25,8 +19,6 @@ from .._logdet import (
 from ._base._shared import (
     SharedSpatialMethods,
     _parse_W,
-    _pointwise_gaussian_loglik,
-    _write_log_likelihood_to_idata,
 )
 from ._base._structure import CrossSectionStructure
 
@@ -382,58 +374,7 @@ class SpatialModel(SharedSpatialMethods, ABC):
         self._idata = self._postprocess_idata(self._idata)
         return self._idata
 
-    def _fit_nuts(
-        self,
-        *,
-        draws: int,
-        tune: int,
-        chains: int,
-        target_accept: float,
-        random_seed: Optional[int],
-        progressbar: bool,
-        nuts_sampler: str = "pymc",
-        idata_kwargs: dict[str, Any] | None = None,
-        compute_log_likelihood: bool = False,
-        sample_kwargs: dict[str, Any] | None = None,
-    ) -> tuple[az.InferenceData, bool]:
-        """Shared NUTS sampling path used by model-specific ``fit`` methods.
-
-        Returns
-        -------
-        tuple[arviz.InferenceData, bool]
-            ``(idata, compute_log_likelihood)`` where the boolean reflects the
-            post-policy value after :func:`prepare_idata_kwargs`.
-        """
-        sample_kwargs = dict(sample_kwargs or {})
-        idata_kwargs = dict(idata_kwargs or {})
-
-        build_kwargs: dict[str, Any] = {}
-        build_sig = inspect.signature(self._build_pymc_model)
-        if "compute_log_likelihood" in build_sig.parameters:
-            build_kwargs["compute_log_likelihood"] = compute_log_likelihood
-        if "nuts_sampler" in build_sig.parameters:
-            build_kwargs["nuts_sampler"] = nuts_sampler
-
-        model = self._build_pymc_model(**build_kwargs)
-        self._pymc_model = model
-
-        idata_kwargs = prepare_idata_kwargs(idata_kwargs, model, nuts_sampler)
-        compute_log_likelihood = bool(idata_kwargs.get("log_likelihood", False))
-        sample_kwargs = prepare_compile_kwargs(sample_kwargs, nuts_sampler)
-
-        with model:
-            self._idata = pm.sample(
-                draws=draws,
-                tune=tune,
-                chains=chains,
-                target_accept=target_accept,
-                random_seed=random_seed,
-                idata_kwargs=idata_kwargs,
-                nuts_sampler=nuts_sampler,
-                progressbar=progressbar,
-                **sample_kwargs,
-            )
-        return self._idata, compute_log_likelihood
+        # _fit_nuts inherited from SharedSpatialMethods.
 
     def _reconstruct_cross_sectional_log_likelihood(
         self,
@@ -442,54 +383,11 @@ class SpatialModel(SharedSpatialMethods, ABC):
     ) -> None:
         """Rebuild complete pointwise log-likelihood for cross-sectional models.
 
-        Dispatches by spatial term type (``rho`` vs ``lam``) and whether the
-        model's beta vector includes WX terms.
+        Delegates to :meth:`SharedSpatialMethods._reconstruct_gaussian_log_likelihood`.
         """
-        if not hasattr(self, "_idata"):
-            return
-
-        spatial_param = self._jacobian_param
-        if spatial_param not in {"rho", "lam"}:
-            return
-
-        # When ``_build_pymc_model`` registered the likelihood as an observed
-        # CustomDist with the Jacobian folded in, PyMC already captured a
-        # complete pointwise log-likelihood — rebuilding it here would be pure
-        # duplicated work.
-        if getattr(self, "_native_log_likelihood", False):
-            return
-
-        # SEM/SDEM on JAX backends build an observed CustomDist and already
-        # have complete log_likelihood from PyMC.
-        if spatial_param == "lam" and use_jax_likelihood(nuts_sampler):
-            return
-
-        idata = self._idata
-        n = int(self._y.shape[0])
-        Z = np.hstack([self._X, self._WX]) if self._has_wx_in_beta else self._X
-
-        spatial_draws = idata.posterior[spatial_param].values.reshape(-1)
-        beta_draws = idata.posterior["beta"].values.reshape(-1, Z.shape[1])
-        sigma_draws = idata.posterior["sigma"].values.reshape(-1)
-        nu_draws = np.full(spatial_draws.shape[0], self._nu) if self.robust else None
-
-        if spatial_param == "rho":
-            mu = spatial_draws[:, None] * self._Wy[None, :] + (beta_draws @ Z.T)
-            eps = self._y[None, :] - mu
-        else:
-            resid = self._y[None, :] - (beta_draws @ Z.T)
-            W_resid = (self._W_sparse @ resid.T).T
-            eps = resid - spatial_draws[:, None] * W_resid
-
-        ll_data = _pointwise_gaussian_loglik(eps, sigma_draws, nu_draws)
-        jacobian = self._logdet_numpy_vec_fn(spatial_draws)
-        ll_total = ll_data + jacobian[:, None] / n
-
-        n_chains = idata.posterior.sizes["chain"]
-        n_draws_per_chain = idata.posterior.sizes["draw"]
-        _write_log_likelihood_to_idata(
-            idata,
-            ll_total.reshape(n_chains, n_draws_per_chain, n),
+        self._reconstruct_gaussian_log_likelihood(
+            spatial_param=self._jacobian_param,
+            nuts_sampler=nuts_sampler,
         )
 
     def _fit_gibbs(
@@ -690,15 +588,9 @@ class SpatialModel(SharedSpatialMethods, ABC):
             number of covariates for which effects are reported.
         """
 
-    @abstractmethod
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean parameters.
-
-        Returns
-        -------
-        np.ndarray
-            Fitted mean vector.
-        """
+    # _fitted_mean_from_posterior: concrete default in SharedSpatialMethods
+    # (dispatches on _jacobian_param and _has_wx_in_beta).  Subclasses
+    # with random effects or dynamic terms override it.
 
     # ------------------------------------------------------------------
     # Internals

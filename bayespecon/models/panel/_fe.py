@@ -111,19 +111,8 @@ class OLSPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
     _jacobian_param: str | None = None
     _likelihood: str = "gaussian"  # NUTS-only (no _gibbs_key)
 
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean coefficients.
-
-        Returns
-        -------
-        np.ndarray
-            Posterior-mean fitted values.
-        """
-        beta = self._posterior_mean("beta")
-        if self._intercept_dropped:
-            ni = self._beta_nonintercept_indices
-            return self._X[:, ni] @ beta
-        return self._X @ beta
+    # _fitted_mean_from_posterior inherited from SharedSpatialMethods
+    # (X @ beta, no rho, no WX)
 
     def _compute_spatial_effects_posterior(
         self,
@@ -132,17 +121,7 @@ class OLSPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         OLS panel has no spatial structure: Direct = beta, Indirect = 0.
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k)
-
-        ni = self._beta_nonintercept_indices
-        direct_samples = beta_draws[:, ni].copy()
-        indirect_samples = np.zeros_like(direct_samples)
-        total_samples = direct_samples.copy()
-
-        return direct_samples, indirect_samples, total_samples
+        return self._sem_effects()
 
 
 class SARPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
@@ -242,19 +221,9 @@ class SARPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
     _model_type: str = "sar"
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean parameters.
-
-        Returns
-        -------
-        np.ndarray
-            Posterior-mean fitted values.
-        """
-        rho = float(self._posterior_mean("rho"))
-        beta = self._posterior_mean("beta")
-        if self._intercept_dropped:
-            ni = self._beta_nonintercept_indices
-            return rho * self._Wy + self._X[:, ni] @ beta
-        return rho * self._Wy + self._X @ beta
+        """Compute fitted values at posterior mean parameters."""
+        # Delegate to SharedSpatialMethods default (handles intercept_dropped).
+        return super()._fitted_mean_from_posterior()
 
     def _compute_spatial_effects_posterior(
         self,
@@ -264,25 +233,7 @@ class SARPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         SAR panel impacts use the same eigenvalue-based formulas as
         cross-sectional SAR, applied per draw.
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        rho_draws = _get_posterior_draws(idata, "rho")  # (G,)
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k)
-        rho_draws.shape[0]
-
-        # Direct-effect trace via the resolvent (no O(N³) eigendecomposition).
-        mean_diag = self._batch_mean_diag(rho_draws)  # (G,)
-
-        mean_row_sum = self._batch_mean_row_sum(rho_draws)  # (G,)
-
-        # Exclude intercept from effects (it has no meaningful spatial interpretation)
-        ni = self._beta_nonintercept_indices
-        direct_samples = mean_diag[:, None] * beta_draws[:, ni]  # (G, k_ni)
-        total_samples = mean_row_sum[:, None] * beta_draws[:, ni]  # (G, k_ni)
-        indirect_samples = total_samples - direct_samples  # (G, k_ni)
-
-        return direct_samples, indirect_samples, total_samples
+        return self._sar_effects()
 
 
 class SEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
@@ -383,18 +334,8 @@ class SEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
     _model_type: str = "sem"
 
     def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean coefficients.
-
-        Returns
-        -------
-        np.ndarray
-            Posterior-mean fitted values.
-        """
-        beta = self._posterior_mean("beta")
-        if self._intercept_dropped:
-            ni = self._beta_nonintercept_indices
-            return self._X[:, ni] @ beta
-        return self._X @ beta
+        """Compute fitted values at posterior mean coefficients."""
+        return super()._fitted_mean_from_posterior()
 
     def _compute_spatial_effects_posterior(
         self,
@@ -403,17 +344,7 @@ class SEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         SEM panel has no spatial multiplier on X: Direct = beta, Indirect = 0.
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k)
-
-        ni = self._beta_nonintercept_indices
-        direct_samples = beta_draws[:, ni].copy()
-        indirect_samples = np.zeros_like(direct_samples)
-        total_samples = direct_samples.copy()
-
-        return direct_samples, indirect_samples, total_samples
+        return self._sem_effects()
 
 
 class SDMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
@@ -508,9 +439,6 @@ class SDMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
     _has_wx_in_beta: bool = True
     _jacobian_param: str | None = "rho"
 
-    def _beta_names(self) -> list[str]:
-        return self._feature_names + [f"W*{name}" for name in self._wx_feature_names]
-
     _priors_cls = PanelSDMPriors
     _likelihood: str = "gaussian"
     _gibbs_key: tuple[str, str] | None = ("gaussian", "panel_fe")
@@ -525,14 +453,7 @@ class SDMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         np.ndarray
             Posterior-mean fitted values.
         """
-        rho = float(self._posterior_mean("rho"))
-        beta = self._posterior_mean("beta")
-        if self._intercept_dropped:
-            ni = self._beta_nonintercept_indices
-            Z = np.hstack([self._X[:, ni], self._WX])
-        else:
-            Z = np.hstack([self._X, self._WX])
-        return rho * self._Wy + Z @ beta
+        return super()._fitted_mean_from_posterior()
 
     def _compute_spatial_effects_posterior(
         self,
@@ -542,40 +463,7 @@ class SDMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         SDM panel impacts use the same eigenvalue-based formulas as
         cross-sectional SDM, applied per draw.
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        rho_draws = _get_posterior_draws(idata, "rho")  # (G,)
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k+k_wx)
-        rho_draws.shape[0]
-        if self._intercept_dropped:
-            k = len(self._beta_nonintercept_indices)
-        else:
-            k = self._X.shape[1]
-        kw = self._WX.shape[1]
-
-        beta1_draws = beta_draws[:, :k]  # (G, k)
-        beta2_draws = beta_draws[:, k : k + kw]  # (G, kw)
-
-        # Direct-effect traces via the resolvent (no O(N³) eigendecomposition).
-        mean_diag_M = self._batch_mean_diag(rho_draws)  # (G,)
-        mean_diag_MW = self._batch_mean_diag_MW(rho_draws)  # (G,)
-
-        mean_row_sum_M = self._batch_mean_row_sum(rho_draws)  # (G,)
-        mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)  # (G,)
-
-        wx_idx = self._beta_wx_column_indices
-        direct_samples = (
-            mean_diag_M[:, None] * beta1_draws[:, wx_idx]
-            + mean_diag_MW[:, None] * beta2_draws
-        )  # (G, kw)
-        total_samples = (
-            mean_row_sum_M[:, None] * beta1_draws[:, wx_idx]
-            + mean_row_sum_MW[:, None] * beta2_draws
-        )  # (G, kw)
-        indirect_samples = total_samples - direct_samples  # (G, kw)
-
-        return direct_samples, indirect_samples, total_samples
+        return self._sdm_effects()
 
 
 class SDEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
@@ -670,9 +558,6 @@ class SDEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
     _has_wx_in_beta: bool = True
     _jacobian_param: str | None = "lam"
 
-    def _beta_names(self) -> list[str]:
-        return self._feature_names + [f"W*{name}" for name in self._wx_feature_names]
-
     _priors_cls = PanelSDEMPriors
     _likelihood: str = "gaussian"
     _gibbs_key: tuple[str, str] | None = ("gaussian", "panel_fe")
@@ -687,13 +572,7 @@ class SDEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
         np.ndarray
             Posterior-mean fitted values.
         """
-        beta = self._posterior_mean("beta")
-        if self._intercept_dropped:
-            ni = self._beta_nonintercept_indices
-            Z = np.hstack([self._X[:, ni], self._WX])
-        else:
-            Z = np.hstack([self._X, self._WX])
-        return Z @ beta
+        return super()._fitted_mean_from_posterior()
 
     def _compute_spatial_effects_posterior(
         self,
@@ -702,29 +581,7 @@ class SDEMPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         SDEM panel impacts match SLX form (no rho multiplier).
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k+k_wx)
-        beta_draws.shape[0]
-        if self._intercept_dropped:
-            k = len(self._beta_nonintercept_indices)
-        else:
-            k = self._X.shape[1]
-        kw = self._WX.shape[1]
-
-        beta1_draws = beta_draws[:, :k]  # (G, k)
-        beta2_draws = beta_draws[:, k : k + kw]  # (G, kw)
-
-        mean_diag_w = float(self._W_sparse.diagonal().mean())
-        mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
-
-        wx_idx = self._beta_wx_column_indices
-        direct_samples = beta1_draws[:, wx_idx] + mean_diag_w * beta2_draws  # (G, kw)
-        total_samples = beta1_draws[:, wx_idx] + mean_row_sum_w * beta2_draws  # (G, kw)
-        indirect_samples = total_samples - direct_samples  # (G, kw)
-
-        return direct_samples, indirect_samples, total_samples
+        return self._slx_effects()
 
 
 class SLXPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
@@ -815,26 +672,10 @@ class SLXPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
     _jacobian_param: str | None = None
     _likelihood: str = "gaussian"  # NUTS-only (no _gibbs_key)
 
-    def _beta_names(self) -> list[str]:
-        return self._feature_names + [f"W*{name}" for name in self._wx_feature_names]
-
     _priors_cls = PanelSLXPriors
 
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean coefficients.
-
-        Returns
-        -------
-        np.ndarray
-            Posterior-mean fitted values.
-        """
-        beta = self._posterior_mean("beta")
-        if self._intercept_dropped:
-            ni = self._beta_nonintercept_indices
-            Z = np.hstack([self._X[:, ni], self._WX])
-        else:
-            Z = np.hstack([self._X, self._WX])
-        return Z @ beta
+    # _fitted_mean_from_posterior inherited from SharedSpatialMethods
+    # ([X, WX] @ beta, no rho)
 
     def _compute_spatial_effects_posterior(
         self,
@@ -843,26 +684,4 @@ class SLXPanelFE(GaussianLikelihoodMixin, SpatialPanelModel):
 
         SLX panel impacts are linear in beta (no rho multiplier).
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k+k_wx)
-        beta_draws.shape[0]
-        if self._intercept_dropped:
-            k = len(self._beta_nonintercept_indices)
-        else:
-            k = self._X.shape[1]
-        kw = self._WX.shape[1]
-
-        beta1_draws = beta_draws[:, :k]  # (G, k)
-        beta2_draws = beta_draws[:, k : k + kw]  # (G, kw)
-
-        mean_diag_w = float(self._W_sparse.diagonal().mean())
-        mean_row_sum_w = float(self._W_sparse.sum() / self._W_sparse.shape[0])
-
-        wx_idx = self._beta_wx_column_indices
-        direct_samples = beta1_draws[:, wx_idx] + mean_diag_w * beta2_draws  # (G, kw)
-        total_samples = beta1_draws[:, wx_idx] + mean_row_sum_w * beta2_draws  # (G, kw)
-        indirect_samples = total_samples - direct_samples  # (G, kw)
-
-        return direct_samples, indirect_samples, total_samples
+        return self._slx_effects()

@@ -142,25 +142,4 @@ class SEM(GaussianLikelihoodMixin, SpatialModel):
             ``(direct_samples, indirect_samples, total_samples)``, each of
             shape ``(G, k)``.
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k)
-
-        ni = self._nonintercept_indices
-        direct_samples = beta_draws[:, ni].copy()
-        indirect_samples = np.zeros_like(direct_samples)
-        total_samples = direct_samples.copy()
-
-        return direct_samples, indirect_samples, total_samples
-
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean coefficients.
-
-        Returns
-        -------
-        np.ndarray
-            Posterior-mean fitted values.
-        """
-        beta = self._posterior_mean("beta")
-        return self._X @ beta
+        return self._sem_effects()

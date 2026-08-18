@@ -1206,14 +1206,9 @@ def chebyshev_sample(
 # ---------------------------------------------------------------------------
 
 
-def _check_jax_available() -> None:
-    """Raise ImportError if JAX is not installed."""
-    import importlib.util
-
-    if importlib.util.find_spec("jax") is None:
-        raise ImportError(
-            "JAX is required for gibbs_backend='jax'. Install with: pip install jax"
-        )
+from ._jax_utils import (
+    check_jax_available as _check_jax_available,
+)
 
 
 def _jax_lanczos_probe(P_dense, z_raw, lanczos_deg):

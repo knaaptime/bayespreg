@@ -122,7 +122,7 @@ def make_flow_solve(pattern: dict):
     import jax.numpy as jnp
     import sparsax
 
-    from bayespecon._jax_dispatch import ensure_x64
+    from ..._jax_dispatch import ensure_x64
 
     ensure_x64()
 
@@ -220,14 +220,15 @@ def _make_flow_gibbs_step(
     import jax.numpy as jnp
     from jax.scipy.linalg import cho_solve, solve_triangular
 
-    from bayespecon._jax_dispatch import ensure_x64
-
-    from .._utils._jax_polyagamma import jax_polyagamma
+    from ..._jax_dispatch import ensure_x64
+    from .._utils._jax_utils import make_pg_draw
     from ._jax import (
         _build_krylov_basis_jax,
         _sample_alpha_jax_reduced,
         _slice_sample_rho_jax,
     )
+
+    _draw_pg = make_pg_draw()
 
     ensure_x64()
     solve, matvec = _make_flow_solvers(ctx)
@@ -263,7 +264,7 @@ def _make_flow_gibbs_step(
     def _draw_omega(y, alpha, eta, key):
         h = jnp.maximum(y + alpha, 1e-3)
         z = jnp.clip(eta - jnp.log(alpha), -20.0, 20.0)
-        return jax_polyagamma(h, z, key=key, method="callback")
+        return _draw_pg(h, z, key)
 
     def _draw_beta(Xtilde, omega, alpha, key):
         kappa = 0.5 * (y_jax - alpha)
@@ -496,7 +497,7 @@ def run_chains_jax_flow(
     import jax.numpy as jnp
     from scipy.special import gammaln
 
-    from bayespecon._jax_dispatch import ensure_x64
+    from ..._jax_dispatch import ensure_x64
 
     ensure_x64()
     N, k = X.shape
@@ -711,12 +712,14 @@ def _make_flow_sep_gibbs_step(
     from jax.experimental import sparse as jsparse
     from jax.scipy.linalg import cho_solve, solve_triangular
 
-    from .._utils._jax_polyagamma import jax_polyagamma
+    from .._utils._jax_utils import make_pg_draw
     from ._jax import (
         _eval_U_from_basis_jax,
         _sample_alpha_jax_reduced,
         _slice_sample_rho_jax,
     )
+
+    _draw_pg = make_pg_draw()
 
     # n×n sparsax solvers for L_d and L_o
     solve_Ld = _build_sar_solver_jax(W_csc, n)
@@ -750,12 +753,7 @@ def _make_flow_sep_gibbs_step(
     def _draw_omega(y, alpha, eta, key):
         h = jnp.maximum(y + alpha, 1e-3)
         z = jnp.clip(eta - jnp.log(alpha), -20.0, 20.0)
-        try:
-            import pgjax
-
-            return pgjax.pg_sample(h, z, key)
-        except ImportError:
-            return jax_polyagamma(h, z, key=key, method="callback")
+        return _draw_pg(h, z, key)
 
     def _draw_beta(Xtilde, omega, alpha, key):
         kappa = 0.5 * (y_jax - alpha)
@@ -1005,7 +1003,7 @@ def run_chains_jax_flow_separable(
     import jax.numpy as jnp
     from scipy.special import gammaln
 
-    from bayespecon._jax_dispatch import ensure_x64
+    from ..._jax_dispatch import ensure_x64
 
     ensure_x64()
     N, k = X.shape

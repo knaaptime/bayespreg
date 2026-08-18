@@ -41,10 +41,8 @@ def _make_zinb_gibbs_step(
     """Build a JIT-compiled reduced-form ZINB Gibbs step (9 blocks)."""
     import jax
     import jax.numpy as jnp
-    from jax.scipy.linalg import cho_solve, solve_triangular
 
-    from bayespecon._jax_dispatch import ensure_x64
-
+    from ..._jax_dispatch import ensure_x64
     from .._utils._jax_slice import jax_slice_sample_1d
     from ..logit_reduced._jax import _rho_log_density_logit
     from ..negbin_reduced._jax import (
@@ -56,16 +54,9 @@ def _make_zinb_gibbs_step(
 
     ensure_x64()
 
-    try:
-        import pgjax
+    from .._utils._jax_utils import make_pg_draw
 
-        def _draw_pg(hh, zz, kk):
-            return pgjax.pg_sample(hh, zz, kk)
-    except ImportError:
-        from .._utils._jax_polyagamma import jax_polyagamma
-
-        def _draw_pg(hh, zz, kk):
-            return jax_polyagamma(hh, zz, key=kk, method="callback")
+    _draw_pg = make_pg_draw()
 
     _solve_sel, _matvec_Wsel = _make_sparse_solvers(sel_ctx)
     _solve_cnt, _matvec_Wcnt = _make_sparse_solvers(cnt_ctx)
@@ -92,15 +83,7 @@ def _make_zinb_gibbs_step(
     _deg = int(krylov_degree)
     _IC = -1  # reparam disabled (target unchanged); simpler/robust
 
-    def _conjugate_normal(Ut, omega, working, V0, mu0, key, dim):
-        """Draw β ~ N(Σ (Uᵀ working + V₀⁻¹μ₀), Σ), Σ⁻¹ = UᵀΩU + V₀⁻¹."""
-        Uw = Ut * omega[:, None]
-        Sig_inv = Uw.T @ Ut + jnp.diag(V0) + 1e-10 * jnp.eye(dim)
-        rhs = Ut.T @ working + V0 * mu0
-        L = jnp.linalg.cholesky(Sig_inv)
-        m = cho_solve((L, True), rhs)
-        zc = jax.random.normal(key, shape=(dim,), dtype=jnp.float64)
-        return m + solve_triangular(L.T, zc, lower=False)
+    from .._utils._jax_utils import conjugate_normal as _conjugate_normal
 
     @jax.jit
     def gibbs_step(state, key, slice_width):
@@ -243,8 +226,7 @@ def run_chains_jax_zinb(
     import jax.numpy as jnp
     from scipy.special import gammaln
 
-    from bayespecon._jax_dispatch import ensure_x64
-
+    from ..._jax_dispatch import ensure_x64
     from .._utils._progress import GibbsProgressBarManager
     from ..negbin_reduced._jax import _build_sparse_ctx
 

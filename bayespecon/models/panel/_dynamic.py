@@ -245,13 +245,6 @@ class _DynamicPanelMixin:
 
         return pts.as_sparse_variable(sp.csc_matrix(self._W_sparse_dyn))
 
-    def _beta_names(self) -> list[str]:
-        if self._wx_feature_names:
-            return self._feature_names + [
-                f"W*{name}" for name in self._wx_feature_names
-            ]
-        return self._feature_names
-
     @cached_property
     def _dynamic_logdet_cache(self) -> dict:
         """Per-model store of dynamic logdet callables, keyed by rho bounds."""
@@ -401,6 +394,7 @@ class _DynamicPanelMixin:
 
 class OLSPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
     _priors_cls = PanelOLSDynamicPriors
+    _has_wx_in_beta = True
 
     """Dynamic panel regression without contemporaneous spatial dependence.
 
@@ -524,6 +518,7 @@ class OLSPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
 class SDMRPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
     _priors_cls = PanelSDMRDynamicPriors
+    _has_wx_in_beta = True
 
     """Dynamic restricted spatial Durbin panel regression.
 
@@ -628,6 +623,7 @@ class SDMRPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
 class SDMUPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
     _priors_cls = PanelSDMUDynamicPriors
+    _has_wx_in_beta = True
 
     """Dynamic unrestricted spatial Durbin panel regression.
 
@@ -877,10 +873,6 @@ class SARPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
     must exceed 2 so the variance exists.
     """
 
-    def _beta_names(self) -> list[str]:
-        """Return coefficient names without WX terms (SAR has no Durbin component)."""
-        return self._feature_names
-
     def _build_pymc_model(self) -> pm.Model:
         self._prepare_dynamic_design()
 
@@ -1026,10 +1018,6 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
     must exceed 2 so the variance exists.
     """
 
-    def _beta_names(self) -> list[str]:
-        """Return coefficient names without WX terms (SEM has no Durbin component)."""
-        return self._feature_names
-
     def _build_pymc_model(self, nuts_sampler: str = "pymc") -> pm.Model:
         self._prepare_dynamic_design()
 
@@ -1151,6 +1139,7 @@ class SEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
 class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
     _priors_cls = PanelSDEMDynamicPriors
+    _has_wx_in_beta = True
 
     """Dynamic spatial Durbin error panel regression.
 
@@ -1366,6 +1355,7 @@ class SDEMPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
 
 class SLXPanelDynamic(_DynamicPanelMixin, SpatialPanelModel):
     _priors_cls = PanelSLXDynamicPriors
+    _has_wx_in_beta = True
 
     """Dynamic SLX panel regression.
 

@@ -298,7 +298,7 @@ def make_sar_solver(
     -------
     _DSymCholSolver, KluSarSolver or _CholmodNormalEqSolver
     """
-    from bayespecon.samplers._utils._sparsax_utils import KluSarSolver
+    from .._utils._sparsax_utils import KluSarSolver
 
     def _cholmod():
         return _CholmodNormalEqSolver(
@@ -320,7 +320,7 @@ def make_sar_solver(
     if d is not None:
         return _DSymCholSolver(W_csc, d, n)
 
-    from bayespecon._jax_dispatch import _sparsax_available
+    from ..._jax_dispatch import _sparsax_available
 
     if _sparsax_available():
         return KluSarSolver(W_csc, n)
@@ -337,7 +337,7 @@ def _symmetrizing_diagonal(W_csc: sp.csc_matrix) -> np.ndarray | None:
     we additionally require ``D > 0`` and verify the resulting similarity is
     symmetric before trusting it.
     """
-    from bayespecon._logdet._slq import _recover_symmetrizing_diagonal
+    from ..._logdet._slq import _recover_symmetrizing_diagonal
 
     try:
         d = _recover_symmetrizing_diagonal(sp.csr_matrix(W_csc))
@@ -367,7 +367,7 @@ def _factor_A(rho: float, W_csc: sp.csc_matrix, n: int):
         The CHOLMOD normal-equations path (``_CholmodNormalEqSolver``)
         is preferred to avoid scipy SuperLU deadlocks on macOS.
     """
-    from bayespecon._ops._backend import _select_sparse_backend, _sparse_factor
+    from ..._ops._backend import _select_sparse_backend, _sparse_factor
 
     A = (sp.eye(n, format="csc") - rho * W_csc).tocsc()
     backend = _select_sparse_backend()

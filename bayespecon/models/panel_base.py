@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Union
@@ -13,18 +12,11 @@ import scipy.sparse as sp
 from formulaic import model_matrix
 from libpysal.graph import Graph
 
-from .._backends.sampler_helpers import (
-    jax_available,
-    prepare_compile_kwargs,
-    prepare_idata_kwargs,
-    use_jax_likelihood,
-)
+from .._backends.sampler_helpers import jax_available
 from .._lazy_deps import az, pm
 from ._base._shared import (
     SharedSpatialMethods,
     _check_row_standardization,
-    _pointwise_gaussian_loglik,
-    _write_log_likelihood_to_idata,
 )
 from ._base._structure import PanelStructure
 
@@ -631,9 +623,7 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
             array has shape ``(G, k)`` or ``(G, k_wx)``.
         """
 
-    @abstractmethod
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Posterior-mean fitted values on transformed scale."""
+    # _fitted_mean_from_posterior: concrete default in SharedSpatialMethods.
 
     def fit(
         self,
@@ -886,50 +876,7 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         )
         return self._idata
 
-    def _fit_nuts(
-        self,
-        *,
-        draws: int,
-        tune: int,
-        chains: int,
-        target_accept: float = 0.9,
-        random_seed: Optional[int],
-        progressbar: bool,
-        nuts_sampler: str = "pymc",
-        idata_kwargs: dict[str, Any] | None = None,
-        compute_log_likelihood: bool = False,
-        sample_kwargs: dict[str, Any] | None = None,
-    ) -> tuple[az.InferenceData, bool]:
-        """Shared NUTS sampling path used by panel ``fit`` methods."""
-        sample_kwargs = dict(sample_kwargs or {})
-        idata_kwargs = dict(idata_kwargs or {})
-
-        build_kwargs: dict[str, Any] = {}
-        build_sig = inspect.signature(self._build_pymc_model)
-        if "nuts_sampler" in build_sig.parameters:
-            build_kwargs["nuts_sampler"] = nuts_sampler
-
-        model = self._build_pymc_model(**build_kwargs)
-        self._pymc_model = model
-
-        idata_kwargs = prepare_idata_kwargs(idata_kwargs, model, nuts_sampler)
-        compute_log_likelihood = bool(idata_kwargs.get("log_likelihood", False))
-        sample_kwargs = prepare_compile_kwargs(sample_kwargs, nuts_sampler)
-
-        with model:
-            self._idata = pm.sample(
-                draws=draws,
-                tune=tune,
-                chains=chains,
-                target_accept=target_accept,
-                random_seed=random_seed,
-                idata_kwargs=idata_kwargs,
-                nuts_sampler=nuts_sampler,
-                progressbar=progressbar,
-                **sample_kwargs,
-            )
-
-        return self._idata, compute_log_likelihood
+        # _fit_nuts inherited from SharedSpatialMethods.
 
     def _reconstruct_panel_log_likelihood(
         self,
@@ -938,64 +885,28 @@ class SpatialPanelModel(SharedSpatialMethods, ABC):
         nuts_sampler: str,
         T_eff: int | None = None,
     ) -> None:
-        """Rebuild complete pointwise log-likelihood for static panel models."""
-        if not hasattr(self, "_idata"):
-            return
+        """Rebuild complete pointwise log-likelihood for static panel models.
 
-        if spatial_param not in {"rho", "lam"}:
-            return
-
-        # When ``_build_pymc_model`` registered the likelihood as an observed
-        # CustomDist with the Jacobian folded in, PyMC already captured a
-        # complete pointwise log-likelihood — rebuilding it here would be pure
-        # duplicated work.
-        if getattr(self, "_native_log_likelihood", False):
-            return
-
-        # SEM/SDEM on JAX backends build an observed CustomDist and already
-        # have complete log_likelihood from PyMC.
-        if spatial_param == "lam" and use_jax_likelihood(nuts_sampler):
-            return
-
-        idata = self._idata
-        n = int(self._y.shape[0])
+        Delegates to :meth:`SharedSpatialMethods._reconstruct_gaussian_log_likelihood`
+        with panel-specific spatial lag and random-effects handling.
+        """
         T_mult = int(self._T if T_eff is None else T_eff)
-        Z = np.hstack([self._X, self._WX]) if self._has_wx_in_beta else self._X
 
-        spatial_draws = idata.posterior[spatial_param].values.reshape(-1)
-        beta_draws = idata.posterior["beta"].values.reshape(-1, Z.shape[1])
-        sigma_draws = idata.posterior["sigma"].values.reshape(-1)
-        nu_draws = np.full(spatial_draws.shape[0], self._nu) if self.robust else None
         alpha_component = None
-        if "alpha" in idata.posterior and hasattr(self, "_unit_idx"):
-            alpha_draws = idata.posterior["alpha"].values
+        if (
+            hasattr(self, "_idata")
+            and "alpha" in self._idata.posterior
+            and hasattr(self, "_unit_idx")
+        ):
+            alpha_draws = self._idata.posterior["alpha"].values
             alpha_flat = alpha_draws.reshape(-1, alpha_draws.shape[-1])
             alpha_component = alpha_flat[:, np.asarray(self._unit_idx, dtype=np.int64)]
 
-        if spatial_param == "rho":
-            mu = spatial_draws[:, None] * self._Wy[None, :] + (beta_draws @ Z.T)
-            if alpha_component is not None:
-                mu = mu + alpha_component
-            eps = self._y[None, :] - mu
-        else:
-            resid = self._y[None, :] - (beta_draws @ Z.T)
-            if alpha_component is not None:
-                resid = resid - alpha_component
-            W_resid = self._batch_sparse_lag(resid, T_eff=T_mult)
-            eps = resid - spatial_draws[:, None] * W_resid
-
-        ll_data = _pointwise_gaussian_loglik(eps, sigma_draws, nu_draws)
-        # ``_logdet_numpy_vec_fn`` is built with ``T=self._T`` and so already
-        # returns T·log|I_N - ρW_N|.  Multiplying by ``T_mult`` again here
-        # squared the Jacobian; ``T_mult`` scales the spatial lag only.
-        jacobian = self._logdet_numpy_vec_fn(spatial_draws)
-        ll_total = ll_data + jacobian[:, None] / n
-
-        n_chains = idata.posterior.sizes["chain"]
-        n_draws_per_chain = idata.posterior.sizes["draw"]
-        _write_log_likelihood_to_idata(
-            idata,
-            ll_total.reshape(n_chains, n_draws_per_chain, n),
+        self._reconstruct_gaussian_log_likelihood(
+            spatial_param=spatial_param,
+            nuts_sampler=nuts_sampler,
+            spatial_lag_fn=lambda resid: self._batch_sparse_lag(resid, T_eff=T_mult),
+            alpha_component=alpha_component,
         )
 
     @property

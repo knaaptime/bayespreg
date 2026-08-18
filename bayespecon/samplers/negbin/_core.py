@@ -50,9 +50,7 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import cho_factor, cho_solve, solve_triangular
 
-from bayespecon._jax_dispatch import ensure_x64
-
-from ..._jax_dispatch import _eqx_available
+from ..._jax_dispatch import _eqx_available, ensure_x64
 from ...models.priors import GibbsPriors
 from .._utils._polyagamma import sample_polyagamma
 from .._utils._slice import (
@@ -683,7 +681,7 @@ def _sample_rho(
         ensure_x64()
         import jax.numpy as jnp
 
-        from bayespecon.samplers._utils._spatial_normal import _jax_log_density_core
+        from .._utils._spatial_normal import _jax_log_density_core
 
         # Convert omega to JAX array (changes each Gibbs iteration,
         # but is constant across ρ candidates within one slice step)
@@ -841,7 +839,7 @@ def _sample_rho(
     if use_mode_centered and (sweep_idx % cache.rho_mode_update_freq == 0):
         # For mode-finding, use the exact dense-Cholesky log-density
         # (no stochastic Lanczos/CG) — it's 15× faster for n ≤ ~500.
-        from bayespecon.samplers._utils._spatial_normal import (
+        from .._utils._spatial_normal import (
             _jax_log_density_core_exact,
         )
 

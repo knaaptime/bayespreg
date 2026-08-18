@@ -50,7 +50,7 @@ from dataclasses import dataclass
 import numpy as np
 import scipy.sparse as sp
 
-from bayespecon._jax_dispatch import ensure_x64
+from ..._jax_dispatch import ensure_x64
 
 
 def _check_blackjax_available() -> None:

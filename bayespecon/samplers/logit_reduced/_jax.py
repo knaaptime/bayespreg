@@ -92,29 +92,17 @@ def _make_reduced_logit_gibbs_step(
     import jax.numpy as jnp
     from jax.scipy.linalg import cho_solve, solve_triangular
 
-    from bayespecon._jax_dispatch import ensure_x64
-
-    from .._utils._jax_polyagamma import jax_polyagamma
+    from ..._jax_dispatch import ensure_x64
     from .._utils._jax_slice import jax_slice_sample_1d
+    from .._utils._jax_utils import make_pg_draw
     from ..negbin_reduced._jax import (
         _build_krylov_basis_jax,
         _eval_U_from_basis_jax,
         _make_sparse_solvers,
     )
 
-    # On-device Pólya-Gamma (no host round-trip) when pgjax is installed — it
-    # removes the per-sweep callback tax and lets pmap parallelize the ω-update.
-    # h = 1 (Bernoulli) is exact via pgjax's Devroye sampler.  Falls back to the
-    # exact host callback otherwise.
-    try:
-        import pgjax
-
-        def _draw_pg(hh, zz, kk):
-            return pgjax.pg_sample(hh, zz, kk)
-    except ImportError:
-
-        def _draw_pg(hh, zz, kk):
-            return jax_polyagamma(hh, zz, key=kk, method="callback")
+    # Pólya-Gamma: pgjax (on-device, exact) or numpy C extension fallback.
+    _draw_pg = make_pg_draw()
 
     ensure_x64()
     _solve, _matvec_W = _make_sparse_solvers(sparse_ctx)
@@ -248,8 +236,7 @@ def run_chains_jax_reduced_logit(
     import jax
     import jax.numpy as jnp
 
-    from bayespecon._jax_dispatch import ensure_x64
-
+    from ..._jax_dispatch import ensure_x64
     from ..negbin_reduced._jax import (
         _build_sparse_ctx,
         _run_chains_device_parallel,

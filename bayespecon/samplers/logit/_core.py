@@ -91,8 +91,7 @@ class LogitGibbsState(GibbsBaseState):
 
 
 # JAX-compatible state class (equinox.Module when available, stub otherwise).
-from bayespecon._jax_dispatch import ensure_x64
-
+from ..._jax_dispatch import ensure_x64
 from .._utils._jax_base import make_jax_state_class
 
 JAXLogitGibbsState = make_jax_state_class(

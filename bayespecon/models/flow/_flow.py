@@ -37,11 +37,6 @@ import pandas as pd
 import pytensor.tensor as pt
 import scipy.sparse as sp
 
-from ..._backends.sampler_helpers import (
-    enforce_c_backend,
-    prepare_compile_kwargs,
-    prepare_idata_kwargs,
-)
 from ..._lazy_deps import az, pm
 from ..._logdet import (
     make_flow_separable_logdet,
@@ -49,6 +44,7 @@ from ..._logdet import (
 )
 from ..._ops import kron_solve_matrix, kron_solve_vec
 from ...graph import _weights_to_csr, flow_trace_blocks, flow_weight_matrices
+from .._mixins._flow_shared import FlowSharedMethods
 from ..base import SpatialModel
 
 
@@ -210,7 +206,7 @@ def _compute_flow_effects_lesage(
     return out
 
 
-class FlowModel(SpatialModel):
+class FlowModel(FlowSharedMethods, SpatialModel):
     """Abstract base class for Bayesian spatial flow regression models.
 
     Unlike :class:`~bayespecon.models.base.SpatialModel`, this class works
@@ -473,113 +469,10 @@ class FlowModel(SpatialModel):
     ) -> dict[str, np.ndarray]:
         """Compute posterior spatial effects.  Implemented by subclasses."""
 
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean parameters.
-
-        Flow models override this in subclasses when fitted values are
-        needed.  The base implementation raises ``NotImplementedError``.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement fitted_values()."
-        )
-
     # ------------------------------------------------------------------
-    # Public API
+    # Public API (fit, spatial_diagnostics_decision, etc.) inherited from
+    # FlowSharedMethods — see .._mixins._flow_shared
     # ------------------------------------------------------------------
-
-    def _posterior_var_names(
-        self,
-        model: pm.Model,
-        *,
-        store_lambda: bool,
-    ) -> list[str]:
-        names = [rv.name for rv in model.free_RVs]
-        names.extend(
-            var.name
-            for var in model.deterministics
-            if store_lambda or var.name != "lambda"
-        )
-        return list(dict.fromkeys(name for name in names if name is not None))
-
-    def fit(
-        self,
-        draws: int = 2000,
-        tune: int = 1000,
-        chains: int = 4,
-        random_seed: Optional[int] = None,
-        store_lambda: bool = False,
-        idata_kwargs: Optional[dict] = None,
-        progressbar: bool = True,
-        **sample_kwargs,
-    ) -> az.InferenceData:
-        """Draw samples from the posterior.
-
-        Parameters
-        ----------
-        draws : int, default 2000
-            Number of posterior samples per chain (after tuning).
-        tune : int, default 1000
-            Number of tuning (warm-up) steps per chain.
-        chains : int, default 4
-            Number of parallel chains.
-        random_seed : int, optional
-            Seed for reproducibility.
-        store_lambda : bool, default False
-            If True, include the high-dimensional fitted mean ``lambda`` in the
-            stored posterior. Leaving this False reduces memory and conversion
-            overhead for NB flow models.
-        idata_kwargs : dict, optional
-            Forwarded to ``pm.sample``.  Defaults to
-            ``{"log_likelihood": True}`` so that ``az.loo`` / ``az.waic`` /
-            ``az.compare`` work out of the box; for SAR flow variants the
-            captured Gaussian log-likelihood is post-processed to add the
-            Jacobian contribution from ``log|I_N - rho_d W_d - rho_o W_o
-            - rho_w W_w|``.
-        progressbar : bool, default True
-            Show progress bar during sampling.
-        **sample_kwargs
-            Additional keyword arguments forwarded to ``pm.sample``.
-            Pass ``target_accept=0.95`` to adjust the NUTS acceptance rate.
-
-        Returns
-        -------
-        arviz.InferenceData
-        """
-        idata_kwargs = dict(idata_kwargs) if idata_kwargs else {}
-        idata_kwargs.setdefault("log_likelihood", True)
-        compute_log_likelihood = bool(idata_kwargs.get("log_likelihood", False))
-        nuts_sampler = sample_kwargs.pop("nuts_sampler", "pymc")
-        target_accept = sample_kwargs.pop("target_accept", 0.9)
-        nuts_sampler = enforce_c_backend(
-            nuts_sampler,
-            requires_c_backend=getattr(self, "_requires_c_backend", False),
-            model_name=type(self).__name__,
-        )
-
-        model = self._build_pymc_model()
-        self._pymc_model = model
-        if "var_names" not in sample_kwargs and not store_lambda:
-            sample_kwargs["var_names"] = self._posterior_var_names(
-                model,
-                store_lambda=False,
-            )
-        idata_kwargs = prepare_idata_kwargs(idata_kwargs, model, nuts_sampler)
-        sample_kwargs = prepare_compile_kwargs(sample_kwargs, nuts_sampler)
-        with model:
-            self._idata = pm.sample(
-                draws=draws,
-                tune=tune,
-                chains=chains,
-                target_accept=target_accept,
-                random_seed=random_seed,
-                idata_kwargs=idata_kwargs,
-                progressbar=progressbar,
-                nuts_sampler=nuts_sampler,
-                **sample_kwargs,
-            )
-        if compute_log_likelihood:
-            self._attach_complete_log_likelihood(self._idata)
-        return self._idata
 
     @property
     def _W_eigs_complex(self) -> Optional[np.ndarray]:
@@ -590,213 +483,10 @@ class FlowModel(SpatialModel):
         """
         return self._W_eigs
 
-    def spatial_diagnostics_decision(
-        self, alpha: float = 0.05, format: str = "graphviz"
-    ) -> Any:
-        """Return a model-selection decision from Bayesian LM test results.
-
-        Walks the flow decision tree using Bayesian p-values from
-        :meth:`spatial_diagnostics` and recommends either ``OLSFlow`` (no
-        spatial dependence detected) or ``SARFlow`` (at least one direction
-        is significant).
-
-        Parameters
-        ----------
-        alpha : float, default 0.05
-            Significance level for the Bayesian p-values.
-        format : {"graphviz", "ascii", "model"}, default "graphviz"
-            Output format.  ``"model"`` returns the recommended model name
-            string.  ``"ascii"`` returns an indented box-drawing tree.
-            ``"graphviz"`` returns a :class:`graphviz.Digraph` (with ASCII
-            fallback if graphviz is not installed).
-
-        Returns
-        -------
-        str or graphviz.Digraph
-        """
-        from ...diagnostics import _decision_trees as _dt
-
-        diag = self.spatial_diagnostics()
-        model_type = self.__class__.__name__
-
-        def _sig(test_name: str) -> bool:
-            if test_name not in diag.index:
-                return False
-            pval = diag.loc[test_name, "p_value"]
-            return not np.isnan(pval) and pval < alpha
-
-        spec = _dt.get_flow_spec(model_type)
-        decision, path = _dt.evaluate(spec, sig_lookup=_sig)
-
-        p_values: dict[str, float] = {}
-        for test_name in diag.index:
-            pv = diag.loc[test_name, "p_value"]
-            if not np.isnan(pv):
-                p_values[str(test_name)] = float(pv)
-
-        return _dt.render(
-            spec,
-            path,
-            decision,
-            p_values=p_values,
-            alpha=alpha,
-            fmt=format,
-            title=f"{model_type} decision tree (alpha={alpha})",
-        )
-
-    def _get_decision_spec(self, model_type: str):
-        """Return the flow decision-tree spec for this model type.
-
-        Overrides :meth:`SpatialModel._get_decision_spec` to use
-        :func:`get_flow_spec` instead of :func:`get_spec`.
-        """
-        from ...diagnostics import _decision_trees as _dt
-
-        return _dt.get_flow_spec(model_type)
-
-    def _model_coords(self, extra: Optional[dict] = None) -> dict:
-        """Return PyMC coordinate labels for named dimensions."""
-        coords: dict = {"coefficient": self._feature_names}
-        if extra:
-            coords.update(extra)
-        return coords
-
-    @property
-    def _nonintercept_indices(self) -> list[int]:
-        """Return indices of non-constant (non-intercept) columns in X.
-
-        This is used to exclude the intercept from impact measures, since
-        the intercept has no meaningful spatial effect interpretation.
-
-        Returns
-        -------
-        list[int]
-            Column indices of X that are not constant/intercept columns.
-        """
-        X = self._X
-        indices: list[int] = []
-        for j, name in enumerate(self._feature_names):
-            column = X[:, j]
-            is_named_intercept = name.lower() == "intercept"
-            is_constant = np.allclose(column, column[0])
-            if not (is_named_intercept or is_constant):
-                indices.append(j)
-        return indices
-
     # ------------------------------------------------------------------
-    # Pointwise log-likelihood (with Jacobian correction for SAR variants)
+    # Pointwise log-likelihood and sparse filter helpers inherited from
+    # FlowSharedMethods — see .._mixins._flow_shared
     # ------------------------------------------------------------------
-
-    def _compute_jacobian_log_det(self, posterior) -> Optional[np.ndarray]:
-        """Per-draw :math:`\\log|I_N - \\rho_d W_d - \\rho_o W_o - \\rho_w W_w|`.
-
-        Returns ``None`` (the default) when no Jacobian correction is
-        required — for example, OLS / NB flow baselines (``A = I_N``)
-        and the NB SAR variants (the ``pm.NegativeBinomial("obs", ...)``
-        log-likelihood already captured by PyMC is the appropriate
-        pointwise density on observed counts).
-
-        Subclasses with a Gaussian observation model and a
-        ``pm.Potential("jacobian", ...)`` term must override this to return
-        an array of shape ``(n_draws,)`` with the per-draw log-determinant.
-        """
-        return None
-
-    def _attach_complete_log_likelihood(self, idata) -> None:
-        """Add Jacobian contribution to the pointwise log-likelihood.
-
-        ``pm.sample(idata_kwargs={"log_likelihood": True})`` only captures
-        observed-RV log densities, so the ``pm.Potential("jacobian", ...)``
-        contribution from ``log|I_N - rho_d W_d - rho_o W_o - rho_w W_w|``
-        is missing for SAR flow variants.  This helper recomputes the
-        complete pointwise log-likelihood and replaces the captured group.
-        """
-        if idata is None or not hasattr(idata, "log_likelihood"):
-            return
-        if "obs" not in idata.log_likelihood.data_vars:
-            return
-
-        jacobian_draws = self._compute_jacobian_log_det(idata.posterior)
-        if jacobian_draws is None:
-            return
-
-        import xarray as xr
-
-        ll_da = idata.log_likelihood["obs"]
-        n_chains = ll_da.sizes["chain"]
-        n_draws_per_chain = ll_da.sizes["draw"]
-        n_obs = int(np.prod(ll_da.shape[2:]))
-
-        ll_array = ll_da.values.reshape(n_chains * n_draws_per_chain, n_obs)
-        jacobian_draws = np.asarray(jacobian_draws, dtype=np.float64).reshape(-1)
-        if jacobian_draws.shape[0] != ll_array.shape[0]:
-            raise RuntimeError(
-                "Posterior draw count does not match log-likelihood shape: "
-                f"{jacobian_draws.shape[0]} vs {ll_array.shape[0]}."
-            )
-
-        ll_array = ll_array + jacobian_draws[:, None] / n_obs
-        ll_array = ll_array.reshape(n_chains, n_draws_per_chain, n_obs)
-
-        new_da = xr.DataArray(ll_array, dims=("chain", "draw", "obs_dim"), name="obs")
-        idata["log_likelihood"] = xr.Dataset({"obs": new_da})
-
-    def _attach_flow_log_abs_det(self, idata, *, n_probes: int = 16, n_quad: int = 6):
-        """Record per-draw ``T·log|A(ρ)|`` in ``idata.sample_stats`` as a diagnostic.
-
-        Used by the count (NB) flow models: the discrete likelihood carries no ``|A|``
-        change-of-variables term (so it must not enter the LOO ``log_likelihood``), but
-        the spatial-filter log-determinant is still exposed for inspection — computed
-        with the scalable resolvent value estimator.  Cross-sectional (``T=1``); the
-        panel base overrides ``T``.
-        """
-        from ...samplers.gaussian._flow_resolvent import attach_flow_log_abs_det
-
-        attach_flow_log_abs_det(
-            idata,
-            self._W_sparse,
-            T=int(getattr(self, "_T", 1)),
-            n_probes=n_probes,
-            n_quad=n_quad,
-        )
-        return idata
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _assemble_A(
-        self,
-        rho_d: float,
-        rho_o: float,
-        rho_w: float,
-    ) -> sp.csr_matrix:
-        """Assemble A = I_N - rho_d*Wd - rho_o*Wo - rho_w*Ww (sparse N×N)."""
-        I_N = sp.eye(self._N, format="csr", dtype=np.float64)
-        return I_N - rho_d * self._Wd - rho_o * self._Wo - rho_w * self._Ww
-
-    @property
-    def _A_solver(self):
-        """Lazily-built :class:`CachedSparseSolver` over ``[Wd, Wo, Ww]``.
-
-        ``A = I - ρ_d W_d - ρ_o W_o - ρ_w W_w`` has a fixed sparsity pattern
-        — only the three ρ values rescale per draw.  sparsax (when installed)
-        caches the fill-reducing symbolic analysis keyed on the merged COO
-        pattern, so repeated solves across posterior draws / posterior
-        predictive / LeSage effects pay the symbolic cost once.  Built once
-        per model instance and reused across methods.
-        """
-        cached = getattr(self, "_cached_A_solver", None)
-        if cached is None:
-            from ...samplers._utils._sparsax_utils import CachedSparseSolver
-
-            cached = CachedSparseSolver([self._Wd, self._Wo, self._Ww], self._N)
-            self._cached_A_solver = cached
-        return cached
-
-    def _solve_A(self, rho_d, rho_o, rho_w, rhs):
-        """Solve ``A(ρ_d, ρ_o, ρ_w) x = rhs`` using the cached symbolic analysis."""
-        return self._A_solver.solve([-rho_d, -rho_o, -rho_w], rhs)
 
     # ------------------------------------------------------------------
     # Public diagnostics
@@ -1462,6 +1152,69 @@ class SARFlowSeparable(FlowModel):
         return out
 
 
+def _compute_ols_flow_effects(
+    idata: "az.InferenceData",
+    *,
+    n: int,
+    k_d: int,
+    k_o: int,
+    feature_names: list[str],
+    intra_idx: Optional[np.ndarray],
+    draws: Optional[int],
+) -> dict[str, np.ndarray]:
+    """Closed-form Thomas-Agnan & LeSage (2014, Table 83.1) effects.
+
+    Shared between :class:`OLSFlow`, :class:`SEMFlow`,
+    :class:`SEMFlowSeparable` (cross-section), and :class:`OLSFlowPanel`,
+    :class:`SEMFlowPanel`, :class:`SEMFlowSeparablePanel` (panel) — all of
+    which have :math:`\\mathbb{E}[y] = X\\beta` (no :math:`X`-mediated
+    spillovers).
+    """
+    beta_draws = idata.posterior["beta"].values.reshape(-1, len(feature_names))
+
+    dest_start = 2
+    orig_start = 2 + k_d
+    intra_start = 2 + k_d + k_o
+    has_intra = intra_idx is not None and beta_draws.shape[1] >= intra_start + k_d
+
+    n_draws_total = beta_draws.shape[0]
+    if draws is not None:
+        n_draws_total = min(draws, n_draws_total)
+        beta_draws = beta_draws[:n_draws_total]
+
+    bd = beta_draws[:, dest_start : dest_start + k_d]
+    bo = beta_draws[:, orig_start : orig_start + k_o]
+    bi = (
+        beta_draws[:, intra_start : intra_start + k_d]
+        if has_intra
+        else np.zeros((n_draws_total, k_d), dtype=np.float64)
+    )
+
+    zeros_d = np.zeros_like(bd)
+    zeros_o = np.zeros_like(bo)
+    out: dict[str, np.ndarray] = {}
+    out["dest_total"] = bd + bi / n
+    out["dest_destination"] = bd * (n - 1) / n
+    out["dest_intra"] = (bd + bi) / n
+    out["dest_origin"] = zeros_d.copy()
+    out["dest_network"] = zeros_d.copy()
+
+    out["orig_total"] = bo
+    out["orig_origin"] = bo * (n - 1) / n
+    out["orig_intra"] = bo / n
+    out["orig_destination"] = zeros_o.copy()
+    out["orig_network"] = zeros_o.copy()
+
+    if k_d == k_o:
+        for eff in _EFFECT_KEYS:
+            out[eff] = out[f"dest_{eff}"] + out[f"orig_{eff}"]
+    else:
+        for eff in _EFFECT_KEYS:
+            out[eff] = np.concatenate([out[f"dest_{eff}"], out[f"orig_{eff}"]], axis=1)
+
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Model 3: OLSFlow — non-spatial gravity baseline (Thomas-Agnan & LeSage 2014)
 # ---------------------------------------------------------------------------
@@ -1603,64 +1356,15 @@ class OLSFlow(FlowModel):
         if self._idata is None:
             raise RuntimeError("Model has not been fit yet.  Call fit() first.")
 
-        idata = self._idata
-        n = self._n
-        k_d = self._k_d
-        k_o = self._k_o
-        beta_draws = idata.posterior["beta"].values.reshape(
-            -1, len(self._feature_names)
+        return _compute_ols_flow_effects(
+            self._idata,
+            n=self._n,
+            k_d=self._k_d,
+            k_o=self._k_o,
+            feature_names=self._feature_names,
+            intra_idx=self._intra_idx,
+            draws=draws,
         )
-
-        dest_start = 2
-        orig_start = 2 + k_d
-        intra_start = 2 + k_d + k_o
-        has_intra = (
-            self._intra_idx is not None and beta_draws.shape[1] >= intra_start + k_d
-        )
-
-        n_draws_total = beta_draws.shape[0]
-        if draws is not None:
-            n_draws_total = min(draws, n_draws_total)
-            beta_draws = beta_draws[:n_draws_total]
-
-        bd = beta_draws[:, dest_start : dest_start + k_d]
-        bo = beta_draws[:, orig_start : orig_start + k_o]
-        bi = (
-            beta_draws[:, intra_start : intra_start + k_d]
-            if has_intra
-            else np.zeros((n_draws_total, k_d), dtype=np.float64)
-        )
-
-        # Per-region totals (averaged across all n perturbation regions).
-        # Destination shock contributes bd to one whole row plus bi at the
-        # diagonal cell; averaged over n regions: total_d = bd + bi / n.
-        zeros_d = np.zeros_like(bd)
-        zeros_o = np.zeros_like(bo)
-        out: dict[str, np.ndarray] = {}
-        out["dest_total"] = bd + bi / n
-        out["dest_destination"] = bd * (n - 1) / n
-        out["dest_intra"] = (bd + bi) / n
-        out["dest_origin"] = zeros_d.copy()
-        out["dest_network"] = zeros_d.copy()
-
-        out["orig_total"] = bo
-        out["orig_origin"] = bo * (n - 1) / n
-        out["orig_intra"] = bo / n
-        out["orig_destination"] = zeros_o.copy()
-        out["orig_network"] = zeros_o.copy()
-
-        if k_d == k_o:
-            # Symmetric case: sum dest and orig effects (same variables)
-            for eff in _EFFECT_KEYS:
-                out[eff] = out[f"dest_{eff}"] + out[f"orig_{eff}"]
-        else:
-            # Asymmetric case: concatenate dest and orig effects (different variables)
-            for eff in _EFFECT_KEYS:
-                out[eff] = np.concatenate(
-                    [out[f"dest_{eff}"], out[f"orig_{eff}"]], axis=1
-                )
-
-        return out
 
 
 # ---------------------------------------------------------------------------
@@ -2631,59 +2335,15 @@ class SEMFlow(FlowModel):
         if self._idata is None:
             raise RuntimeError("Model has not been fit yet.  Call fit() first.")
 
-        idata = self._idata
-        n = self._n
-        k_d = self._k_d
-        k_o = self._k_o
-        beta_draws = idata.posterior["beta"].values.reshape(
-            -1, len(self._feature_names)
+        return _compute_ols_flow_effects(
+            self._idata,
+            n=self._n,
+            k_d=self._k_d,
+            k_o=self._k_o,
+            feature_names=self._feature_names,
+            intra_idx=self._intra_idx,
+            draws=draws,
         )
-
-        dest_start = 2
-        orig_start = 2 + k_d
-        intra_start = 2 + k_d + k_o
-        has_intra = (
-            self._intra_idx is not None and beta_draws.shape[1] >= intra_start + k_d
-        )
-
-        n_draws_total = beta_draws.shape[0]
-        if draws is not None:
-            n_draws_total = min(draws, n_draws_total)
-            beta_draws = beta_draws[:n_draws_total]
-
-        bd = beta_draws[:, dest_start : dest_start + k_d]
-        bo = beta_draws[:, orig_start : orig_start + k_o]
-        bi = (
-            beta_draws[:, intra_start : intra_start + k_d]
-            if has_intra
-            else np.zeros((n_draws_total, k_d), dtype=np.float64)
-        )
-
-        zeros_d = np.zeros_like(bd)
-        zeros_o = np.zeros_like(bo)
-        out: dict[str, np.ndarray] = {}
-        out["dest_total"] = bd + bi / n
-        out["dest_destination"] = bd * (n - 1) / n
-        out["dest_intra"] = (bd + bi) / n
-        out["dest_origin"] = zeros_d.copy()
-        out["dest_network"] = zeros_d.copy()
-
-        out["orig_total"] = bo
-        out["orig_origin"] = bo * (n - 1) / n
-        out["orig_intra"] = bo / n
-        out["orig_destination"] = zeros_o.copy()
-        out["orig_network"] = zeros_o.copy()
-
-        if k_d == k_o:
-            for eff in _EFFECT_KEYS:
-                out[eff] = out[f"dest_{eff}"] + out[f"orig_{eff}"]
-        else:
-            for eff in _EFFECT_KEYS:
-                out[eff] = np.concatenate(
-                    [out[f"dest_{eff}"], out[f"orig_{eff}"]], axis=1
-                )
-
-        return out
 
 
 # ---------------------------------------------------------------------------

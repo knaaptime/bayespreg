@@ -68,29 +68,21 @@ from __future__ import annotations
 
 import numpy as np
 
+from .._utils._jax_utils import (
+    check_jax_available as _check_jax_available_impl,
+)
+
 
 def _check_jax_available() -> None:
     """Raise ImportError if JAX or equinox is not installed."""
-    import importlib.util
-
-    if importlib.util.find_spec("jax") is None:
-        raise ImportError(
-            "JAX is required for the full-JIT Gaussian Gibbs sampler. "
-            "Install with: pip install jax"
-        )
-    if importlib.util.find_spec("equinox") is None:
-        raise ImportError(
-            "equinox is required for the full-JIT Gaussian Gibbs sampler. "
-            "Install with: pip install equinox"
-        )
+    _check_jax_available_impl(require_equinox=True)
 
 
 # ---------------------------------------------------------------------------
 # JAX Gaussian Gibbs state (equinox Module)
 # ---------------------------------------------------------------------------
 
-from bayespecon._jax_dispatch import ensure_x64
-
+from ..._jax_dispatch import ensure_x64
 from .._utils._jax_base import make_jax_state_class
 
 JAXGaussianGibbsState = make_jax_state_class(

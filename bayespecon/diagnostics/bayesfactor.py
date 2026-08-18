@@ -1171,8 +1171,17 @@ def bayes_factor_compare_models(
     log_posterior_list = []
     constrained_to_unconstrained_list = []
     for i, obj in enumerate(model_objects):
-        # Check if this is a fitted model object (has inference_data and pymc_model)
-        if hasattr(obj, "inference_data") and hasattr(obj, "pymc_model"):
+        # Check if this is a fitted model object (has inference_data and
+        # pymc_model).  Probe the *class*, not the instance: ``pymc_model`` is a
+        # lazily-building property, so ``hasattr(obj, "pymc_model")`` would
+        # construct and compile a PyTensor graph just to answer "does this
+        # attribute exist?" — defeating the native log-posterior path below for
+        # every Gibbs-fitted model.  Looking the property up on the type returns
+        # the descriptor without invoking its getter.
+        _has_pymc_model = hasattr(type(obj), "pymc_model") or "pymc_model" in getattr(
+            obj, "__dict__", {}
+        )
+        if hasattr(obj, "inference_data") and _has_pymc_model:
             idata = obj.inference_data
             if idata is None:
                 raise ValueError(

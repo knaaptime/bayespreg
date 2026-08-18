@@ -364,6 +364,62 @@ def _neyman_adjust_scalar(
     return g_t_star, V_star
 
 
+def _neyman_adjust_vector(
+    g_t: np.ndarray,
+    g_n: np.ndarray,
+    J_tt: np.ndarray,
+    J_tn: np.ndarray,
+    J_nn: np.ndarray,
+    *,
+    label: str,
+):
+    """Apply the Neyman-orthogonal score correction for a vector target parameter.
+
+    Computes ``g_t* = g_t - g_n @ (J_{nt} J_{nn}^{-1})`` and the adjusted
+    variance ``V* = J_{tt} - J_{tn} J_{nn}^{-1} J_{nt}``. If the nuisance
+    block is scalar (``J_nn`` is a 0-d or 1×1 array), the inverse is plain
+    division. If the nuisance is empty, returns the unadjusted values.
+
+    Parameters
+    ----------
+    g_t : np.ndarray, shape (draws, p)
+        Score samples for the vector target parameter.
+    g_n : np.ndarray, shape (draws,) or (draws, m)
+        Score samples for the nuisance (scalar or vector).
+    J_tt : np.ndarray, shape (p, p)
+        Information for the target block.
+    J_tn : np.ndarray, shape (p,) or (p, m)
+        Cross-information between target and nuisance.
+    J_nn : np.ndarray, shape (), (1,) or (m, m)
+        Information for the nuisance block.
+    label : str
+        Label passed to :func:`_safe_inv` for diagnostic warnings.
+
+    Returns
+    -------
+    g_t_star : np.ndarray, shape (draws, p)
+    V_star : np.ndarray, shape (p, p)
+    """
+    g_n = np.atleast_2d(g_n)
+    if g_n.shape[1] == 0:
+        return g_t, J_tt
+
+    J_nn_arr = np.atleast_2d(J_nn)
+    if J_nn_arr.size == 1:
+        # Scalar nuisance: inverse is plain division.
+        J_nn_scalar = float(J_nn_arr.ravel()[0])
+        coef = np.atleast_1d(J_tn) / (J_nn_scalar + 1e-12)  # (p,)
+        g_t_star = g_t - np.outer(g_n[:, 0], coef)  # (draws, p)
+        V_star = J_tt - np.outer(coef, np.atleast_1d(J_tn))
+    else:
+        J_nn_inv = _safe_inv(J_nn_arr, label)
+        J_tn_arr = np.atleast_2d(J_tn)
+        coef = J_nn_inv @ J_tn_arr.T  # (m, p)
+        g_t_star = g_t - g_n @ coef  # (draws, p)
+        V_star = J_tt - J_tn_arr.T @ coef  # (p, p) = J_tn @ J_nn_inv @ J_nt
+    return g_t_star, V_star
+
+
 # ---------------------------------------------------------------------------
 # Phase-1 helpers — extracted from duplicated boilerplate across ~30 tests
 # ---------------------------------------------------------------------------
@@ -537,3 +593,82 @@ def _panel_spatial_lag(W_sparse, v: np.ndarray, N: int, T: int) -> np.ndarray:
         r = v.reshape(draws * T, N)
         Wr = np.asarray(W_sparse @ r.T, dtype=float).T  # (draws*T, N)
         return Wr.reshape(draws, N * T)
+
+
+# ---------------------------------------------------------------------------
+# Shared utilities for information-matrix blocks and projections
+# ---------------------------------------------------------------------------
+
+
+def _trace_WtW_WW(W_sparse) -> float:
+    r"""Compute :math:`\operatorname{tr}(W^\top W + W^2)` from a sparse W.
+
+    Used by the information-matrix blocks of the Bayesian LM tests
+    (Anselin 1996, eq. 13; Koley & Bera 2024, Section 3).
+
+    Parameters
+    ----------
+    W_sparse : scipy.sparse matrix
+        N×N spatial weights matrix.
+
+    Returns
+    -------
+    float
+        :math:`\operatorname{tr}(W^\top W) + \operatorname{tr}(W^2)`.
+    """
+    # tr(W'W) = ||W||_F^2 = sum(W_ij^2)  [O(nnz)]
+    # tr(W^2) = sum_ij W_ij * W_ji = sum(W * W.T)  [O(nnz)]
+    return float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
+
+
+def _mx_project(X: np.ndarray, v: np.ndarray) -> np.ndarray:
+    r"""Return :math:`M_X v = v - X(X^\top X)^{-1} X^\top v`.
+
+    The OLS annihilator applied to a vector (or batch of vectors).
+    Complements :func:`_mx_quadratic` (which returns the scalar quadratic
+    form) and :func:`_mx_cross` (which returns a cross product) by
+    returning the *projected vector* itself — needed when the projected
+    residuals enter a score calculation.
+
+    Parameters
+    ----------
+    X : np.ndarray, shape (n, k)
+        Design matrix.
+    v : np.ndarray, shape (n,) or (draws, n)
+        Vector(s) to project.
+
+    Returns
+    -------
+    np.ndarray
+        :math:`M_X v` with the same shape as *v*.
+    """
+    XtX = X.T @ X
+    if v.ndim == 1:
+        Xv = X.T @ v
+        sol, *_ = np.linalg.lstsq(XtX, Xv, rcond=None)
+        return v - X @ sol
+    else:
+        # (draws, n) → project each draw
+        Xv = v @ X  # (draws, k)
+        sol, *_ = np.linalg.lstsq(XtX, Xv.T, rcond=None)  # (k, draws)
+        return v - (X @ sol).T
+
+
+def _resolve_lam_name(idata) -> str:
+    """Return the posterior variable name for the SEM/SDEM spatial parameter.
+
+    Some models store the spatial-error parameter as ``"lam"`` and others as
+    ``"lambda"`` (PyMC reserves ``lambda`` for Python's keyword in some
+    contexts).  This helper checks which is present.
+
+    Parameters
+    ----------
+    idata : arviz.InferenceData
+        Fitted-model inference data with a ``posterior`` group.
+
+    Returns
+    -------
+    str
+        Either ``"lam"`` or ``"lambda"``.
+    """
+    return "lam" if "lam" in idata.posterior else "lambda"

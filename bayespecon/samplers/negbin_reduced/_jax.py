@@ -13,19 +13,12 @@ Pace 2009).
 Architecture
 ------------
 The sampler uses a Python loop that calls a JIT-compiled Gibbs step
-for each iteration.  PG draws use ``jax.pure_callback`` to call the
-exact C extension ``random_polyagamma``, which produces exact PG(h, z)
-draws for any h (integer or non-integer).  This eliminates the
-systematic ~0.5–1% mean bias of the Gamma-series approximation that
+for each iteration.  PG draws use ``pgjax.pg_sample`` (exact Devroye
+sampler, on-device) when installed; otherwise the ``polyagamma`` C
+extension is called via ``jax.pure_callback``.  Both produce exact
+PG(h, z) draws for any h (integer or non-integer), eliminating the
+systematic mean bias of the truncated Gamma-series approximation that
 caused α to collapse over many Gibbs iterations.
-
-A ``jax.lax.scan``-based runner is not used because ``pure_callback``
-requires a host round-trip per call, which defeats the purpose of scan.
-The Python loop compiles the Gibbs step once and calls it repeatedly,
-amortising the JIT overhead.
-
-- **PG sampling**: Exact draws via ``jax.pure_callback`` calling the
-  C extension ``random_polyagamma``.
 - **ρ draw**: JAX slice sampling with a shift-invert Krylov basis.
   The basis is built once per sweep at the current ρ via LU
   factorization; each slice-candidate density evaluation is a cheap
@@ -45,9 +38,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bayespecon._jax_dispatch import ensure_x64
-
-from .._utils._jax_polyagamma import jax_polyagamma
+from ..._jax_dispatch import ensure_x64
 
 # ---------------------------------------------------------------------------
 # Krylov basis: build and evaluate
@@ -521,18 +512,10 @@ def _make_reduced_gibbs_step(
 
     ensure_x64()
 
-    # On-device Pólya-Gamma (pgjax) when installed — draws ω ~ PG(y+α, ·) with no
-    # host round-trip (real-h via the tail-corrected Gamma sum; exact and
-    # bias-free, so α does not collapse).  Falls back to the exact host callback.
-    try:
-        import pgjax
+    # Pólya-Gamma: pgjax (on-device, exact) or numpy C extension fallback.
+    from .._utils._jax_utils import make_pg_draw
 
-        def _draw_pg(hh, zz, kk):
-            return pgjax.pg_sample(hh, zz, kk)
-    except ImportError:
-
-        def _draw_pg(hh, zz, kk):
-            return jax_polyagamma(hh, zz, key=kk, method="callback")
+    _draw_pg = make_pg_draw()
 
     # ── Sparse sparsax solve closures (W is never densified; vmap-safe) ──
     _solve, _matvec_W = _make_sparse_solvers(sparse_ctx)
