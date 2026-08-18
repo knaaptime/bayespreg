@@ -377,3 +377,93 @@ class TestNegativeBinomialPanelFlowRecovery:
         )
 
         _check_beta_recovery(idata, beta_d_true, beta_o_true, gamma_dist_true, tol=0.8)
+
+
+@pytest.mark.slow
+class TestNegBinFlowAspatialRecovery:
+    """Recovery for the aspatial NegBinFlow (no spatial parameters)."""
+
+    def test_negbin_flow_recovers_beta_and_alpha(self):
+        from bayespecon.dgp.flows import generate_negbin_flow_data
+
+        beta_d_true, beta_o_true = [1.5, -0.8], [0.7, 1.2]
+        gamma_dist_true = -0.5
+        alpha_true = 2.0
+
+        out = generate_negbin_flow_data(
+            n=15,
+            rho_d=0.0,
+            rho_o=0.0,
+            rho_w=0.0,
+            beta_d=beta_d_true,
+            beta_o=beta_o_true,
+            gamma_dist=gamma_dist_true,
+            alpha=alpha_true,
+            seed=42,
+        )
+        model = NegBinFlow(
+            out["y_vec"],
+            out["X"],
+            out["G"],
+            col_names=out["col_names"],
+        )
+        idata = model.fit(
+            sampler="gibbs",
+            draws=1500,
+            tune=1500,
+            chains=2,
+            random_seed=42,
+            progressbar=False,
+        )
+
+        alpha_hat = float(idata.posterior["alpha"].mean())
+        assert abs(alpha_hat - alpha_true) < 1.5, (
+            f"alpha: {alpha_hat:.3f} vs {alpha_true}"
+        )
+        _check_beta_recovery(idata, beta_d_true, beta_o_true, gamma_dist_true)
+
+
+@pytest.mark.slow
+class TestNegBinFlowPanelAspatialRecovery:
+    """Recovery for the aspatial NegBinFlowPanel (no spatial parameters)."""
+
+    def test_negbin_flow_panel_recovers_beta_and_alpha(self):
+        from bayespecon.dgp.flows import generate_panel_negbin_flow_data
+
+        beta_d_true, beta_o_true = [1.4, -0.7], [0.8, 1.1]
+        gamma_dist_true = -0.5
+        alpha_true = 2.2
+
+        out = generate_panel_negbin_flow_data(
+            n=7,
+            T=5,
+            rho_d=0.0,
+            rho_o=0.0,
+            rho_w=0.0,
+            beta_d=beta_d_true,
+            beta_o=beta_o_true,
+            gamma_dist=gamma_dist_true,
+            alpha=alpha_true,
+            seed=42,
+        )
+        model = NegBinFlowPanel(
+            y=out["y"],
+            W=out["G"],
+            X=out["X"],
+            T=5,
+            col_names=out["col_names"],
+            effects=0,
+        )
+        idata = model.fit(
+            draws=1500,
+            tune=1500,
+            chains=2,
+            random_seed=42,
+            progressbar=False,
+        )
+
+        alpha_hat = float(idata.posterior["alpha"].mean())
+        assert abs(alpha_hat - alpha_true) < 3.5, (
+            f"alpha: {alpha_hat:.3f} vs {alpha_true}"
+        )
+        _check_beta_recovery(idata, beta_d_true, beta_o_true, gamma_dist_true)

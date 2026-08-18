@@ -14,13 +14,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bayespecon.models import OLSPanelRE, SARPanelRE, SEMPanelRE
+from bayespecon.models import OLSPanelRE, SARPanelRE, SDEMPanelRE, SEMPanelRE
 from bayespecon.tests.helpers import (
     PANEL_N,
     PANEL_T,
     SAMPLE_KWARGS,
     make_panel_ols_data,
     make_panel_sar_data,
+    make_panel_sdem_fe_data,
     make_panel_sem_data,
 )
 
@@ -30,6 +31,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.recovery]
 RHO_TRUE = 0.4
 LAM_TRUE = 0.4
 BETA_TRUE = np.array([1.0, 2.0])
+BETA2_TRUE = np.array([0.8])  # WX coefficient for SDEM
 SIGMA_TRUE = 0.8
 SIGMA_ALPHA_TRUE = 0.5
 
@@ -53,6 +55,16 @@ def _assert_beta(idata, label):
 def _assert_scalar(idata, name, true, tol, label):
     hat = float(idata.posterior[name].mean())
     assert abs(hat - true) < tol, f"{label} {name}: expected ≈{true}, got {hat:.3f}"
+
+
+def _assert_sdem_beta(idata, label):
+    """SDEM beta covers [X coefficients, WX coefficients]."""
+    beta_hat = idata.posterior["beta"].mean(("chain", "draw")).values
+    combined = np.concatenate([BETA_TRUE, BETA2_TRUE])
+    for j, (bhat, btrue) in enumerate(zip(beta_hat, combined)):
+        assert abs(bhat - btrue) < ABS_TOL_BETA, (
+            f"{label} beta[{j}]: expected ≈{btrue}, got {bhat:.3f}"
+        )
 
 
 def test_ols_panel_re_recovers_all(rng, W_panel_dense, W_panel_graph):
@@ -118,4 +130,35 @@ def test_sem_panel_re_recovers_all(rng, W_panel_dense, W_panel_graph):
     _assert_beta(idata, "SEMPanelRE")
     _assert_scalar(
         idata, "sigma_alpha", SIGMA_ALPHA_TRUE, ABS_TOL_SIGMA_ALPHA_SEM_RE, "SEMPanelRE"
+    )
+
+
+def test_sdem_panel_re_recovers_all(rng, W_panel_dense, W_panel_graph):
+    """SDEMPanelRE posterior mean recovery.
+
+    Like SEM-RE, σ_α² is weakly identified because random effects absorb
+    spatial correlation.  The beta vector includes both X and WX
+    coefficients.
+    """
+    y, X, _ = make_panel_sdem_fe_data(
+        rng,
+        W_panel_dense,
+        PANEL_N,
+        PANEL_T,
+        lam=LAM_TRUE,
+        beta1=BETA_TRUE,
+        beta2=BETA2_TRUE,
+        sigma=SIGMA_TRUE,
+        sigma_alpha=SIGMA_ALPHA_TRUE,
+    )
+    model = SDEMPanelRE(y=y, X=X, W=W_panel_graph, N=PANEL_N, T=PANEL_T)
+    idata = model.fit(**SAMPLE_KWARGS)
+    _assert_scalar(idata, "lam", LAM_TRUE, ABS_TOL_SPATIAL, "SDEMPanelRE")
+    _assert_sdem_beta(idata, "SDEMPanelRE")
+    _assert_scalar(
+        idata,
+        "sigma_alpha",
+        SIGMA_ALPHA_TRUE,
+        ABS_TOL_SIGMA_ALPHA_SEM_RE,
+        "SDEMPanelRE",
     )

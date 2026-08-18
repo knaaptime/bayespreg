@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from bayespecon import dgp
-from bayespecon.models import SARNegBinStructural
+from bayespecon.models import SARNegBin, SARNegBinStructural
 from bayespecon.tests.helpers import W_to_graph, make_rook_W
 
 # ---------------------------------------------------------------------------
@@ -394,4 +394,96 @@ class TestSARNegBinStructuralJaxDenseRecovery:
         )
         assert abs(rho_mean - RHO_TRUE) < 0.2, (
             f"rho_mean={rho_mean:.3f} too far from rho_true={RHO_TRUE}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Reduced-form SARNegBin recovery
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def sar_nb_reduced_data():
+    """SAR-NB data from the *reduced-form* DGP (sigma2=0, no latent noise)."""
+    rng = np.random.default_rng(99)
+    W_dense = make_rook_W(SIDE)
+    W_graph = W_to_graph(W_dense)
+    return dgp.simulate_sar_negbin(
+        W=W_graph,
+        rho=RHO_TRUE,
+        beta=BETA_TRUE,
+        alpha=ALPHA_TRUE,
+        sigma2=0.0,  # reduced form: deterministic latent
+        rng=rng,
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.recovery
+class TestSARNegBinReducedRecovery:
+    """Parameter recovery for the reduced-form SARNegBin (Gibbs sampler).
+
+    The DGP uses ``sigma2=0`` (no latent noise), matching the reduced-form
+    model specification: ``eta = (I - rho W)^{-1} X beta``.
+    """
+
+    def test_recovers_rho(self, sar_nb_reduced_data):
+        y = sar_nb_reduced_data["y"]
+        X = sar_nb_reduced_data["X"]
+        W = sar_nb_reduced_data["W_graph"]
+
+        model = SARNegBin(y=y, X=X, W=W)
+        idata = model.fit(
+            draws=DRAWS,
+            tune=TUNE,
+            chains=CHAINS,
+            random_seed=42,
+            n_jobs=1,
+            progressbar=False,
+        )
+
+        rho_mean = float(idata.posterior["rho"].mean())
+        assert abs(rho_mean - RHO_TRUE) < 0.2, (
+            f"rho_mean={rho_mean:.3f} too far from rho_true={RHO_TRUE}"
+        )
+
+    def test_recovers_alpha(self, sar_nb_reduced_data):
+        y = sar_nb_reduced_data["y"]
+        X = sar_nb_reduced_data["X"]
+        W = sar_nb_reduced_data["W_graph"]
+
+        model = SARNegBin(y=y, X=X, W=W)
+        idata = model.fit(
+            draws=DRAWS,
+            tune=TUNE,
+            chains=CHAINS,
+            random_seed=42,
+            n_jobs=1,
+            progressbar=False,
+        )
+
+        alpha_mean = float(idata.posterior["alpha"].mean())
+        assert alpha_mean > 0, f"alpha_mean={alpha_mean:.3f} should be positive"
+        assert abs(alpha_mean - ALPHA_TRUE) < 1.5, (
+            f"alpha_mean={alpha_mean:.3f} too far from alpha_true={ALPHA_TRUE}"
+        )
+
+    def test_recovers_beta(self, sar_nb_reduced_data):
+        y = sar_nb_reduced_data["y"]
+        X = sar_nb_reduced_data["X"]
+        W = sar_nb_reduced_data["W_graph"]
+
+        model = SARNegBin(y=y, X=X, W=W)
+        idata = model.fit(
+            draws=DRAWS,
+            tune=TUNE,
+            chains=CHAINS,
+            random_seed=42,
+            n_jobs=1,
+            progressbar=False,
+        )
+
+        beta_mean = idata.posterior["beta"].mean(dim=["chain", "draw"]).values
+        assert abs(beta_mean[1] - BETA_TRUE[1]) < 0.4, (
+            f"slope={beta_mean[1]:.3f} too far from true={BETA_TRUE[1]}"
         )

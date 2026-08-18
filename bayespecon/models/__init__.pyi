@@ -28,6 +28,8 @@ from .flow._flow import SARFlow as SARFlow
 from .flow._flow import SARFlowSeparable as SARFlowSeparable
 from .flow._flow import SARNegBinFlow as SARNegBinFlow
 from .flow._flow import SARNegBinFlowSeparable as SARNegBinFlowSeparable
+from .flow._flow import SARPoissonFlow as SARPoissonFlow
+from .flow._flow import SARPoissonFlowSeparable as SARPoissonFlowSeparable
 from .flow._flow import SEMFlow as SEMFlow
 from .flow._flow import SEMFlowSeparable as SEMFlowSeparable
 from .flow_panel._panel import (

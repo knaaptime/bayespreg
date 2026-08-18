@@ -552,6 +552,7 @@ def _make_gibbs_step_with_data(
             ),
             y_jax,
             priors.alpha_sigma,
+            priors.alpha_nu,
             key_alpha,
         )
 
@@ -568,7 +569,7 @@ def _make_gibbs_step_with_data(
     return gibbs_step
 
 
-def _jax_nb_log_density_alpha(log_a, y_jax, eta, alpha_sigma):
+def _jax_nb_log_density_alpha(log_a, y_jax, eta, alpha_sigma, alpha_nu):
     """JAX-compiled NB log-density for α slice sampling.
 
     Computes log p(log_a | y, η) up to a constant, where α = exp(log_a).
@@ -605,12 +606,17 @@ def _jax_nb_log_density_alpha(log_a, y_jax, eta, alpha_sigma):
     )
     log_lik = jnp.where(jnp.isfinite(log_lik), log_lik, -1e10)
     total_log_lik = jnp.sum(log_lik)
-    # HalfNormal prior on α: p(α) ∝ exp(-α²/(2σ²)), Jacobian for log transform
-    log_prior = -(a**2) / (2.0 * alpha_sigma**2)
+    # Half-Student-t(ν, σ) prior on α, matching the PyMC/NUTS builders and the
+    # reduced-form JAX sampler.  Jacobian for the log transform added below.
+    log_prior = (
+        -0.5
+        * (alpha_nu + 1.0)
+        * jnp.log1p((a * a) / (alpha_nu * alpha_sigma * alpha_sigma))
+    )
     return log_a + total_log_lik + log_prior
 
 
-def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
+def _sample_alpha_jax(state, y_jax, alpha_sigma, alpha_nu, key):
     """Sample α using JAX-compiled slice sampling.
 
     This eliminates the per-iteration Python↔JAX boundary crossing
@@ -642,7 +648,9 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
     log_alpha = jnp.log(state.alpha)
 
     # Log-density at current point
-    log_y0 = _jax_nb_log_density_alpha(log_alpha, y_jax, state.eta, alpha_sigma)
+    log_y0 = _jax_nb_log_density_alpha(
+        log_alpha, y_jax, state.eta, alpha_sigma, alpha_nu
+    )
 
     # Draw vertical level: log(u) where u ~ Uniform(0, f(x0))
     key, subkey = jax.random.split(key)
@@ -668,7 +676,8 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
     def should_step_left(carry):
         L_val, _ = carry
         return (L_val > lower_bound) & (
-            _jax_nb_log_density_alpha(L_val, y_jax, state.eta, alpha_sigma) > log_u
+            _jax_nb_log_density_alpha(L_val, y_jax, state.eta, alpha_sigma, alpha_nu)
+            > log_u
         )
 
     L_final, _ = jax.lax.while_loop(
@@ -684,7 +693,8 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
     def should_step_right(carry):
         R_val, _ = carry
         return (R_val < upper_bound) & (
-            _jax_nb_log_density_alpha(R_val, y_jax, state.eta, alpha_sigma) > log_u
+            _jax_nb_log_density_alpha(R_val, y_jax, state.eta, alpha_sigma, alpha_nu)
+            > log_u
         )
 
     R_final, _ = jax.lax.while_loop(
@@ -702,7 +712,9 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
         L_val, R_val, key_val, x_best, _ = carry
         key_val, subkey = jax.random.split(key_val)
         x_new = L_val + jax.random.uniform(subkey, dtype=jnp.float64) * (R_val - L_val)
-        log_dens_new = _jax_nb_log_density_alpha(x_new, y_jax, state.eta, alpha_sigma)
+        log_dens_new = _jax_nb_log_density_alpha(
+            x_new, y_jax, state.eta, alpha_sigma, alpha_nu
+        )
         accepted = log_dens_new > log_u
         L_new = jnp.where(x_new < log_alpha, x_new, L_val)
         R_new = jnp.where(x_new >= log_alpha, x_new, R_val)
@@ -765,7 +777,13 @@ def _sample_alpha_python(state, y, alpha_sigma, alpha_nu, rng):
         )
         log_lik = np.where(np.isfinite(log_lik), log_lik, -1e10)
         total_log_lik = np.sum(log_lik)
-        log_prior = -(a**2) / (2.0 * alpha_sigma**2)
+        # Half-Student-t(ν, σ) prior on α (alpha_nu was previously accepted and
+        # silently discarded here, giving this path a HalfNormal prior).
+        log_prior = (
+            -0.5
+            * (alpha_nu + 1.0)
+            * np.log1p((a * a) / (alpha_nu * alpha_sigma * alpha_sigma))
+        )
         return log_a + total_log_lik + log_prior
 
     log_alpha_new, _ = slice_sample_1d(

@@ -927,7 +927,10 @@ def _sample_alpha(
         log p(log α | y, η) = log α + Σ_i log NB(y_i | exp(η_i), α) + log p(α)
 
     where log α is the Jacobian from the change of variables α = exp(log α),
-    and p(α) is the HalfNormal(σ_α) prior.
+    and p(α) is the Half-Student-t(ν_α, σ_α) prior — the same prior the
+    PyMC/NUTS builders place via ``pm.HalfStudentT`` and the same kernel the
+    reduced-form JAX sampler uses, so a model's posterior does not depend on
+    ``gibbs_backend``.
 
     Parameters
     ----------
@@ -936,7 +939,7 @@ def _sample_alpha(
     y : ndarray of shape (n,)
         Integer response vector.
     priors : GibbsPriors
-        Prior hyperparameters (alpha_sigma).
+        Prior hyperparameters (alpha_sigma, alpha_nu).
     rng : numpy.random.Generator
         Random state.
 
@@ -946,6 +949,7 @@ def _sample_alpha(
         New draw of α.
     """
     alpha_sigma = priors.alpha_sigma
+    alpha_nu = priors.alpha_nu
     eta = state.eta
     log_alpha = np.log(state.alpha)
 
@@ -974,10 +978,17 @@ def _sample_alpha(
         )
         total_log_lik = np.sum(log_lik)
 
-        # HalfNormal prior on alpha: p(alpha) = (2/(pi*sigma^2))^{1/2} exp(-alpha^2/(2*sigma^2))
-        # On log(alpha) scale: log p(alpha) + log(alpha) [Jacobian]
-        # = -alpha^2 / (2*sigma^2) + log(alpha) + const
-        log_prior = -(alpha**2) / (2.0 * alpha_sigma**2)
+        # Half-Student-t(nu, sigma) prior on alpha:
+        #   p(alpha) ∝ (1 + alpha^2 / (nu * sigma^2))^{-(nu+1)/2}
+        # Matches the PyMC/NUTS path (pm.HalfStudentT) and the reduced-form JAX
+        # path.  A HalfNormal here would be a hard wall at alpha ≈ 4*sigma,
+        # which prevents the NB from representing near-equidispersed
+        # (Poisson-like) data at all.
+        log_prior = (
+            -0.5
+            * (alpha_nu + 1.0)
+            * np.log1p((alpha * alpha) / (alpha_nu * alpha_sigma * alpha_sigma))
+        )
 
         # Jacobian: d(alpha)/d(log_alpha) = alpha, so log|J| = log(alpha) = log_a
         return log_a + total_log_lik + log_prior

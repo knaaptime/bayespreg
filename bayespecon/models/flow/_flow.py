@@ -2298,6 +2298,165 @@ class NegBinFlow(_NegBinFlowMixin, OLSFlow):
 # ---------------------------------------------------------------------------
 
 
+class _PoissonFlowMixin:
+    """Shared ``fit`` dispatch for Poisson flow models.
+
+    Mirrors :class:`_NegBinFlowMixin`, but dispatches to the auxiliary-mixture
+    Gibbs sampler (Frühwirth-Schnatter & Wagner 2006) rather than Pólya–Gamma.
+    Poisson admits no exact PG representation, and the NB-with-large-alpha
+    approximation degenerates precisely in the Poisson limit — the PG working
+    precision outruns the Fisher information without bound, collapsing ESS.
+
+    Gibbs-only: unlike the NB classes there is no ``sampler="nuts"`` path yet.
+    """
+
+    def fit(
+        self,
+        draws: int = 2000,
+        tune: int = 1000,
+        chains: int = 4,
+        random_seed: Optional[int] = None,
+        sampler: str = "gibbs",
+        progressbar: bool = True,
+        n_jobs: int = -1,
+        **sample_kwargs,
+    ) -> az.InferenceData:
+        """Draw samples from the posterior.
+
+        Parameters
+        ----------
+        draws, tune, chains : int
+            Post-warmup draws, warmup sweeps, and number of chains.
+        random_seed : int, optional
+            Seed for reproducibility.
+        sampler : {"gibbs"}, default "gibbs"
+            Only the auxiliary-mixture Gibbs sampler is implemented.
+        progressbar : bool, default True
+            Show a progress bar.
+        n_jobs : int, default -1
+            Chain-level parallelism.
+        """
+        if sampler != "gibbs":
+            raise NotImplementedError(
+                f"{type(self).__name__} supports sampler='gibbs' only; "
+                f"got {sampler!r}.  There is no NUTS path for the "
+                "auxiliary-mixture Poisson flow models yet."
+            )
+        if sample_kwargs:
+            raise TypeError(f"Unexpected keyword arguments: {sorted(sample_kwargs)}")
+        return self._fit_gibbs(
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            random_seed=random_seed,
+            progressbar=progressbar,
+            n_jobs=n_jobs,
+        )
+
+
+def _require_counts(y, cls_name: str) -> np.ndarray:
+    """Validate and coerce a response vector to non-negative integer counts."""
+    y_arr = np.asarray(y)
+    if not np.issubdtype(y_arr.dtype, np.integer):
+        y_rounded = np.round(y_arr).astype(np.int64)
+        if not np.allclose(y_arr, y_rounded):
+            raise ValueError(
+                f"{cls_name} requires integer-valued observations; got dtype "
+                f"{y_arr.dtype} with non-integer values."
+            )
+        y_arr = y_rounded
+    if np.any(y_arr < 0):
+        raise ValueError(f"{cls_name} requires non-negative integer observations.")
+    return y_arr
+
+
+class SARPoissonFlow(_PoissonFlowMixin, SARFlow):
+    """Unrestricted 3-ρ SAR flow model with Poisson observation noise.
+
+    .. warning::
+
+       The unrestricted 3-ρ parameterization mixes poorly at moderate ``n`` for
+       *both* likelihoods — ρ_d, ρ_o and ρ_w trade off along a ridge that
+       one-at-a-time slice updates cannot traverse.  Measured at n=36
+       (N=1296): ESS ≈ 4 of 2000 draws with rhat ≈ 1.4 for this sampler *and*
+       for :class:`SARNegBinFlow` on the same data.  Prefer
+       :class:`SARPoissonFlowSeparable` unless ρ_w is genuinely of interest.
+    """
+
+    def __init__(self, y, X, W, **kwargs):
+        y_arr = _require_counts(y, "SARPoissonFlow")
+        super().__init__(y_arr.astype(np.float64), X, W, **kwargs)
+        self._y_int_vec: np.ndarray = y_arr.ravel().astype(np.int64)
+
+    def _compute_jacobian_log_det(self, posterior) -> Optional[np.ndarray]:
+        return None
+
+    def _fit_gibbs(
+        self,
+        draws: int = 2000,
+        tune: int = 1000,
+        chains: int = 4,
+        random_seed: Optional[int] = None,
+        progressbar: bool = True,
+        n_jobs: int = -1,
+    ) -> az.InferenceData:
+        """Sample via reduced-form auxiliary-mixture Gibbs (unrestricted 3-ρ)."""
+        from ._poisson_gibbs import run_poisson_flow_gibbs
+
+        return run_poisson_flow_gibbs(
+            self,
+            separable=False,
+            model_type="pois_sar_flow",
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            random_seed=random_seed,
+            progressbar=progressbar,
+            n_jobs=n_jobs,
+        )
+
+
+class SARPoissonFlowSeparable(_PoissonFlowMixin, SARFlowSeparable):
+    """Separable SAR flow model with Poisson observation noise.
+
+    ``rho_w = -rho_d * rho_o`` is deterministic, which removes the ρ ridge that
+    makes the unrestricted variant intractable.  This is the recommended
+    Poisson flow model.
+    """
+
+    def __init__(self, y, X, W, **kwargs):
+        y_arr = _require_counts(y, "SARPoissonFlowSeparable")
+        super().__init__(y_arr.astype(np.float64), X, W, **kwargs)
+        self._y_int_vec: np.ndarray = y_arr.ravel().astype(np.int64)
+
+    def _compute_jacobian_log_det(self, posterior) -> Optional[np.ndarray]:
+        return None
+
+    def _fit_gibbs(
+        self,
+        draws: int = 2000,
+        tune: int = 1000,
+        chains: int = 4,
+        random_seed: Optional[int] = None,
+        progressbar: bool = True,
+        n_jobs: int = -1,
+    ) -> az.InferenceData:
+        """Sample via reduced-form auxiliary-mixture Gibbs (separable 2-ρ)."""
+        from ._poisson_gibbs import run_poisson_flow_gibbs
+
+        return run_poisson_flow_gibbs(
+            self,
+            separable=True,
+            model_type="pois_sar_flow_sep",
+            draws=draws,
+            tune=tune,
+            chains=chains,
+            random_seed=random_seed,
+            progressbar=progressbar,
+            n_jobs=n_jobs,
+        )
+
+
 class SEMFlow(FlowModel):
     r"""Bayesian spatial-error flow model with three free spatial parameters.
 

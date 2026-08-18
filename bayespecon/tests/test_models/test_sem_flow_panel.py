@@ -191,3 +191,49 @@ class TestSemFlowPanelRecovery:
         ro = post["lam_o"].values.ravel()
         rw = post["lam_w"].values.ravel()
         np.testing.assert_allclose(rw, -rd * ro, atol=1e-10)
+
+    def test_separable_panel_recovery_normal(self):
+        """SEMFlowSeparablePanel should recover lam_d, lam_o from DGP data."""
+        from bayespecon.dgp.flows import generate_panel_sem_flow_data_separable
+        from bayespecon.models.flow_panel._panel import SEMFlowSeparablePanel
+
+        lam_d_true, lam_o_true = 0.25, 0.20
+        beta_d_true = [1.0, -0.5]
+        beta_o_true = [0.8, 0.3]
+        sigma_true = 0.6
+
+        data = generate_panel_sem_flow_data_separable(
+            n=15,
+            T=4,
+            lam_d=lam_d_true,
+            lam_o=lam_o_true,
+            beta_d=beta_d_true,
+            beta_o=beta_o_true,
+            sigma=sigma_true,
+            sigma_alpha=0.0,
+            gamma_dist=-0.4,
+            seed=11,
+            distribution="normal",
+        )
+        model = SEMFlowSeparablePanel(
+            data["y"],
+            data["X"],
+            data["G"],
+            T=4,
+            col_names=data["col_names"],
+        )
+        idata = model.fit(
+            draws=300,
+            tune=300,
+            chains=2,
+            target_accept=0.9,
+            random_seed=7,
+            progressbar=False,
+        )
+        post = idata.posterior
+        for name, true in [("lam_d", lam_d_true), ("lam_o", lam_o_true)]:
+            samples = post[name].values.ravel()
+            mean, sd = samples.mean(), samples.std()
+            assert abs(mean - true) < 4 * sd, (
+                f"{name}: mean={mean:.3f}, true={true}, sd={sd:.3f}"
+            )

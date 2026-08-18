@@ -1,5 +1,44 @@
 # Supported Models
 
+
+## Model suite
+
+The package organizes models along three column dimensions — **likelihood** (linear / non-linear), **temporal structure** (cross-section / panel), and **outcome structure** (single / flow). Each cell lists the spatial structures implemented for that combination.
+
+```html
+<table style="border-collapse: collapse; text-align: center; margin: 1em auto;">
+  <thead>
+    <tr>
+      <th rowspan="2" style="border: 1px solid #999; padding: 8px 12px; background: #f5f5f5;"></th>
+      <th colspan="2" style="border: 1px solid #999; padding: 8px 12px; background: #e8e8e8;"><strong>Linear</strong></th>
+      <th colspan="2" style="border: 1px solid #999; padding: 8px 12px; background: #e8e8e8;"><strong>Non-linear</strong></th>
+    </tr>
+    <tr>
+      <th style="border: 1px solid #999; padding: 6px 12px;">Cross-section</th>
+      <th style="border: 1px solid #999; padding: 6px 12px;">Panel</th>
+      <th style="border: 1px solid #999; padding: 6px 12px;">Cross-section</th>
+      <th style="border: 1px solid #999; padding: 6px 12px;">Panel</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th style="border: 1px solid #999; padding: 8px 12px; background: #f5f5f5;"><strong>Single</strong></th>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">Aspatial, SLX,<br>SAR, SEM,<br>SDM, SDEM</td>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">Aspatial, SLX,<br>SAR, SEM,<br>SDM, SDEM</td>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">Aspatial, SAR,<br>SEM, SDM</td>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">SAR, SEM</td>
+    </tr>
+    <tr>
+      <th style="border: 1px solid #999; padding: 8px 12px; background: #f5f5f5;"><strong>Flow</strong></th>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">Aspatial, SAR,<br>SEM, SDEM</td>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">Aspatial, SAR,<br>SEM</td>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">Aspatial, SAR</td>
+      <td style="border: 1px solid #999; padding: 10px 14px; vertical-align: top; text-align: left; line-height: 1.6;">Aspatial, SAR</td>
+    </tr>
+  </tbody>
+</table>
+```
+
 ## Cross Sectional Models
 
 ### OLS
