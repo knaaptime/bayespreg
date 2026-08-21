@@ -113,3 +113,12 @@ docs/source/user-guide/cache
 reference
 scratch/
 .claude/*
+# Added by code-review-graph
+.code-review-graph/
+.github/code-review-graph.instruction.md
+agents.md
+claude.md
+.mcp.json
+
+/.quarto/
+**/*.quarto_ipynb

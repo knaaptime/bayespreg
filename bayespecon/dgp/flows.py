@@ -1472,3 +1472,100 @@ def generate_panel_sem_flow_data_separable(
         beta_o=beta_o,
         **kwargs,
     )
+
+
+def _poissonize_flow(out: dict, mean_count: float, seed: int) -> dict:
+    r"""Redraw a flow dataset's response as Poisson at a target mean count.
+
+    The reduced-form flow models use a mean propagator, :math:`\log \mu =
+    A(\rho)^{-1} X\beta`, and for row-standardised weights :math:`A^{-1}`
+    preserves constants — so shifting ``eta`` by a constant is an *exact*
+    reparameterisation of the intercept, not an approximation.  That is what
+    lets the target mean be set without disturbing the spatial parameters.
+    """
+    eta = out["eta_vec"]
+    eta = eta + (np.log(mean_count) - np.log(np.exp(eta).mean()))
+    rng = np.random.default_rng(seed)
+    lam = np.exp(eta)
+    y = rng.poisson(lam).astype(np.int64)
+    n = int(np.sqrt(y.size))
+    out = dict(out)
+    out["eta_vec"] = eta
+    out["lambda_vec"] = lam
+    out["y_vec"] = y
+    out["y_mat"] = y.reshape(n, n)
+    out.pop("alpha", None)
+    return out
+
+
+def generate_poisson_flow_data(
+    n: int | None = None,
+    rho_d: float = 0.3,
+    rho_o: float = 0.2,
+    rho_w: float = 0.1,
+    mean_count: float = 8.0,
+    signal: float = 0.3,
+    seed: int = 42,
+    **kwargs,
+) -> dict:
+    r"""Generate synthetic O-D flow counts from a Poisson SAR flow DGP.
+
+    .. math::
+
+        y_{ij} \sim \operatorname{Poisson}(\mu_{ij}), \qquad
+        \log \boldsymbol{\mu} = A(\rho_d, \rho_o, \rho_w)^{-1} X\beta
+
+    Parameters
+    ----------
+    n : int, optional
+        Approximate number of spatial units (``N = n^2`` flows).
+    rho_d, rho_o, rho_w : float
+        Destination, origin and cross spatial parameters.
+    mean_count : float, default 8.0
+        Target mean of the simulated counts.
+    signal : float, default 0.3
+        Magnitude of the regression coefficients, which sets the spread of
+        ``eta``.  The default gives ``sd(eta) ~ 1`` and roughly 5-10% zeros —
+        realistic gravity data.  Raising it past ~0.5 produces the very
+        heavy-tailed, mostly-zero designs on which *no* flow sampler in this
+        package recovers (``sd(eta) ~ 3``, 60-70% zeros); those are a bad
+        test bed, not a hard one.
+    seed : int, default 42
+        Random seed.
+    **kwargs
+        Forwarded to :func:`generate_negbin_flow_data`.
+
+    Returns
+    -------
+    dict
+        As :func:`generate_negbin_flow_data`, without ``alpha``.
+    """
+    kwargs.setdefault("beta_d", [signal, signal])
+    kwargs.setdefault("beta_o", [signal, signal])
+    kwargs.setdefault("gamma_dist", -signal)
+    out = generate_negbin_flow_data(
+        n=n, rho_d=rho_d, rho_o=rho_o, rho_w=rho_w, alpha=2.0, seed=seed, **kwargs
+    )
+    return _poissonize_flow(out, mean_count, seed)
+
+
+def generate_poisson_flow_data_separable(
+    n: int | None = None,
+    rho_d: float = 0.3,
+    rho_o: float = 0.2,
+    mean_count: float = 8.0,
+    signal: float = 0.3,
+    seed: int = 42,
+    **kwargs,
+) -> dict:
+    r"""Separable Poisson flow DGP (:math:`\rho_w = -\rho_d \rho_o`).
+
+    See :func:`generate_poisson_flow_data` for the parameters.
+    """
+    kwargs.setdefault("beta_d", [signal, signal])
+    kwargs.setdefault("beta_o", [signal, signal])
+    kwargs.setdefault("gamma_dist", -signal)
+    out = generate_negbin_flow_data_separable(
+        n=n, rho_d=rho_d, rho_o=rho_o, alpha=2.0, seed=seed, **kwargs
+    )
+    return _poissonize_flow(out, mean_count, seed)

@@ -292,12 +292,12 @@ def _sample_beta_conjugate(
     k = X.shape[1]
     beta_sigma_arr = np.broadcast_to(np.asarray(priors.beta_sigma, dtype=float), (k,))
     beta_mu_arr = np.broadcast_to(np.asarray(priors.beta_mu, dtype=float), (k,))
-    prior_prec = np.diag(1.0 / beta_sigma_arr**2)
-    prior_mean = np.array(beta_mu_arr, dtype=float)
+    prior_prec_diag = 1.0 / beta_sigma_arr**2
 
-    post_prec = XtX / sigma2 + prior_prec
+    post_prec = XtX / sigma2
+    post_prec[np.diag_indices_from(post_prec)] += prior_prec_diag
     Xtr = X.T @ r
-    rhs = Xtr / sigma2 + prior_prec @ prior_mean
+    rhs = Xtr / sigma2 + prior_prec_diag * beta_mu_arr
 
     # Cholesky factorization: post_prec = L Lᵀ (SPD, lower-triangular L)
     # Must request lower=True so that solve_triangular(L, z, trans='T')

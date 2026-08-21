@@ -399,6 +399,71 @@ def make_spatial_probit_data(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Spatial logit data generators
+# ---------------------------------------------------------------------------
+
+
+def make_sar_logit_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    rho: float = 0.35,
+    beta: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate reduced-form SAR-logit binary data (noise-free).
+
+    The reduced-form model is deterministic:
+    ``eta = (I - rho W)^{-1} X beta`` (no latent noise field),
+    ``y ~ Bernoulli(logit^{-1}(eta))``.
+
+    Unlike ``dgp.simulate_sar_logit`` (which adds ``nu ~ N(0, I)`` and
+    matches the *structural* model), this generator omits the noise term
+    so the DGP matches the reduced-form ``SARLogit`` model exactly.
+    """
+    import scipy.sparse as sp
+
+    W_sparse = sp.csr_matrix(W)
+    n_obs = W.shape[0]
+    if beta is None:
+        beta = np.array([0.3, 1.0], dtype=float)
+    beta = np.asarray(beta, dtype=float)
+    X = np.column_stack([np.ones(n_obs), rng.standard_normal((n_obs, len(beta) - 1))])
+    eta = sp.linalg.spsolve(sp.eye(n_obs, format="csr") - rho * W_sparse, X @ beta)
+    probs = 1.0 / (1.0 + np.exp(-eta))
+    y = (rng.uniform(size=n_obs) < probs).astype(float)
+    return y, X
+
+
+def make_sar_logit_structural_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    rho: float = 0.35,
+    beta: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate structural-form SAR-logit binary data (with latent noise).
+
+    DGP: ``eta = (I - rho W)^{-1}(X beta + nu)``, ``nu ~ N(0, I)``,
+    ``y ~ Bernoulli(logit^{-1}(eta))``.  Matches the structural
+    ``SARLogitStructural`` model (latent field with noise).
+    """
+    out = dgp.simulate_sar_logit(W=W, rho=rho, beta=beta, rng=rng)
+    return out["y"], out["X"]
+
+
+def make_sem_logit_data(
+    rng: np.random.Generator,
+    W: np.ndarray,
+    lam: float = 0.35,
+    beta: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate SEM-logit binary data.
+
+    DGP: ``eta = X beta + (I - lam W)^{-1} nu``, ``y ~ Bernoulli(logit^{-1}(eta))``.
+    """
+    out = dgp.simulate_sem_logit(W=W, lam=lam, beta=beta, rng=rng)
+    return out["y"], out["X"]
+
+
 def make_sar_tobit_data(
     rng: np.random.Generator,
     W: np.ndarray,

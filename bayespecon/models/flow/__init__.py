@@ -7,8 +7,11 @@ from ._flow import (
     SARFlowSeparable,
     SARNegBinFlow,
     SARNegBinFlowSeparable,
+    SARPoissonFlow,
+    SARPoissonFlowSeparable,
     SEMFlow,
     SEMFlowSeparable,
     _build_flow_effect_masks,
     _compute_flow_effects_lesage,
+    _compute_ols_flow_effects,
 )

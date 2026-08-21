@@ -812,7 +812,7 @@ def attach_flow_log_abs_det(
                 )
             return out
     else:
-        from bayespecon._jax_dispatch import _sparsax_available
+        from ..._jax_dispatch import _sparsax_available
 
         rng = np.random.default_rng(seed)
         probes = rng.choice([-1.0, 1.0], size=(kron.N, int(n_probes))).astype(

@@ -15,10 +15,13 @@ from bayespecon.diagnostics.lmtests.core import (
     _lm_vector,
     _mx_cross,
     _mx_quadratic,
+    _neyman_adjust_scalar,
+    _neyman_adjust_vector,
     _panel_spatial_lag,
     _posterior_mean_sigma2,
     _resolve_X_for_beta,
     _safe_inv,
+    _trace_WtW_WW,
 )
 from bayespecon.diagnostics.lmtests.cross_sectional import (
     _info_matrix_blocks_slx_robust,
@@ -125,24 +128,6 @@ def _panel_residuals(model, beta_draws: np.ndarray) -> np.ndarray:
     return _compute_residuals(model, beta_draws, use_Z=True)
 
 
-def _panel_trace_WtW_WW(W_sparse) -> float:
-    """Compute tr(W'W + W²) from an N×N sparse weights matrix.
-
-    Parameters
-    ----------
-    W_sparse : scipy.sparse matrix
-        N×N spatial weights matrix.
-
-    Returns
-    -------
-    float
-        Trace of W'W + W².
-    """
-    # tr(W'W) = ||W||_F^2 = sum(W_ij^2)  [O(nnz)]
-    # tr(W^2) = sum_ij W_ij * W_ji = sum(W * W.T)  [O(nnz)]
-    return float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
-
-
 def _panel_info_matrix_blocks(
     X: np.ndarray,
     WX: np.ndarray,
@@ -210,7 +195,7 @@ def _panel_info_matrix_blocks(
     k_wx = WX.shape[1]
 
     if T_ww is None:
-        T_ww = _panel_trace_WtW_WW(W_sparse)
+        T_ww = _trace_WtW_WW(W_sparse)
     T_mult = T
 
     # Variance blocks (raw-score scale, panel)
@@ -992,9 +977,14 @@ def bayesian_panel_robust_lm_lag_sdm_test(
     J_rl = blocks["J_rho_lam"]
 
     # Schur-complement Neyman correction on λ
-    coef = J_rl / (J_ll + 1e-12)
-    g_rho_star = g_rho - coef * g_lambda
-    V_rho_given_lambda = J_rr - (J_rl * J_rl) / (J_ll + 1e-12)
+    g_rho_star, V_rho_given_lambda = _neyman_adjust_scalar(
+        g_rho,
+        g_lambda[:, None],
+        J_rr,
+        J_rl,
+        J_ll,
+        label="V_rho_given_lambda (panel robust LM-Lag-SDM)",
+    )
 
     return _lm_scalar(
         g_rho_star,
@@ -1108,12 +1098,15 @@ def bayesian_panel_robust_lm_wx_test(
     V_rho_gamma = info["J_rho_gamma"]  # (k_wx,)
     V_gamma_gamma = info["J_gamma_gamma"]  # (k_wx, k_wx)
 
-    # Canonical Schur complement: V_{gamma | rho}.
-    coef = V_rho_gamma / (V_rho_rho + 1e-12)  # (k_wx,)
-    V_gamma_given_rho = V_gamma_gamma - np.outer(V_rho_gamma, coef)
-
-    # Neyman orthogonal score: g_gamma* = g_gamma - V_{gamma,rho} V_{rho,rho}^{-1} g_rho
-    g_gamma_star = g_gamma - np.outer(g_rho, coef)  # (draws, k_wx)
+    # Neyman: g_gamma* = g_gamma - V_{gamma,rho} V_{rho,rho}^{-1} g_rho
+    g_gamma_star, V_gamma_given_rho = _neyman_adjust_vector(
+        g_gamma,
+        g_rho,
+        V_gamma_gamma,
+        V_rho_gamma,
+        V_rho_rho,
+        label="V_gamma_given_rho (panel robust LM-WX)",
+    )
 
     return _lm_vector(
         g_gamma_star,
@@ -1199,9 +1192,14 @@ def bayesian_panel_robust_lm_error_sdem_test(
     J_rl = blocks["J_rho_lam"]
 
     # Schur-complement Neyman correction on ρ
-    coef = J_rl / (J_rr + 1e-12)
-    g_lambda_star = g_lambda - coef * g_rho
-    V_lambda_given_rho = J_ll - (J_rl * J_rl) / (J_rr + 1e-12)
+    g_lambda_star, V_lambda_given_rho = _neyman_adjust_scalar(
+        g_lambda,
+        g_rho[:, None],
+        J_ll,
+        J_rl,
+        J_rr,
+        label="V_lambda_given_rho (panel robust LM-Error-SDEM)",
+    )
 
     LM = g_lambda_star**2 / (V_lambda_given_rho + 1e-12)
 
@@ -1236,40 +1234,11 @@ def bayesian_panel_robust_lm_error_sdem_test(
 # Conventions:
 #   - Score for spatial-lag direction i evaluated at OLSFlow draws:
 #         g_i^{(g)} = (W_i y)^T e^{(g)} ,    e^{(g)} = y - X beta^{(g)}
-#   - Information matrix J = T_flow_traces * sigma2_bar + Q,
+#   - Information matrix J = T * T_flow_traces * sigma2_bar + Q,
 #     with Q[i,j] = (W_i y)^T (W_j y).
 #   - chi^2 reference at the posterior-mean LM, df given per test.
 
-
-def _flow_panel_score_info(model, *, restrict_keys=("d", "o", "w")):
-    """Score / information for a fitted :class:`OLSFlowPanel` null."""
-    np.asarray(model._y, dtype=np.float64)  # demeaned panel stack
-    np.asarray(model._X, dtype=np.float64)
-    Wy_all = np.column_stack(
-        [
-            np.asarray(model._Wd_y, dtype=np.float64),
-            np.asarray(model._Wo_y, dtype=np.float64),
-            np.asarray(model._Ww_y, dtype=np.float64),
-        ]
-    )
-    idx = {"d": 0, "o": 1, "w": 2}
-    cols = np.array([idx[k] for k in restrict_keys], dtype=int)
-    Wy = Wy_all[:, cols]
-
-    idata = model.inference_data
-    beta_draws = _get_posterior_draws(idata, "beta")
-    _, sigma2_mean = _posterior_mean_sigma2(idata)
-
-    resid = _compute_residuals(model, beta_draws)
-    G = resid @ Wy
-
-    # Per-period traces accumulated over T periods (independence across t
-    # under H_0 with the demeaning transform).
-    T = int(getattr(model, "_T", 1))
-    Q = Wy.T @ Wy
-    T_blk = model._T_flow_traces[np.ix_(cols, cols)]
-    J = T * T_blk * sigma2_mean + Q
-    return G, J
+from .flow import _flow_score_info as _flow_panel_score_info
 
 
 def _flow_panel_marginal_lm(model, key: str, test_type: str) -> BayesianLMTestResult:

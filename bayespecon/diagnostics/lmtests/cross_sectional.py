@@ -16,9 +16,13 @@ from bayespecon.diagnostics.lmtests.core import (
     _lm_vector,
     _mx_cross,
     _mx_quadratic,
+    _neyman_adjust_scalar,
+    _neyman_adjust_vector,
     _posterior_mean_sigma2,
+    _resolve_lam_name,
     _resolve_X_for_beta,
     _safe_inv,
+    _trace_WtW_WW,
 )
 
 
@@ -611,7 +615,7 @@ def _info_matrix_blocks_sdm(
             "Pass model._T_ww for efficiency.",
             stacklevel=2,
         )
-        T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
+        T_ww = _trace_WtW_WW(W_sparse)
 
     # V_{γγ} = σ² · (WX)' M_X (WX)  -- M_X-projected, raw-score scale.
     V_gamma_gamma = sigma2 * _mx_cross(X, WX, WX)
@@ -687,7 +691,7 @@ def _info_matrix_blocks_sdem(
             "Pass model._T_ww for efficiency.",
             stacklevel=2,
         )
-        T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
+        T_ww = _trace_WtW_WW(W_sparse)
 
     k_wx = WX.shape[1]
 
@@ -794,7 +798,7 @@ def _info_matrix_blocks_slx_robust(
         Z_beta = Z
 
     if T_ww is None:
-        T_ww = float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
+        T_ww = _trace_WtW_WW(W_sparse)
 
     # Trace identities for tr(M_Z A M_Z B) without forming dense M_Z:
     #   tr(M_Z A M_Z B) = tr(AB) - tr(P_Z AB) - tr(P_Z BA) + tr(P_Z A P_Z B)
@@ -818,6 +822,7 @@ def _info_matrix_blocks_slx_robust(
     # tr(W²) and tr(W'W) on the W_sparse dimension
     tr_W2 = float(W_sparse.multiply(W_sparse.T).sum())
     tr_WtW = float(W_sparse.power(2).sum())
+    T_ww = tr_W2 + tr_WtW  # = _trace_WtW_WW(W_sparse)
 
     # Case A=W, B=W
     tr_PZ_W2 = float(np.trace(ZtZ_inv @ (Z.T @ W2Z)))
@@ -1105,13 +1110,14 @@ def bayesian_robust_lm_wx_test(
     V_rho_gamma = info["J_rho_gamma"]  # (k_wx,)
     V_gamma_gamma = info["J_gamma_gamma"]  # (k_wx, k_wx)
 
-    # Neyman adjustment: g_gamma* = g_gamma - (V_gamma_rho / V_rho_rho) g_rho
-    coef = V_rho_gamma / (V_rho_rho + 1e-12)  # (k_wx,)
-    g_gamma_star = g_gamma - np.outer(g_rho, coef)  # (draws, k_wx)
-
-    # Schur complement: Var(g_gamma*) = V_gamma_gamma - V_rho_gamma V_rho_gamma' / V_rho_rho
-    V_gamma_given_rho = V_gamma_gamma - np.outer(V_rho_gamma, V_rho_gamma) / (
-        V_rho_rho + 1e-12
+    # Neyman: g_gamma* = g_gamma - (V_{gamma,rho} / V_{rho,rho}) g_rho
+    g_gamma_star, V_gamma_given_rho = _neyman_adjust_vector(
+        g_gamma,
+        g_rho,
+        V_gamma_gamma,
+        V_rho_gamma,
+        V_rho_rho,
+        label="V_gamma_given_rho (robust LM-WX)",
     )
 
     return _lm_vector(
@@ -1503,7 +1509,7 @@ def bayesian_lm_lag_sdem_test(
 
     idata = model.inference_data
     beta_draws = _get_posterior_draws(idata, "beta")
-    lam_name = "lam" if "lam" in idata.posterior else "lambda"
+    lam_name = _resolve_lam_name(idata)
     lam_draws = _get_posterior_draws(idata, lam_name).reshape(-1)
 
     u = _compute_residuals(
@@ -1817,10 +1823,14 @@ def bayesian_robust_lm_error_sar_test(
     # behavior.
     g_rho_centered = g_rho - (sigma_draws**2) * tr_MxG
 
-    coef = V_lr / (V_rr + 1e-12)
-    g_lambda_star = g_lambda - coef * g_rho_centered
-    V_l_given_r = V_ll - V_lr * coef
-
+    g_lambda_star, V_l_given_r = _neyman_adjust_scalar(
+        g_lambda,
+        g_rho_centered[:, None],
+        V_ll,
+        V_lr,
+        V_rr,
+        label="V_l_given_r (robust LM-Error-SAR)",
+    )
     LM = g_lambda_star**2 / (abs(V_l_given_r) + 1e-12)
 
     return _finalize_lm(
@@ -1922,10 +1932,14 @@ def bayesian_robust_lm_error_sdm_test(
     # size ~ 0.04 across n in {64, 225, 625}.
     g_rho_centered = g_rho - (sigma_draws**2) * tr_MzG
 
-    coef = V_lr / (V_rr + 1e-12)
-    g_lambda_star = g_lambda - coef * g_rho_centered
-    V_l_given_r = V_ll - V_lr * coef
-
+    g_lambda_star, V_l_given_r = _neyman_adjust_scalar(
+        g_lambda,
+        g_rho_centered[:, None],
+        V_ll,
+        V_lr,
+        V_rr,
+        label="V_l_given_r (robust LM-Error-SDM)",
+    )
     LM = g_lambda_star**2 / (abs(V_l_given_r) + 1e-12)
 
     return _finalize_lm(
@@ -2062,7 +2076,7 @@ def bayesian_robust_lm_lag_sem_test(
 
     idata = model.inference_data
     beta_draws = _get_posterior_draws(idata, "beta")
-    lam_name = "lam" if "lam" in idata.posterior else "lambda"
+    lam_name = _resolve_lam_name(idata)
     lam_draws = _get_posterior_draws(idata, lam_name).reshape(-1)
     sigma_draws = _get_posterior_draws(idata, "sigma")
 
@@ -2086,14 +2100,14 @@ def bayesian_robust_lm_lag_sem_test(
     V_rg = blocks["V_rg"]
     k_wx = WX.shape[1]
 
-    if k_wx > 0:
-        V_gg_inv = _safe_inv(V_gg, "V_gg (robust LM-Lag-SEM)")
-        coef = V_rg @ V_gg_inv  # (k_wx,)
-        g_rho_star = g_rho - g_gamma @ coef
-        V_r_given_g = float(V_rr) - float(V_rg @ V_gg_inv @ V_rg)
-    else:
-        g_rho_star = g_rho
-        V_r_given_g = float(V_rr)
+    g_rho_star, V_r_given_g = _neyman_adjust_scalar(
+        g_rho,
+        g_gamma,
+        V_rr,
+        V_rg,
+        V_gg,
+        label="V_r_given_g (robust LM-Lag-SEM)",
+    )
 
     LM = g_rho_star**2 / (abs(V_r_given_g) + 1e-12)
 
@@ -2171,7 +2185,7 @@ def bayesian_robust_lm_wx_sem_test(
 
     idata = model.inference_data
     beta_draws = _get_posterior_draws(idata, "beta")
-    lam_name = "lam" if "lam" in idata.posterior else "lambda"
+    lam_name = _resolve_lam_name(idata)
     lam_draws = _get_posterior_draws(idata, lam_name).reshape(-1)
     sigma_draws = _get_posterior_draws(idata, "sigma")
 
@@ -2192,10 +2206,15 @@ def bayesian_robust_lm_wx_sem_test(
     V_gg = blocks["V_gg"]
     V_rg = blocks["V_rg"]
 
-    # Neyman: g_gamma_star = g_gamma - V_{gamma,rho} V_{rho,rho}^{-1} g_rho.
-    coef = V_rg / (V_rr + 1e-12)  # (k_wx,)
-    g_gamma_star = g_gamma - np.outer(g_rho, coef)
-    V_g_given_r = V_gg - np.outer(V_rg, V_rg) / (V_rr + 1e-12)
+    # Neyman: g_gamma* = g_gamma - V_{gamma,rho} V_{rho,rho}^{-1} g_rho.
+    g_gamma_star, V_g_given_r = _neyman_adjust_vector(
+        g_gamma,
+        g_rho,
+        V_gg,
+        V_rg,
+        V_rr,
+        label="V_g_given_r (robust LM-WX-SEM)",
+    )
 
     V_inv = _safe_inv(V_g_given_r, "V_g_given_r (robust LM-WX-SEM)")
     LM = np.einsum("di,ij,dj->d", g_gamma_star, V_inv, g_gamma_star)
@@ -2270,7 +2289,7 @@ def bayesian_robust_lm_lag_sdem_test(
 
     idata = model.inference_data
     beta_draws = _get_posterior_draws(idata, "beta")  # (draws, k+k_wx)
-    lam_name = "lam" if "lam" in idata.posterior else "lambda"
+    lam_name = _resolve_lam_name(idata)
     lam_draws = _get_posterior_draws(idata, lam_name).reshape(-1)
     sigma_draws = _get_posterior_draws(idata, "sigma")
 

@@ -258,3 +258,54 @@ class TestSemFlowRecovery:
         ro = post["lam_o"].values.ravel()
         rw = post["lam_w"].values.ravel()
         np.testing.assert_allclose(rw, -rd * ro, atol=1e-10)
+
+    def test_separable_recovery_normal(self):
+        """SEMFlowSeparable should recover lam_d, lam_o from DGP data."""
+        from bayespecon.dgp.flows import generate_sem_flow_data_separable
+        from bayespecon.models.flow._flow import SEMFlowSeparable
+
+        lam_d_true, lam_o_true = 0.25, 0.20
+        beta_d_true = [1.0, -0.5]
+        beta_o_true = [0.8, 0.3]
+        sigma_true = 0.6
+
+        data = generate_sem_flow_data_separable(
+            n=20,
+            lam_d=lam_d_true,
+            lam_o=lam_o_true,
+            beta_d=beta_d_true,
+            beta_o=beta_o_true,
+            sigma=sigma_true,
+            gamma_dist=-0.4,
+            seed=11,
+            distribution="normal",
+        )
+        model = SEMFlowSeparable(
+            data["y_vec"],
+            data["X"],
+            data["G"],
+            col_names=data["col_names"],
+        )
+        idata = model.fit(
+            draws=400,
+            tune=400,
+            chains=2,
+            target_accept=0.9,
+            random_seed=7,
+            progressbar=False,
+        )
+        post = idata.posterior
+
+        for name, true in [("lam_d", lam_d_true), ("lam_o", lam_o_true)]:
+            samples = post[name].values.ravel()
+            mean, sd = samples.mean(), samples.std()
+            assert abs(mean - true) < 4 * sd, (
+                f"{name}: mean={mean:.3f}, true={true}, sd={sd:.3f}"
+            )
+
+        sigma_mean = post["sigma"].values.ravel().mean()
+        assert abs(sigma_mean - sigma_true) < 0.1
+
+        beta_post = post["beta"].values.reshape(-1, post["beta"].shape[-1]).mean(axis=0)
+        np.testing.assert_allclose(beta_post[2:4], beta_d_true, atol=0.15)
+        np.testing.assert_allclose(beta_post[4:6], beta_o_true, atol=0.15)

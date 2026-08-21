@@ -91,8 +91,7 @@ class LogitGibbsState(GibbsBaseState):
 
 
 # JAX-compatible state class (equinox.Module when available, stub otherwise).
-from bayespecon._jax_dispatch import ensure_x64
-
+from ..._jax_dispatch import ensure_x64
 from .._utils._jax_base import make_jax_state_class
 
 JAXLogitGibbsState = make_jax_state_class(
@@ -308,17 +307,19 @@ def _sample_beta(
     beta_mu = priors.beta_mu
     beta_sigma = priors.beta_sigma
 
-    # Prior precision and mean
+    # Prior precision and mean (diagonal — use vector arithmetic, not np.diag)
     if np.isscalar(beta_sigma):
-        Lambda0_inv = np.eye(len(XtX)) / beta_sigma**2
-        Lambda0_inv_mu0 = np.full(len(XtX), beta_mu) / beta_sigma**2
+        k_beta = len(XtX)
+        prior_prec_diag = np.full(k_beta, 1.0 / beta_sigma**2)
+        Lambda0_inv_mu0 = np.full(k_beta, beta_mu) / beta_sigma**2
     else:
         beta_sigma = np.asarray(beta_sigma)
-        Lambda0_inv = np.diag(1.0 / beta_sigma**2)
-        Lambda0_inv_mu0 = beta_mu / beta_sigma**2
+        prior_prec_diag = 1.0 / beta_sigma**2
+        Lambda0_inv_mu0 = np.asarray(beta_mu) / beta_sigma**2
 
     # Posterior precision: Σ_β⁻¹ = Λ₀⁻¹ + X^TX  (σ² = 1, no division)
-    Sigma_beta_inv = Lambda0_inv + XtX
+    Sigma_beta_inv = XtX.copy()
+    Sigma_beta_inv[np.diag_indices_from(Sigma_beta_inv)] += prior_prec_diag
     rhs_beta = Lambda0_inv_mu0 + X.T @ A_rho_eta  # σ² = 1
 
     # One Cholesky of the SPD precision, reused for the mean and the sample.
@@ -1040,19 +1041,20 @@ def _sample_beta_sem(
     X_star = X - lam * (W_sparse @ X)
     eta_star = A_lambda_eta
 
-    # Prior precision and mean
+    # Prior precision and mean (diagonal — use vector arithmetic, not np.diag)
     k = X.shape[1]
     if np.isscalar(beta_sigma):
-        Lambda0_inv = np.eye(k) / beta_sigma**2
+        prior_prec_diag = np.full(k, 1.0 / beta_sigma**2)
         Lambda0_inv_mu0 = np.full(k, beta_mu) / beta_sigma**2
     else:
         beta_sigma = np.asarray(beta_sigma)
-        Lambda0_inv = np.diag(1.0 / beta_sigma**2)
-        Lambda0_inv_mu0 = beta_mu / beta_sigma**2
+        prior_prec_diag = 1.0 / beta_sigma**2
+        Lambda0_inv_mu0 = np.asarray(beta_mu) / beta_sigma**2
 
     # Posterior precision: Σ_β⁻¹ = Λ₀⁻¹ + X*'X*  (σ² = 1)
     XstXs = X_star.T @ X_star
-    Sigma_beta_inv = Lambda0_inv + XstXs
+    Sigma_beta_inv = XstXs.copy()
+    Sigma_beta_inv[np.diag_indices_from(Sigma_beta_inv)] += prior_prec_diag
     rhs_beta = Lambda0_inv_mu0 + X_star.T @ eta_star  # σ² = 1
 
     # One Cholesky of the SPD precision, reused for the mean and the sample.

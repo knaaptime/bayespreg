@@ -204,7 +204,7 @@ def resolve_pg_jax_backend(backend, *, W_sparse, W_sym, WtW, n, logdet_bounds):
     if backend != "jax":
         return "cholmod", jax_parts
 
-    from bayespecon._jax_dispatch import (
+    from ..._jax_dispatch import (
         _sparsax_available,
         _sparsax_jax_enabled,
         ensure_x64,
@@ -227,7 +227,7 @@ def resolve_pg_jax_backend(backend, *, W_sparse, W_sym, WtW, n, logdet_bounds):
         jax_parts["W_sym_dense"] = jnp.asarray(W_sym.toarray(), dtype=jnp.float64)
         jax_parts["WtW_dense"] = jnp.asarray(WtW.toarray(), dtype=jnp.float64)
 
-    from bayespecon._logdet import make_logdet_jax_fn
+    from ..._logdet import make_logdet_jax_fn
 
     jax_parts["logdet_jax"] = make_logdet_jax_fn(
         W_sparse,
@@ -376,7 +376,7 @@ class CachedSparseSolver:
         self.const_vals = _align(I_coo)
         self.w_vals_list = [_align(Wk) for Wk in mats]
 
-        from bayespecon._jax_dispatch import _sparsax_available
+        from ..._jax_dispatch import _sparsax_available
 
         self._use_sparsax = _sparsax_available()
         self._Ai_jax = None
@@ -388,7 +388,7 @@ class CachedSparseSolver:
             import jax.numpy as jnp
             import sparsax as sparsax_mod
 
-            from bayespecon._jax_dispatch import ensure_x64
+            from ..._jax_dispatch import ensure_x64
 
             ensure_x64()
             self._Ai_jax = jnp.asarray(self.Ai, dtype=jnp.int32)

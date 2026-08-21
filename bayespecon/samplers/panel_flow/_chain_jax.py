@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from bayespecon._jax_dispatch import ensure_x64
+from ..._jax_dispatch import ensure_x64
 
 
 class _ChainOutput(NamedTuple):

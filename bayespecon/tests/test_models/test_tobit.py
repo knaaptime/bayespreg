@@ -26,9 +26,11 @@ BETA2_TRUE = np.array([0.7])
 SIGMA_TRUE = 0.8
 CENSOR_TRUE = 0.0
 
-ABS_TOL_SPATIAL = 0.30
-ABS_TOL_BETA = 0.55
-ABS_TOL_WX = 0.70
+# Tightened at n=225 (SIDE=15): Tobit censoring adds noise, so slightly
+# wider than the Gaussian tolerances.
+ABS_TOL_SPATIAL = 0.15
+ABS_TOL_BETA = 0.20
+ABS_TOL_WX = 0.25
 
 
 def test_sar_tobit_recovers_rho_and_beta(rng, W_dense, W_graph):

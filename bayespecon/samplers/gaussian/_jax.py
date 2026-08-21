@@ -68,29 +68,21 @@ from __future__ import annotations
 
 import numpy as np
 
+from .._utils._jax_utils import (
+    check_jax_available as _check_jax_available_impl,
+)
+
 
 def _check_jax_available() -> None:
     """Raise ImportError if JAX or equinox is not installed."""
-    import importlib.util
-
-    if importlib.util.find_spec("jax") is None:
-        raise ImportError(
-            "JAX is required for the full-JIT Gaussian Gibbs sampler. "
-            "Install with: pip install jax"
-        )
-    if importlib.util.find_spec("equinox") is None:
-        raise ImportError(
-            "equinox is required for the full-JIT Gaussian Gibbs sampler. "
-            "Install with: pip install equinox"
-        )
+    _check_jax_available_impl(require_equinox=True)
 
 
 # ---------------------------------------------------------------------------
 # JAX Gaussian Gibbs state (equinox Module)
 # ---------------------------------------------------------------------------
 
-from bayespecon._jax_dispatch import ensure_x64
-
+from ..._jax_dispatch import ensure_x64
 from .._utils._jax_base import make_jax_state_class
 
 JAXGaussianGibbsState = make_jax_state_class(
@@ -327,15 +319,19 @@ def _make_gaussian_gibbs_step(
             r = y_jax - rho * Wy_jax
             X_eff = X_jax
             XtX_eff = XtX_jax
+            # X*'y* = Xᵀ(y - ρWy) = XTy - ρ·XTWy — O(k) from precomputed
+            Xty_eff = XTy - rho * XTWy
         else:
             # SEM: transform y and X by (I - λW) using PRECOMPUTED Wy/WX
             r = y_jax - rho * Wy_jax
             X_eff = X_jax - rho * WX_jax
             # Quadratic-in-ρ form for X*'X* — no O(nk²) needed
             XtX_eff = XtX_jax - rho * (XtWX + XtWX.T) + (rho * rho) * WXtWX
+            # Quadratic-in-ρ form for X*'y* — avoids O(nk) matmul
+            Xty_eff = XTy - rho * (XTWy + WXTy) + (rho * rho) * WXTWy
 
         Sigma_beta_inv = XtX_eff / sigma2 + beta_prior_prec
-        rhs_beta = beta_mu_jax / beta_sigma2_jax + X_eff.T @ r / sigma2
+        rhs_beta = beta_mu_jax / beta_sigma2_jax + Xty_eff / sigma2
         L_beta = jnp.linalg.cholesky(Sigma_beta_inv)
         m_beta = jnp.linalg.solve(L_beta.T, jnp.linalg.solve(L_beta, rhs_beta))
         z_beta = jax.random.normal(key_beta, shape=(k,), dtype=jnp.float64)
@@ -386,12 +382,13 @@ def _make_gaussian_gibbs_step(
                 Xty_star = XTy - param_val * (XTWy + WXTy) + rho_sq * WXTWy
                 XtX_star = XtX_jax - param_val * (XtWX + XtWX.T) + rho_sq * WXtWX
 
-                XtX_star_inv_Xty = jnp.linalg.solve(XtX_star, Xty_star)
+                L_XtX = jnp.linalg.cholesky(XtX_star)
+                XtX_star_inv_Xty = jax.scipy.linalg.cho_solve((L_XtX, True), Xty_star)
                 rss = yty_star - Xty_star @ XtX_star_inv_Xty
                 rss = jnp.maximum(rss, 1e-300)
 
                 logdet = _logdet_of(param_val)
-                logdet_XtX = jnp.linalg.slogdet(XtX_star)[1]
+                logdet_XtX = 2.0 * jnp.sum(jnp.log(jnp.diag(L_XtX)))
 
                 log_prior = jnp.where(
                     (param_val >= rho_lo) & (param_val <= rho_hi),

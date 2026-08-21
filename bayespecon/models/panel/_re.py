@@ -1020,9 +1020,6 @@ class SDEMPanelRE(SpatialPanelModel):
             )
         self._unit_idx = np.arange(self._N * self._T) % self._N
 
-    def _beta_names(self) -> list[str]:
-        return self._feature_names + [f"W*{name}" for name in self._wx_feature_names]
-
     def _model_coords(self) -> dict:
         coords = super()._model_coords()
         coords["unit"] = list(range(self._N))

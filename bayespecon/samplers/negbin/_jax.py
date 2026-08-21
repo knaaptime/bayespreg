@@ -52,8 +52,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bayespecon._jax_dispatch import ensure_x64
-
+from ..._jax_dispatch import ensure_x64
 from .._utils._spatial_normal import (
     _sparsax_factor_ops_available,
     build_precision_krylov_basis_jax,
@@ -80,9 +79,9 @@ def _pg_gamma_series_draw(key, h, z, n_terms: int):
     neglected tail *variance* is :math:`O(1/K^3)` — negligible at K=25.
 
     Without the correction the truncated series has a systematic −0.8%
-    to −1.7% mean bias at K=25 (the bias for which ``method="gamma"``
-    was removed from ``_utils/_jax_polyagamma.py`` — see that module's
-    docstring; this function is the scan-compatible replacement).
+    to −1.7% mean bias at K=25 (the bias for which the old Gamma-series
+    method was removed).  This function is the scan-compatible
+    replacement.
 
     Parameters
     ----------
@@ -125,20 +124,14 @@ def _pg_gamma_series_draw(key, h, z, n_terms: int):
     return jnp.maximum(series + tail_mean, 1e-6)
 
 
+from .._utils._jax_utils import (
+    check_jax_available as _check_jax_available_impl,
+)
+
+
 def _check_jax_available() -> None:
     """Raise ImportError if JAX or equinox is not installed."""
-    import importlib.util
-
-    if importlib.util.find_spec("jax") is None:
-        raise ImportError(
-            "JAX is required for the full-JIT Gibbs sampler. "
-            "Install with: pip install jax"
-        )
-    if importlib.util.find_spec("equinox") is None:
-        raise ImportError(
-            "equinox is required for the full-JIT Gibbs sampler. "
-            "Install with: pip install equinox"
-        )
+    _check_jax_available_impl(require_equinox=True)
 
 
 def _make_gibbs_step_with_data(
@@ -342,11 +335,10 @@ def _make_gibbs_step_with_data(
         sigma2_new = jnp.maximum(1.0 / sigma2_inv, 1e-10)
 
         # ── Block 5: ρ — slice sampling (collapsed, η integrated out) ──
-        # Uses Neal's stepping-out slice sampler.  log_density is exact
-        # (dense Cholesky), so the slice density is deterministic.
-        key_rho_slice, key_rho_u, key_rho_L, key_rho_R, key_rho_shrink = (
-            jax.random.split(key_rho, 5)
-        )
+        # Uses the shared JAX slice sampler (same as logit/_jax.py).
+        from .._utils._jax_slice import jax_slice_sample_1d
+
+        key_rho, key_alpha = jax.random.split(key_rho)
 
         # Hoist the ρ-independent pieces of the collapsed rhs out of the
         # slice density: these are constant across every stepping-out /
@@ -462,76 +454,14 @@ def _make_gibbs_step_with_data(
             )
             return logdet_W - 0.5 * log_det_P + 0.5 * quad_r + log_prior
 
-        # Slice sampling for ρ
-        log_y0 = log_density_rho(rho)
-        log_u = log_y0 + jnp.log(jax.random.uniform(key_rho_u, dtype=jnp.float64))
-
-        # Step-out width
-        w_rho = jnp.float64(0.2)
-
-        # Stepping out: expand [L, R] until log_density < log_u at endpoints
-        u_rand = jax.random.uniform(key_rho_L, dtype=jnp.float64)
-        L = jnp.maximum(rho - u_rand * w_rho, rho_lower_jax)
-        R = jnp.minimum(L + w_rho, rho_upper_jax)
-
-        max_steps = 50
-
-        # Step out left
-        def step_left(carry):
-            L_val, steps = carry
-            return (jnp.maximum(L_val - w_rho, rho_lower_jax), steps + 1)
-
-        def should_step_left(carry):
-            L_val, steps = carry
-            return (
-                (L_val > rho_lower_jax)
-                & (log_density_rho(L_val) > log_u)
-                & (steps < max_steps)
-            )
-
-        L_final, _ = jax.lax.while_loop(should_step_left, step_left, (L, jnp.int32(0)))
-
-        # Step out right
-        def step_right(carry):
-            R_val, steps = carry
-            return (jnp.minimum(R_val + w_rho, rho_upper_jax), steps + 1)
-
-        def should_step_right(carry):
-            R_val, steps = carry
-            return (
-                (R_val < rho_upper_jax)
-                & (log_density_rho(R_val) > log_u)
-                & (steps < max_steps)
-            )
-
-        R_final, _ = jax.lax.while_loop(
-            should_step_right, step_right, (R, jnp.int32(0))
-        )
-
-        # Shrinkage: sample from [L, R] and shrink until accepted
-        def shrink_cond(carry):
-            _, _, _, _, done = carry
-            return ~done
-
-        def shrink_body(carry):
-            L_val, R_val, key_val, _, done_val = carry
-            key_val, subkey = jax.random.split(key_val)
-            x_new = L_val + jax.random.uniform(subkey, dtype=jnp.float64) * (
-                R_val - L_val
-            )
-            log_dens_new = log_density_rho(x_new)
-            accepted = log_dens_new > log_u
-            L_new = jnp.where(x_new < rho, x_new, L_val)
-            R_new = jnp.where(x_new >= rho, x_new, R_val)
-            collapsed = (R_new - L_new) < 1e-15
-            done = accepted | collapsed
-            x_best = jnp.where(accepted, x_new, rho)
-            return (L_new, R_new, key_val, x_best, done)
-
-        _, _, _, rho_new, _ = jax.lax.while_loop(
-            shrink_cond,
-            shrink_body,
-            (L_final, R_final, key_rho_shrink, rho, jnp.bool_(False)),
+        # ── Slice sampling for ρ (shared JAX helper) ──
+        rho_new, _ = jax_slice_sample_1d(
+            log_density_rho,
+            rho,
+            rho_lower_jax,
+            rho_upper_jax,
+            key=key_rho,
+            w=jnp.float64(0.2),
         )
 
         rho_new = jnp.clip(rho_new, rho_lower_jax, rho_upper_jax)
@@ -540,7 +470,6 @@ def _make_gibbs_step_with_data(
         accept = jnp.bool_(True)
 
         # ── Block 6: α | y, η — JAX slice sampling ──
-        key_alpha, _ = jax.random.split(key_rho_shrink)
         alpha_new = _sample_alpha_jax(
             JAXGibbsState(
                 eta=eta_new,
@@ -552,6 +481,7 @@ def _make_gibbs_step_with_data(
             ),
             y_jax,
             priors.alpha_sigma,
+            priors.alpha_nu,
             key_alpha,
         )
 
@@ -568,7 +498,7 @@ def _make_gibbs_step_with_data(
     return gibbs_step
 
 
-def _jax_nb_log_density_alpha(log_a, y_jax, eta, alpha_sigma):
+def _jax_nb_log_density_alpha(log_a, y_jax, eta, alpha_sigma, alpha_nu):
     """JAX-compiled NB log-density for α slice sampling.
 
     Computes log p(log_a | y, η) up to a constant, where α = exp(log_a).
@@ -605,12 +535,17 @@ def _jax_nb_log_density_alpha(log_a, y_jax, eta, alpha_sigma):
     )
     log_lik = jnp.where(jnp.isfinite(log_lik), log_lik, -1e10)
     total_log_lik = jnp.sum(log_lik)
-    # HalfNormal prior on α: p(α) ∝ exp(-α²/(2σ²)), Jacobian for log transform
-    log_prior = -(a**2) / (2.0 * alpha_sigma**2)
+    # Half-Student-t(ν, σ) prior on α, matching the PyMC/NUTS builders and the
+    # reduced-form JAX sampler.  Jacobian for the log transform added below.
+    log_prior = (
+        -0.5
+        * (alpha_nu + 1.0)
+        * jnp.log1p((a * a) / (alpha_nu * alpha_sigma * alpha_sigma))
+    )
     return log_a + total_log_lik + log_prior
 
 
-def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
+def _sample_alpha_jax(state, y_jax, alpha_sigma, alpha_nu, key):
     """Sample α using JAX-compiled slice sampling.
 
     This eliminates the per-iteration Python↔JAX boundary crossing
@@ -642,7 +577,9 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
     log_alpha = jnp.log(state.alpha)
 
     # Log-density at current point
-    log_y0 = _jax_nb_log_density_alpha(log_alpha, y_jax, state.eta, alpha_sigma)
+    log_y0 = _jax_nb_log_density_alpha(
+        log_alpha, y_jax, state.eta, alpha_sigma, alpha_nu
+    )
 
     # Draw vertical level: log(u) where u ~ Uniform(0, f(x0))
     key, subkey = jax.random.split(key)
@@ -668,7 +605,8 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
     def should_step_left(carry):
         L_val, _ = carry
         return (L_val > lower_bound) & (
-            _jax_nb_log_density_alpha(L_val, y_jax, state.eta, alpha_sigma) > log_u
+            _jax_nb_log_density_alpha(L_val, y_jax, state.eta, alpha_sigma, alpha_nu)
+            > log_u
         )
 
     L_final, _ = jax.lax.while_loop(
@@ -684,7 +622,8 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
     def should_step_right(carry):
         R_val, _ = carry
         return (R_val < upper_bound) & (
-            _jax_nb_log_density_alpha(R_val, y_jax, state.eta, alpha_sigma) > log_u
+            _jax_nb_log_density_alpha(R_val, y_jax, state.eta, alpha_sigma, alpha_nu)
+            > log_u
         )
 
     R_final, _ = jax.lax.while_loop(
@@ -702,7 +641,9 @@ def _sample_alpha_jax(state, y_jax, alpha_sigma, key):
         L_val, R_val, key_val, x_best, _ = carry
         key_val, subkey = jax.random.split(key_val)
         x_new = L_val + jax.random.uniform(subkey, dtype=jnp.float64) * (R_val - L_val)
-        log_dens_new = _jax_nb_log_density_alpha(x_new, y_jax, state.eta, alpha_sigma)
+        log_dens_new = _jax_nb_log_density_alpha(
+            x_new, y_jax, state.eta, alpha_sigma, alpha_nu
+        )
         accepted = log_dens_new > log_u
         L_new = jnp.where(x_new < log_alpha, x_new, L_val)
         R_new = jnp.where(x_new >= log_alpha, x_new, R_val)
@@ -745,7 +686,7 @@ def _sample_alpha_python(state, y, alpha_sigma, alpha_nu, rng):
     """
     from scipy.special import gammaln
 
-    from bayespecon.samplers._utils._slice import slice_sample_1d
+    from .._utils._slice import slice_sample_1d
 
     alpha = float(state.alpha)
     eta = np.asarray(state.eta)
@@ -765,7 +706,13 @@ def _sample_alpha_python(state, y, alpha_sigma, alpha_nu, rng):
         )
         log_lik = np.where(np.isfinite(log_lik), log_lik, -1e10)
         total_log_lik = np.sum(log_lik)
-        log_prior = -(a**2) / (2.0 * alpha_sigma**2)
+        # Half-Student-t(ν, σ) prior on α (alpha_nu was previously accepted and
+        # silently discarded here, giving this path a HalfNormal prior).
+        log_prior = (
+            -0.5
+            * (alpha_nu + 1.0)
+            * np.log1p((a * a) / (alpha_nu * alpha_sigma * alpha_sigma))
+        )
         return log_a + total_log_lik + log_prior
 
     log_alpha_new, _ = slice_sample_1d(
@@ -891,10 +838,9 @@ def run_chain_jax(
     XtX_jax = jnp.asarray(X.T @ X, dtype=jnp.float64)
 
     # Sparse W as BCOO — never densify W for the O(nnz) matvecs.
-    from jax.experimental import sparse as _jsparse
+    from .._utils._jax_utils import build_w_bcoo
 
-    W_bcoo = _jsparse.BCOO.from_scipy_sparse(W_sparse.tocsr())
-    Wt_bcoo = _jsparse.BCOO.from_scipy_sparse(W_sparse.T.tocsr())
+    W_bcoo, Wt_bcoo = build_w_bcoo(W_sparse)
 
     # Initialize state
     state = JAXGibbsState(
@@ -1116,10 +1062,9 @@ def run_chains_jax_vectorized(
     y_jax = jnp.asarray(y, dtype=jnp.float64)
     X_jax = jnp.asarray(X, dtype=jnp.float64)
     XtX_jax = jnp.asarray(X.T @ X, dtype=jnp.float64)
-    from jax.experimental import sparse as _jsparse
+    from .._utils._jax_utils import build_w_bcoo
 
-    W_bcoo = _jsparse.BCOO.from_scipy_sparse(W_sparse.tocsr())
-    Wt_bcoo = _jsparse.BCOO.from_scipy_sparse(W_sparse.T.tocsr())
+    W_bcoo, Wt_bcoo = build_w_bcoo(W_sparse)
 
     gibbs_step = _make_gibbs_step_with_data(
         y_jax=y_jax,

@@ -136,9 +136,6 @@ class SDM(GaussianLikelihoodMixin, SpatialModel):
     _likelihood: str = "gaussian"
     _gibbs_key: tuple[str, str] | None = ("gaussian", "cross_section")
 
-    def _beta_names(self) -> list[str]:
-        return self._feature_names + [f"W*{name}" for name in self._wx_feature_names]
-
     def _compute_spatial_effects_posterior(
         self,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -157,44 +154,7 @@ class SDM(GaussianLikelihoodMixin, SpatialModel):
             ``(direct_samples, indirect_samples, total_samples)``, each of
             shape ``(G, k_wx)``.
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
+        return self._sdm_effects()
 
-        idata = self.inference_data
-        rho_draws = _get_posterior_draws(idata, "rho")  # (G,)
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k+k_wx)
-        k = self._X.shape[1]
-        kw = self._WX.shape[1]
-
-        beta1_draws = beta_draws[:, :k]  # (G, k)
-        beta2_draws = beta_draws[:, k : k + kw]  # (G, kw)
-
-        mean_diag_M = self._batch_mean_diag(rho_draws)  # (G,)
-        mean_diag_MW = self._batch_mean_diag_MW(rho_draws)  # (G,)
-        mean_row_sum_M = self._batch_mean_row_sum(rho_draws)  # (G,)
-        mean_row_sum_MW = self._batch_mean_row_sum_MW(rho_draws)  # (G,)
-
-        wx_idx = self._wx_column_indices
-        direct_samples = (
-            mean_diag_M[:, None] * beta1_draws[:, wx_idx]
-            + mean_diag_MW[:, None] * beta2_draws
-        )  # (G, kw)
-        total_samples = (
-            mean_row_sum_M[:, None] * beta1_draws[:, wx_idx]
-            + mean_row_sum_MW[:, None] * beta2_draws
-        )  # (G, kw)
-        indirect_samples = total_samples - direct_samples  # (G, kw)
-
-        return direct_samples, indirect_samples, total_samples
-
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean parameters.
-
-        Returns
-        -------
-        np.ndarray
-            Posterior-mean fitted values.
-        """
-        rho = float(self._posterior_mean("rho"))
-        beta = self._posterior_mean("beta")
-        Z = np.hstack([self._X, self._WX])
-        return rho * self._Wy + Z @ beta
+    # _fitted_mean_from_posterior inherited from SharedSpatialMethods
+    # (rho * Wy + [X, WX] @ beta via _jacobian_param + _has_wx_in_beta)

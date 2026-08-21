@@ -17,12 +17,12 @@ from bayespecon.diagnostics.lmtests.core import (
 )
 
 
-def _flow_score_info(model, *, restrict_keys=("d", "o", "w")):
+def _flow_score_info(model, *, restrict_keys=("d", "o", "w"), T: int | None = None):
     """Return per-draw score matrix and the (3,3) information matrix.
 
     Parameters
     ----------
-    model : OLSFlow
+    model : OLSFlow or OLSFlowPanel
         Fitted flow model providing ``inference_data`` (with ``beta`` and
         ``sigma`` posterior draws), the cached spatial lags
         ``_Wd_y``/``_Wo_y``/``_Ww_y``, the cached trace matrix
@@ -30,6 +30,11 @@ def _flow_score_info(model, *, restrict_keys=("d", "o", "w")):
     restrict_keys : tuple of {"d","o","w"}
         Subset of the three spatial-lag directions to keep (in order).
         Mainly for test readability — the joint test uses the full triple.
+    T : int, optional
+        Number of panel periods.  When ``None`` (default), inferred from
+        ``getattr(model, "_T", 1)``.  The information matrix scales the
+        Kronecker trace block by ``T`` to reflect i.i.d. within-period
+        contributions under :math:`H_0`.
 
     Returns
     -------
@@ -37,9 +42,11 @@ def _flow_score_info(model, *, restrict_keys=("d", "o", "w")):
         Score draws, ``G[g, i] = (W_i y)^T e_g``.
     J : np.ndarray, shape (k, k)
         Information matrix
-        ``J = T_flow_traces[K, K] * sigma2_bar + Q[K, K]``
+        ``J = T * T_flow_traces[K, K] * sigma2_bar + Q[K, K]``
         with ``Q[i, j] = (W_i y)^T (W_j y)``.
     """
+    if T is None:
+        T = int(getattr(model, "_T", 1))
     np.asarray(model._y, dtype=np.float64)
     np.asarray(model._X, dtype=np.float64)
     Wy_all = np.column_stack(
@@ -63,7 +70,7 @@ def _flow_score_info(model, *, restrict_keys=("d", "o", "w")):
 
     Q = Wy.T @ Wy  # (k, k)
     T_blk = model._T_flow_traces[np.ix_(cols, cols)]
-    J = T_blk * sigma2_mean + Q  # (k, k)
+    J = T * T_blk * sigma2_mean + Q  # (k, k)
 
     return G, J
 

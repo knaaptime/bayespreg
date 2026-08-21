@@ -8,10 +8,9 @@ Architecture
 ------------
 The sampler uses:
 
-- **PG sampling**: Exact sum-of-exponentials method via
-  :func:`jax_polyagamma` with ``method="exp"``.  Since h = 1 for
-  binary logit, the Exp method is exact (no truncation bias) and
-  fast (single exponential draw per observation).
+- **PG sampling**: Exact Pólya-Gamma draws via :func:`make_pg_draw`
+  (pgjax's Devroye sampler when installed; numpy C extension fallback).
+  Since h = 1 for binary logit, draws are exact with no truncation bias.
 - **η and β draws**: Dense Cholesky factorization via ``jnp.linalg.cholesky``
   and ``jnp.linalg.solve``.  O(n³) but fast for n ≤ ~2000.
 - **ρ/λ draw**: 1-D slice sampler on the doubly-collapsed log-density.
@@ -21,9 +20,6 @@ The sampler uses:
   gradient computation that MALA requires (autodiff through Cholesky
   + solve is ~3× the forward cost).
 
-Limitations
------------
-- O(n³) dense Cholesky limits scalability to n ≤ ~2000.
 
 References
 ----------
@@ -36,9 +32,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from bayespecon._jax_dispatch import ensure_x64
-
-from .._utils._jax_polyagamma import jax_polyagamma
+from ..._jax_dispatch import ensure_x64
+from .._utils._jax_utils import (
+    build_w_bcoo as _build_w_bcoo,
+)
+from .._utils._jax_utils import (
+    check_jax_available as _check_jax_available_impl,
+)
+from .._utils._jax_utils import (
+    make_pg_draw,
+)
 from .._utils._spatial_normal import (
     _sparsax_factor_ops_available,
     build_precision_krylov_basis_jax,
@@ -47,43 +50,15 @@ from .._utils._spatial_normal import (
 )
 from ._core import JAXLogitGibbsState
 
-# On-device Pólya-Gamma for the ω ~ PG(1, η) block.  Prefer pgjax's exact Devroye
-# sampler (no host round-trip, no truncation bias) when installed; else fall back
-# to the on-device but truncated/approximate "exp" method.  h = 1 (Bernoulli).
-try:
-    import pgjax as _pgjax
-
-    def _draw_pg1(h, z, key):
-        return _pgjax.pg_sample(h, z, key)
-except ImportError:
-
-    def _draw_pg1(h, z, key):
-        return jax_polyagamma(h, z, key=key, method="exp")
+# Pólya-Gamma for the ω ~ PG(1, η) block.  pgjax's exact Devroye sampler is
+# on-device (no host round-trip) and exact for any h; falls back to the numpy
+# C extension via pure_callback when pgjax is unavailable.  h = 1 (Bernoulli).
+_draw_pg1 = make_pg_draw()
 
 
 def _check_jax_available() -> None:
     """Raise ImportError if JAX or equinox is not installed."""
-    import importlib.util
-
-    if importlib.util.find_spec("jax") is None:
-        raise ImportError(
-            "JAX is required for the full-JIT Gibbs sampler. "
-            "Install with: pip install jax"
-        )
-    if importlib.util.find_spec("equinox") is None:
-        raise ImportError(
-            "equinox is required for the full-JIT Gibbs sampler. "
-            "Install with: pip install equinox"
-        )
-
-
-def _build_w_bcoo(W_sparse):
-    """Build ``(W, Wᵀ)`` as JAX BCOO sparse matrices — never densify W."""
-    from jax.experimental import sparse as jsparse
-
-    W_bcoo = jsparse.BCOO.from_scipy_sparse(W_sparse.tocsr())
-    Wt_bcoo = jsparse.BCOO.from_scipy_sparse(W_sparse.T.tocsr())
-    return W_bcoo, Wt_bcoo
+    _check_jax_available_impl(require_equinox=True)
 
 
 def _make_gibbs_step_with_data(

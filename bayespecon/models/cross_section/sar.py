@@ -148,30 +148,4 @@ class SAR(GaussianLikelihoodMixin, SpatialModel):
             ``(direct_samples, indirect_samples, total_samples)``, each of
             shape ``(G, k)``.
         """
-        from ...diagnostics.lmtests import _get_posterior_draws
-
-        idata = self.inference_data
-        rho_draws = _get_posterior_draws(idata, "rho")  # (G,)
-        beta_draws = _get_posterior_draws(idata, "beta")  # (G, k)
-
-        mean_diag = self._batch_mean_diag(rho_draws)  # (G,)
-        mean_row_sum = self._batch_mean_row_sum(rho_draws)  # (G,)
-
-        ni = self._nonintercept_indices
-        direct_samples = mean_diag[:, None] * beta_draws[:, ni]
-        total_samples = mean_row_sum[:, None] * beta_draws[:, ni]
-        indirect_samples = total_samples - direct_samples
-
-        return direct_samples, indirect_samples, total_samples
-
-    def _fitted_mean_from_posterior(self) -> np.ndarray:
-        """Compute fitted values at posterior mean parameters.
-
-        Returns
-        -------
-        np.ndarray
-            Posterior-mean fitted values.
-        """
-        rho = float(self._posterior_mean("rho"))
-        beta = self._posterior_mean("beta")
-        return rho * self._Wy + self._X @ beta
+        return self._sar_effects()

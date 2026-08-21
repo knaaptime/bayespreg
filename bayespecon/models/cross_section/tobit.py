@@ -572,9 +572,7 @@ class SDMTobit(_SpatialTobitBase):
     """
 
     _priors_cls = SDMTobitPriors
-
-    def _beta_names(self) -> list[str]:
-        return self._feature_names + [f"W*{name}" for name in self._wx_feature_names]
+    _has_wx_in_beta: bool = True
 
     def _build_pymc_model(self) -> pm.Model:
         Z = np.hstack([self._X, self._WX])
