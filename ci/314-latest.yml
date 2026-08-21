@@ -10,6 +10,7 @@ dependencies:
   - spreg
   - statsmodels
   - geopandas
+  - geodatasets
   - codecov
   - coverage
   - pytest
@@ -22,15 +23,14 @@ dependencies:
   - nutpie
   - polyagamma
   - scikit-sparse
-  - blackjax
-  - numpyro
-  - equinox
   - pip
   - pip:
-    - git+https://github.com/knaaptime/cholgraph
     - jax # force from pip to allow windows 
-    - sparsax
     - pgjax
+    - blackjax
+    - numpyro
+    - sparsax
+    - equinox
 
   # docs
   - numpydoc

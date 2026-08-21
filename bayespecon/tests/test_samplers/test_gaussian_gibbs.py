@@ -112,7 +112,7 @@ def _build_cache(W_dense, X, model_type="sar", y=None, Wy=None, method="eigenval
     elif Wy is None:
         Wy = W_dense @ np.ones(X.shape[0])  # placeholder; caller should override
 
-    # Precompute WX, XtWX, WXtWX for SEM/SDEM models
+    # Precompute y-side inner products for ALL model types
     WX = None
     XtWX = None
     WXtWX = None
@@ -123,17 +123,17 @@ def _build_cache(W_dense, X, model_type="sar", y=None, Wy=None, method="eigenval
     XTWy = None
     WXTy = None
     WXTWy = None
+    if y is not None:
+        yty = float(y @ y)
+        yTWy = float(y @ Wy)
+        WyTWy = float(Wy @ Wy)
+        XTy = X.T @ y
+        XTWy = X.T @ Wy
     if model_type in ("sem", "sdem"):
         WX = W_sparse @ X
         XtWX = X.T @ WX
         WXtWX = WX.T @ WX
-        # Precompute inner products for O(k) collapsed density
         if y is not None:
-            yty = float(y @ y)
-            yTWy = float(y @ Wy)
-            WyTWy = float(Wy @ Wy)
-            XTy = X.T @ y
-            XTWy = X.T @ Wy
             WXTy = WX.T @ y
             WXTWy = WX.T @ Wy
 
@@ -171,11 +171,9 @@ class TestSARCollapsedLogDensity:
     def test_returns_scalar(self):
         y, X, W_dense, n = _make_sar_data()
         Wy = W_dense @ y
-        cache = _build_cache(W_dense, X, model_type="sar", Wy=Wy)
+        cache = _build_cache(W_dense, X, model_type="sar", y=y, Wy=Wy)
         k = X.shape[1]
-        result = _sar_collapsed_log_density(
-            0.3, y, Wy, X, cache.XtX_cho, cache.logdet_fn, n, k
-        )
+        result = _sar_collapsed_log_density(0.3, cache, n, k)
         assert np.isscalar(result) or result.ndim == 0
 
     def test_maximum_near_true_rho(self):
@@ -183,16 +181,11 @@ class TestSARCollapsedLogDensity:
         rho_true = 0.4
         y, X, W_dense, n = _make_sar_data(rho_true=rho_true)
         Wy = W_dense @ y
-        cache = _build_cache(W_dense, X, model_type="sar", Wy=Wy)
+        cache = _build_cache(W_dense, X, model_type="sar", y=y, Wy=Wy)
         k = X.shape[1]
 
         rho_grid = np.linspace(cache.rho_lower + 0.01, cache.rho_upper - 0.01, 50)
-        log_dens = [
-            _sar_collapsed_log_density(
-                r, y, Wy, X, cache.XtX_cho, cache.logdet_fn, n, k
-            )
-            for r in rho_grid
-        ]
+        log_dens = [_sar_collapsed_log_density(r, cache, n, k) for r in rho_grid]
         rho_argmax = rho_grid[np.argmax(log_dens)]
         # The mode should be within 0.3 of the true value for this small dataset
         assert abs(rho_argmax - rho_true) < 0.3
@@ -201,15 +194,11 @@ class TestSARCollapsedLogDensity:
         """Density should decrease near the spectral bounds."""
         y, X, W_dense, n = _make_sar_data()
         Wy = W_dense @ y
-        cache = _build_cache(W_dense, X, model_type="sar", Wy=Wy)
+        cache = _build_cache(W_dense, X, model_type="sar", y=y, Wy=Wy)
         k = X.shape[1]
 
-        ld_mid = _sar_collapsed_log_density(
-            0.0, y, Wy, X, cache.XtX_cho, cache.logdet_fn, n, k
-        )
-        ld_near_upper = _sar_collapsed_log_density(
-            cache.rho_upper - 0.01, y, Wy, X, cache.XtX_cho, cache.logdet_fn, n, k
-        )
+        ld_mid = _sar_collapsed_log_density(0.0, cache, n, k)
+        ld_near_upper = _sar_collapsed_log_density(cache.rho_upper - 0.01, cache, n, k)
         # Near the boundary, log|I-ρW| → -∞, so density should be lower
         assert ld_near_upper < ld_mid
 
@@ -217,7 +206,7 @@ class TestSARCollapsedLogDensity:
         """Woodbury form RSS should match direct M_X computation."""
         y, X, W_dense, n = _make_sar_data()
         Wy = W_dense @ y
-        cache = _build_cache(W_dense, X, model_type="sar", Wy=Wy)
+        cache = _build_cache(W_dense, X, model_type="sar", y=y, Wy=Wy)
         k = X.shape[1]
         rho = 0.3
 
@@ -302,9 +291,11 @@ class TestBetaBlock:
     def test_sample_beta_sem_shape(self):
         y, X, W_dense, n = _make_sem_data()
         W_sparse = sp.csr_matrix(W_dense)
+        Wy = W_dense @ y
+        cache = _build_cache(W_dense, X, model_type="sem", y=y, Wy=Wy)
         priors = GaussianGibbsPriors()
         rng = np.random.default_rng(42)
-        beta = _sample_beta_sem(0.3, 1.0, y, X, W_sparse, priors, rng)
+        beta = _sample_beta_sem(0.3, 1.0, cache, priors, rng)
         assert beta.shape == (X.shape[1],)
 
     def test_conjugate_normal_matches_analytical(self):
@@ -581,7 +572,7 @@ class TestChainRunner:
     def test_sar_chain_produces_valid_output(self):
         y, X, W_dense, n = _make_sar_data()
         Wy = W_dense @ y
-        cache = _build_cache(W_dense, X, model_type="sar", Wy=Wy)
+        cache = _build_cache(W_dense, X, model_type="sar", y=y, Wy=Wy)
         priors = GaussianGibbsPriors()
         rng = np.random.default_rng(42)
         init = _initialize_gaussian_gibbs(y, X, cache.XtX_cho, priors, rng)
@@ -640,7 +631,7 @@ class TestChainRunner:
     def test_thinning(self):
         y, X, W_dense, n = _make_sar_data()
         Wy = W_dense @ y
-        cache = _build_cache(W_dense, X, model_type="sar", Wy=Wy)
+        cache = _build_cache(W_dense, X, model_type="sar", y=y, Wy=Wy)
         priors = GaussianGibbsPriors()
         rng = np.random.default_rng(42)
         init = _initialize_gaussian_gibbs(y, X, cache.XtX_cho, priors, rng)

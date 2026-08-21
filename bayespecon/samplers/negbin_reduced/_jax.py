@@ -40,6 +40,35 @@ import numpy as np
 
 from ..._jax_dispatch import ensure_x64
 
+# Safety factor applied to the estimated radius of convergence.
+# Matches _SERIES_RADIUS_SAFETY in _spatial_normal.py.
+_KRYLOV_RADIUS_SAFETY = 0.6
+
+
+def _series_radius_jax(V_stack, safety: float = _KRYLOV_RADIUS_SAFETY):
+    """JAX-compatible estimate of the usable |Δρ| from the Krylov coefficients.
+
+    JIT-safe port of :func:`..._spatial_normal._series_radius`: the series
+    :math:`\\sum_j \\Delta\\rho^j U_j` converges inside
+    :math:`|\\Delta\\rho| < R` with :math:`R^{-1} = \\limsup_j \\|U_j\\|^{1/j}`
+    (Cauchy–Hadamard).  The root test uses
+    :math:`(\\|U_0\\| / \\|U_j\\|)^{1/j}` for ``j = 1..m``, returning the
+    minimum (most conservative) radius scaled by ``safety``.
+
+    This matters because near the boundary (e.g. ρ ≈ −1 with
+    λ_min(W) = −1), the spectral radius of ``A_c⁻¹W`` explodes, and a
+    fixed ``krylov_dmax`` can exceed the true convergence radius —
+    producing diverged density evaluations that trap the slice sampler.
+    """
+    import jax.numpy as jnp
+
+    norms = jnp.array([jnp.linalg.norm(V_stack[j]) for j in range(V_stack.shape[0])])
+    n0 = jnp.maximum(norms[0], jnp.float64(1e-300))
+    j = jnp.arange(1, norms.shape[0], dtype=jnp.float64)
+    radii = (n0 / jnp.maximum(norms[1:], jnp.float64(1e-300))) ** (1.0 / j)
+    return jnp.float64(safety) * jnp.min(radii)
+
+
 # ---------------------------------------------------------------------------
 # Krylov basis: build and evaluate
 # ---------------------------------------------------------------------------
@@ -235,22 +264,46 @@ def _rho_log_density_marginal_jax(
 
     No log|I−ρW| term — it cancels when β is marginalized out.
     """
+    import jax
     import jax.numpy as jnp
     from jax.scipy.linalg import solve_triangular
 
     k = V_stack.shape[2]
 
-    # Evaluate U(ρ) via Krylov basis when within radius, else direct solve
+    # Reject candidates where I − ρW is numerically singular.  For
+    # row-standardized W (λ_max = 1, λ_min = −1), the smallest eigenvalue
+    # of I − ρW is 1 − |ρ|, so |ρ| > 1 − ε makes KLU fail.  The ρ bounds
+    # already exclude the exact boundary, but the direct-solve fallback
+    # can still propose candidates close enough to fail KLU.
+    _singular = jnp.abs(rho_val) > 0.995
+
+    # Clamp the configured dmax to the Krylov basis' actual convergence radius.
+    # Near the boundary (ρ ≈ ±1) the spectral radius of A_c⁻¹W explodes, so the
+    # fixed dmax can exceed the Neumann series' radius of convergence — producing
+    # diverged density evaluations that trap the slice sampler at the boundary.
+    safe_dmax = jnp.minimum(krylov_dmax, _series_radius_jax(V_stack))
+
+    # Evaluate U(ρ) via Krylov basis when within safe radius, else direct solve
     drho = rho_val - rho_basis
-    use_basis = jnp.abs(drho) <= krylov_dmax
+    use_basis = jnp.abs(drho) <= safe_dmax
 
     U_krylov = _eval_U_from_basis_jax(V_stack, drho)
 
     # Direct sparse solve fallback (sparsax; correct for any ρ)
     has_fallback = (X_jax is not None) and (solve_at is not None)
     if has_fallback:
-        U_direct = solve_at(rho_val, X_jax)
-        U = jnp.where(use_basis, U_krylov, U_direct)
+        # Use lax.cond (not jnp.where) so the direct solve is only evaluated
+        # when actually needed — jnp.where executes both branches under JIT.
+        # Clamp ρ away from the singular boundary for the direct solve to
+        # avoid KLU failures on near-singular I − ρW (ρ ≈ ±1).  Candidates
+        # beyond the clamp are rejected as -inf by the _singular guard below.
+        _rho_clamped = jnp.clip(rho_val, -0.995, 0.995)
+        U = jax.lax.cond(
+            use_basis,
+            lambda _: U_krylov,
+            lambda _: solve_at(_rho_clamped, X_jax),
+            operand=None,
+        )
     else:
         U = U_krylov
 
@@ -300,6 +353,9 @@ def _rho_log_density_marginal_jax(
 
     # Jacobian for intercept reparameterization
     result = jnp.where(reparam, result + jnp.log(scale), result)
+
+    # Reject candidates where I − ρW is numerically singular (KLU would fail).
+    result = jnp.where(_singular, -jnp.inf, result)
 
     # Reject if outside Krylov radius AND no fallback available
     if not has_fallback:
@@ -578,12 +634,22 @@ def _make_reduced_gibbs_step(
         rho_basis_prev = state.get("rho_basis", jnp.float64(0.0))
         _drho_check = rho - rho_basis_prev
 
+        # Clamp ρ away from the singular boundary before building the Krylov
+        # basis — sparsax KLU fails on near-singular I − ρW (ρ ≈ ±1).
+        # Matches the NumPy path's try/except fallback to ρ = 0.
+        _rho_safe = jnp.clip(rho, -0.995, 0.995)
+
         def _rebuild_basis(_):
             V = _build_krylov_basis_jax(
-                lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _krylov_degree
+                lambda rhs: _solve(_rho_safe, rhs),
+                X_jax,
+                _matvec_W,
+                n,
+                k,
+                _krylov_degree,
             )
             _eta = V[0] @ beta
-            return V, rho, _eta
+            return V, _rho_safe, _eta
 
         def _reuse_basis(_):
             _U = _eval_U_from_basis_jax(V_stack_prev, _drho_check)
@@ -605,10 +671,11 @@ def _make_reduced_gibbs_step(
 
         # ── Block 1: ρ — slice sampling with Krylov basis ──
 
-        # Krylov-only slice: solve_at=None means candidates outside the Krylov
-        # radius are rejected (−inf) rather than evaluated with a direct solve.
-        # The bounded ρ step is offset by a wider krylov_dmax (with enough
-        # degree to stay accurate).  The NumPy path keeps its conditional fallback.
+        # Krylov basis + direct-solve fallback: the safe_dmax clamping inside
+        # _rho_log_density_marginal_jax restricts the Krylov region to the
+        # actual convergence radius, and the sparsax direct solve evaluates
+        # candidates outside that region.  This matches the NumPy path's
+        # conditional fallback and lets the sampler traverse the full ρ support.
         rho_new = _slice_sample_rho_jax(
             rho_current=rho,
             V_stack=V_stack,
@@ -624,15 +691,23 @@ def _make_reduced_gibbs_step(
             krylov_dmax=_krylov_dmax,
             slice_width=slice_width,
             key=key_rho,
-            X_jax=None,
-            solve_at=None,
+            X_jax=X_jax,
+            solve_at=lambda rho_val, rhs: _solve(rho_val, rhs),
         )
 
         # ── Block 2: β | ρ, ω, α, y — conjugate normal ──
-        # Krylov-only guarantees |Δρ| ≤ dmax, so the basis evaluation of
-        # X̃ = (I−ρ_new W)⁻¹X is always valid — no direct-solve fallback needed.
+        # Evaluate X̃ = (I−ρ_new W)⁻¹X: Krylov basis when within safe radius,
+        # direct sparsax solve otherwise.  Clamp ρ to avoid KLU failures.
         drho_new = rho_new - rho_basis
-        Xtilde = _eval_U_from_basis_jax(V_stack, drho_new)
+        _safe_dmax_beta = jnp.minimum(_krylov_dmax, _series_radius_jax(V_stack))
+        _use_krylov_beta = jnp.abs(drho_new) <= _safe_dmax_beta
+        _rho_new_clamped = jnp.clip(rho_new, -0.995, 0.995)
+        Xtilde = jax.lax.cond(
+            _use_krylov_beta,
+            lambda _: _eval_U_from_basis_jax(V_stack, drho_new),
+            lambda _: _solve(_rho_new_clamped, X_jax),
+            operand=None,
+        )
 
         reparam_beta = (_intercept_col >= 0) & (jnp.abs(rho_new) > 1e-8)
         scale_beta = 1.0 - rho_new
@@ -1175,10 +1250,18 @@ def _reduced_pointwise_loglik(
         w_vals = np.asarray(w_coo.data, dtype=np.float64)
         for i in range(n_keep):
             Ax = const_vals - rho_samples[i] * w_vals
-            eta_i = np.asarray(
-                sparsax.lu_solve(Ai, Aj, Ax, X @ beta_samples[i]),
-                dtype=np.float64,
-            )
+            try:
+                eta_i = np.asarray(
+                    sparsax.lu_solve(Ai, Aj, Ax, X @ beta_samples[i]),
+                    dtype=np.float64,
+                )
+            except Exception:
+                # KLU fails on near-singular I − ρW (ρ ≈ ±1).
+                # Fall back to scipy's sparse solver for this draw.
+                from ..._ops._backend import _solve_sparse_vector
+
+                A_csc = (_sp.eye(n, format="csc") - rho_samples[i] * W_sparse).tocsc()
+                eta_i = _solve_sparse_vector(A_csc, X @ beta_samples[i])
             a = alpha_samples[i]
             mu = np.exp(eta_i)
             log_lik[i] = (

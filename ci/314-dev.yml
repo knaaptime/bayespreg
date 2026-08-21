@@ -7,6 +7,7 @@ dependencies:
   - arviz < 1
   - formulaic
   - pymc
+  - arviz
   - spreg
   - statsmodels
   - geopandas
@@ -21,18 +22,17 @@ dependencies:
   - lazy_loader
   - fastprogress
   - nutpie
-  - blackjax
-  - numpyro
   - polyagamma
   - scikit-sparse
-  - equinox
   - pip
   - pip:
-    - git+https://github.com/knaaptime/cholgraph
     - jax # force from pip to allow windows 
-    - sparsax
     - pgjax
-  
+    - blackjax
+    - numpyro
+    - sparsax
+    - equinox
+
   # docs
   - twine
   - sphinx>=1.4.3

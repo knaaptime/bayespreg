@@ -414,7 +414,9 @@ def _sample_beta(
     )
 
     # Posterior precision: Sigma_beta_inv = diag(1/sigma_beta^2) + XtX / sigma2
-    Sigma_beta_inv = np.diag(1.0 / beta_sigma2) + XtX / sigma2
+    prior_prec_diag = 1.0 / beta_sigma2
+    Sigma_beta_inv = XtX / sigma2
+    Sigma_beta_inv[np.diag_indices_from(Sigma_beta_inv)] += prior_prec_diag
 
     # Posterior mean: m_beta = Sigma_beta @ (mu_beta / sigma_beta^2 + Xt @ A_rho_eta / sigma2)
     rhs = beta_mu / beta_sigma2 + X.T @ A_rho_eta / sigma2

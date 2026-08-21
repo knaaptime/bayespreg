@@ -788,29 +788,27 @@ class GibbsEstimation:
         # SEM/SDEM use it for sigma2 and collapsed density)
         Wy = self.Wy if self.Wy is not None else self.W_sparse @ self.y
 
-        # Precompute WX, XtWX, WXtWX for SEM/SDEM models
-        # These avoid repeated sparse matrix-vector products in the hot loop
+        # Precompute y-side inner products for ALL model types.
+        # SAR/SDM need them for the O(k) collapsed ρ density (Phase 1 perf:
+        # eliminates O(nk) per slice evaluation).  SEM/SDEM need them for
+        # both the collapsed λ density and the β block (Phase 2 perf:
+        # eliminates O(nk²) per Gibbs iteration).
+        yty = float(self.y @ self.y)
+        yTWy = float(self.y @ Wy)
+        WyTWy = float(Wy @ Wy)
+        XTy = self.X.T @ self.y  # (k,)
+        XTWy = self.X.T @ Wy  # (k,)
+
+        # WX-side quantities only needed for SEM/SDEM
         WX = None
         XtWX = None
         WXtWX = None
-        # SEM/SDEM inner products for O(k) collapsed density
-        yty = None
-        yTWy = None
-        WyTWy = None
-        XTy = None
-        XTWy = None
         WXTy = None
         WXTWy = None
         if self.model_type in ("sem", "sdem"):
             WX = self.W_sparse @ self.X  # (n, k)
             XtWX = self.X.T @ WX  # (k, k)
             WXtWX = WX.T @ WX  # (k, k)
-            # Precompute inner products for O(k) collapsed density
-            yty = float(self.y @ self.y)
-            yTWy = float(self.y @ Wy)
-            WyTWy = float(Wy @ Wy)
-            XTy = self.X.T @ self.y  # (k,)
-            XTWy = self.X.T @ Wy  # (k,)
             WXTy = WX.T @ self.y  # (k,)
             WXTWy = WX.T @ Wy  # (k,)
 

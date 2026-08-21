@@ -167,9 +167,7 @@ def _sample_beta_sar(
 def _sample_beta_sem(
     lam: float,
     sigma2: float,
-    y: np.ndarray,
-    X: np.ndarray,
-    W_sparse: sp.csr_matrix,
+    cache: GaussianGibbsCache,
     priors: GaussianGibbsPriors,
     rng: np.random.Generator,
 ) -> np.ndarray:
@@ -184,18 +182,17 @@ def _sample_beta_sem(
         Σ_β = (X*^T X* / σ² + Λ₀⁻¹)⁻¹
         β̂ = Σ_β (X*^T y* / σ² + Λ₀⁻¹ μ₀)
 
+    Uses the quadratic-in-λ forms from precomputed cache constants
+    so each evaluation is O(k² + k³) — no O(nk) or O(nk²) work.
+
     Parameters
     ----------
     lam : float
         Current spatial error parameter λ.
     sigma2 : float
         Current residual variance.
-    y : ndarray of shape (n,)
-        Response vector.
-    X : ndarray of shape (n, k)
-        Design matrix.
-    W_sparse : csr_matrix
-        Sparse spatial weights matrix.
+    cache : GaussianGibbsCache
+        Precomputed cross-products (XtX, XtWX, WXtWX, XTy, XTWy, WXTy, WXTWy).
     priors : GaussianGibbsPriors
         Prior hyperparameters.
     rng : numpy.random.Generator
@@ -206,11 +203,10 @@ def _sample_beta_sem(
     beta : ndarray of shape (k,)
         New draw from the conditional posterior.
     """
-    # Transform y and X by (I - λW)
-    y_star = y - lam * (W_sparse @ y)
-    X_star = X - lam * (W_sparse @ X)
-    XtX_star = X_star.T @ X_star
-    return _sample_beta_conjugate(y_star, X_star, XtX_star, sigma2, priors, rng)
+    lam2 = lam * lam
+    XtX_star = cache.XtX - lam * (cache.XtWX + cache.XtWX.T) + lam2 * cache.WXtWX
+    Xty_star = cache.XTy - lam * (cache.XTWy + cache.WXTy) + lam2 * cache.WXTWy
+    return _sample_beta_conjugate_from_prec(XtX_star, Xty_star, sigma2, priors, rng)
 
 
 def _sample_beta_conjugate(
@@ -253,12 +249,12 @@ def _sample_beta_conjugate(
     k = X.shape[1]
     beta_sigma_arr = np.broadcast_to(np.asarray(priors.beta_sigma, dtype=float), (k,))
     beta_mu_arr = np.broadcast_to(np.asarray(priors.beta_mu, dtype=float), (k,))
-    prior_prec = np.diag(1.0 / beta_sigma_arr**2)
-    prior_mean = np.array(beta_mu_arr, dtype=float)
+    prior_prec_diag = 1.0 / beta_sigma_arr**2
 
-    post_prec = XtX / sigma2 + prior_prec
+    post_prec = XtX / sigma2
+    post_prec[np.diag_indices_from(post_prec)] += prior_prec_diag
     Xtr = X.T @ r
-    rhs = Xtr / sigma2 + prior_prec @ prior_mean
+    rhs = Xtr / sigma2 + prior_prec_diag * beta_mu_arr
 
     # Cholesky factorization: post_prec = L Lᵀ (SPD, lower-triangular L)
     # post_mean = post_prec⁻¹ @ rhs via two triangular solves
@@ -267,6 +263,61 @@ def _sample_beta_conjugate(
     # NB: must request lower=True; the scipy default returns the *upper*
     # Cholesky U (A = UᵀU), in which case solve_triangular(U, z, trans='T')
     # yields U⁻ᵀ z whose covariance is U⁻ᵀ U⁻¹ ≠ A⁻¹ — a silent bug.
+    L, lower = cho_factor(post_prec, lower=True)
+    post_mean = cho_solve((L, lower), rhs)
+    z = rng.standard_normal(k)
+    beta = post_mean + solve_triangular(L, z, lower=lower, trans="T")
+    return beta
+
+
+def _sample_beta_conjugate_from_prec(
+    XtX_star: np.ndarray,
+    Xty_star: np.ndarray,
+    sigma2: float,
+    priors: GaussianGibbsPriors,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Sample β from conjugate normal posterior, given precomputed Gram and cross.
+
+    Model: y* = X* β + ε,  ε ~ N(0, σ² I)
+    Prior: β ~ N(μ₀, Λ₀)  with Λ₀ diagonal
+
+    Posterior: β | · ~ N(β̂, Σ_β)
+    where Σ_β = (X*ᵀX* / σ² + Λ₀⁻¹)⁻¹
+          β̂ = Σ_β (X*ᵀy* / σ² + Λ₀⁻¹ μ₀)
+
+    This variant accepts the precomputed Gram matrix ``XtX_star`` and
+    cross-product ``Xty_star`` directly, avoiding any O(nk) work inside
+    the Gibbs hot loop (used by the SEM/SDEM β block where these are
+    available as quadratics in λ from cache constants).
+
+    Parameters
+    ----------
+    XtX_star : ndarray of shape (k, k)
+        Precomputed X*ᵀX* (Gram matrix of the transformed design).
+    Xty_star : ndarray of shape (k,)
+        Precomputed X*ᵀy* (cross-product of transformed design and response).
+    sigma2 : float
+        Current residual variance.
+    priors : GaussianGibbsPriors
+        Prior hyperparameters.
+    rng : numpy.random.Generator
+        Random state.
+
+    Returns
+    -------
+    beta : ndarray of shape (k,)
+        New draw from the conditional posterior.
+    """
+    k = XtX_star.shape[0]
+    beta_sigma_arr = np.broadcast_to(np.asarray(priors.beta_sigma, dtype=float), (k,))
+    beta_mu_arr = np.broadcast_to(np.asarray(priors.beta_mu, dtype=float), (k,))
+    prior_prec_diag = 1.0 / beta_sigma_arr**2
+
+    post_prec = XtX_star / sigma2
+    post_prec[np.diag_indices_from(post_prec)] += prior_prec_diag
+    rhs = Xty_star / sigma2 + prior_prec_diag * beta_mu_arr
+
     L, lower = cho_factor(post_prec, lower=True)
     post_mean = cho_solve((L, lower), rhs)
     z = rng.standard_normal(k)
@@ -355,11 +406,7 @@ def _sample_sigma2(
 
 def _sar_collapsed_log_density(
     rho: float,
-    y: np.ndarray,
-    Wy: np.ndarray,
-    X: np.ndarray,
-    XtX_cho: tuple,
-    logdet_fn: Callable[[float], float],
+    cache: GaussianGibbsCache,
     n: int,
     k: int,
 ) -> float:
@@ -372,26 +419,20 @@ def _sar_collapsed_log_density(
     where RSS(ρ) = (y - ρWy)^T M_X (y - ρWy) and
     M_X = I - X(X^T X)^{-1} X^T.
 
-    Uses the Woodbury form to avoid O(n²) M_X multiplication:
+    Uses the precomputed inner products from ``cache`` to evaluate in O(k²)
+    instead of O(nk).  The quadratic-in-ρ forms are:
 
-        r^T M_X r = r^T r - (X^T r)^T (X^T X)^{-1} (X^T r)
-
-    which is O(nk + k²) instead of O(n²).
+        r^T r   = yty − 2ρ·yTWy + ρ²·WyTWy
+        X^T r   = XTy − ρ·XTWy
+        RSS(ρ)  = r^T r − (X^T r)^T (X^T X)^{-1} (X^T r)
 
     Parameters
     ----------
     rho : float
         Spatial autoregressive parameter.
-    y : ndarray of shape (n,)
-        Response vector.
-    Wy : ndarray of shape (n,)
-        W @ y (precomputed).
-    X : ndarray of shape (n, k)
-        Design matrix.
-    XtX_cho : tuple of (ndarray, bool)
-        Cholesky factor of X^T X from ``scipy.linalg.cho_factor``.
-    logdet_fn : callable
-        log|I - rho*W| callable.
+    cache : GaussianGibbsCache
+        Carries precomputed ``yty``, ``yTWy``, ``WyTWy``, ``XTy``, ``XTWy``,
+        ``XtX_cho``, and ``logdet_fn``.
     n : int
         Number of observations.
     k : int
@@ -402,10 +443,10 @@ def _sar_collapsed_log_density(
     log_density : float
         Collapsed log-density of ρ (up to a constant).
     """
-    r = y - rho * Wy
-    Xtr = X.T @ r  # (k,) — X^T r
-    rss = np.dot(r, r) - Xtr @ cho_solve(XtX_cho, Xtr)
-    logdet = logdet_fn(rho)
+    r_dot_r = cache.yty - 2.0 * rho * cache.yTWy + rho * rho * cache.WyTWy
+    Xtr = cache.XTy - rho * cache.XTWy
+    rss = r_dot_r - Xtr @ cho_solve(cache.XtX_cho, Xtr)
+    logdet = cache.logdet_fn(rho)
     return logdet - 0.5 * (n - k) * np.log(rss)
 
 
@@ -471,14 +512,15 @@ def _sem_collapsed_log_density(
         L, lower = cho_factor(XtX_star)
         sol = cho_solve((L, lower), Xty_star)
         rss = yty_star - Xty_star @ sol
+        logdet_XtX = 2.0 * np.sum(np.log(np.diag(L)))  # free from Cholesky
     except np.linalg.LinAlgError:
         # Cholesky failed — matrix is not SPD, use pseudo-inverse
         XtX_star_inv = np.linalg.pinv(XtX_star)
         rss = yty_star - Xty_star @ XtX_star_inv @ Xty_star
+        logdet_XtX = np.linalg.slogdet(XtX_star)[1]  # fallback: general det
     rss = max(rss, 1e-300)  # Prevent log(0)
 
     logdet = cache.logdet_fn(lam)
-    logdet_XtX = np.linalg.slogdet(XtX_star)[1]
 
     return logdet - 0.5 * logdet_XtX - 0.5 * (n - k) * np.log(rss)
 
@@ -492,9 +534,6 @@ def _sample_rho_sar(
     state: GaussianGibbsState,
     cache: GaussianGibbsCache,
     priors: GaussianGibbsPriors,
-    y: np.ndarray,
-    Wy: np.ndarray,
-    X: np.ndarray,
     n: int,
     k: int,
     rng: np.random.Generator,
@@ -508,15 +547,10 @@ def _sample_rho_sar(
     state : GaussianGibbsState
         Current Gibbs state.
     cache : GaussianGibbsCache
-        Precomputed data.
+        Precomputed data (carries ``yty``, ``yTWy``, ``WyTWy``, ``XTy``,
+        ``XTWy``, ``XtX_cho``, ``logdet_fn``).
     priors : GaussianGibbsPriors
         Prior hyperparameters.
-    y : ndarray of shape (n,)
-        Response vector.
-    Wy : ndarray of shape (n,)
-        W @ y (precomputed).
-    X : ndarray of shape (n, k)
-        Design matrix.
     n : int
         Number of observations.
     k : int
@@ -539,11 +573,7 @@ def _sample_rho_sar(
     def log_density(rho_val):
         return _sar_collapsed_log_density(
             rho_val,
-            y,
-            Wy,
-            X,
-            cache.XtX_cho,
-            cache.logdet_fn,
+            cache,
             n,
             k,
         )
@@ -777,9 +807,7 @@ def run_gaussian_chain(
             state.beta = _sample_beta_sem(
                 state.rho,
                 state.sigma2,
-                y,
-                X,
-                cache.W_sparse,
+                cache,
                 priors,
                 rng,
             )
@@ -806,9 +834,6 @@ def run_gaussian_chain(
                 state,
                 cache,
                 priors,
-                y,
-                Wy,
-                X,
                 n,
                 k,
                 rng,

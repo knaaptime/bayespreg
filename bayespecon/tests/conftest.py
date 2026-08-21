@@ -20,7 +20,7 @@ from libpysal.graph import Graph
 
 from .helpers import PANEL_N, W_to_graph, make_line_W, make_rook_W
 
-SIDE = 6  # 36 cross-sectional units
+SIDE = 15  # 225 cross-sectional units
 
 
 # ---------------------------------------------------------------------------

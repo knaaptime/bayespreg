@@ -24,24 +24,56 @@ def _rho_log_density_logit(
     mu0,
     intercept_col,
     krylov_dmax,
+    X_jax=None,
+    solve_at=None,
 ):
-    """β-marginalized log-density of ρ for the reduced-form logit (Krylov-only).
+    """β-marginalized log-density of ρ for the reduced-form logit.
 
     Identical Gaussian core to the reduced-NB density, with the Bernoulli
     working response s = κ/ω (κ = y − ½) — no ``log α`` offset — and no
-    ``log|I−ρW|`` term (it cancels when β is marginalized out).  Candidates
-    outside the Krylov radius are rejected (−inf); the bounded ρ step is offset
-    by a wide ``krylov_dmax`` (see the count model for the rationale).
+    ``log|I−ρW|`` term (it cancels when β is marginalized out).
+
+    Evaluates U(ρ) via the Krylov basis when |Δρ| is within the *safe* radius
+    (the minimum of ``krylov_dmax`` and the Neumann series' actual convergence
+    radius estimated from the Krylov coefficients).  When a direct sparsax solve
+    is available (``solve_at``), candidates outside the safe radius use that
+    instead — matching the NumPy path's conditional fallback and allowing the
+    slice sampler to traverse the full ρ support.  Without a fallback,
+    out-of-radius candidates are rejected (−inf).
     """
+    import jax
     import jax.numpy as jnp
     from jax.scipy.linalg import solve_triangular
 
-    from ..negbin_reduced._jax import _eval_U_from_basis_jax
+    from ..negbin_reduced._jax import _eval_U_from_basis_jax, _series_radius_jax
 
     k = V_stack.shape[2]
+
+    # Reject candidates where I − ρW is numerically singular (KLU would fail).
+    _singular = jnp.abs(rho_val) > 0.995
+
+    # Clamp the configured dmax to the Krylov basis' actual convergence radius.
+    safe_dmax = jnp.minimum(krylov_dmax, _series_radius_jax(V_stack))
     drho = rho_val - rho_basis
-    use_basis = jnp.abs(drho) <= krylov_dmax
-    U = _eval_U_from_basis_jax(V_stack, drho)
+    use_basis = jnp.abs(drho) <= safe_dmax
+
+    U_krylov = _eval_U_from_basis_jax(V_stack, drho)
+
+    # Direct sparse solve fallback (sparsax; correct for any ρ)
+    has_fallback = (X_jax is not None) and (solve_at is not None)
+    if has_fallback:
+        # Use lax.cond (not jnp.where) so the direct solve is only evaluated
+        # when actually needed.  Clamp ρ away from the singular boundary to
+        # avoid KLU failures on near-singular I − ρW.
+        _rho_clamped = jnp.clip(rho_val, -0.995, 0.995)
+        U = jax.lax.cond(
+            use_basis,
+            lambda _: U_krylov,
+            lambda _: solve_at(_rho_clamped, X_jax),
+            operand=None,
+        )
+    else:
+        U = U_krylov
 
     reparam = (intercept_col >= 0) & (jnp.abs(rho_val) > 1e-8)
     scale = 1.0 - rho_val
@@ -71,7 +103,14 @@ def _rho_log_density_logit(
 
     result = -0.5 * log_det_M - 0.5 * (rOr - quad_pen)
     result = jnp.where(reparam, result + jnp.log(scale), result)
-    return jnp.where(use_basis, result, -jnp.inf)  # Krylov-only
+
+    # Reject candidates where I − ρW is numerically singular (KLU would fail).
+    result = jnp.where(_singular, -jnp.inf, result)
+
+    # Reject out-of-radius candidates only when no direct-solve fallback exists.
+    if not has_fallback:
+        result = jnp.where(use_basis, result, -jnp.inf)
+    return result
 
 
 def _make_reduced_logit_gibbs_step(
@@ -99,6 +138,7 @@ def _make_reduced_logit_gibbs_step(
         _build_krylov_basis_jax,
         _eval_U_from_basis_jax,
         _make_sparse_solvers,
+        _series_radius_jax,
     )
 
     # Pólya-Gamma: pgjax (on-device, exact) or numpy C extension fallback.
@@ -137,12 +177,16 @@ def _make_reduced_logit_gibbs_step(
         rho_basis_prev = state.get("rho_basis", jnp.float64(0.0))
         _drho_check = rho - rho_basis_prev
 
+        # Clamp ρ away from the singular boundary before building the Krylov
+        # basis — sparsax KLU fails on near-singular I − ρW (ρ ≈ ±1).
+        _rho_safe = jnp.clip(rho, -0.995, 0.995)
+
         def _rebuild_basis(_):
             V = _build_krylov_basis_jax(
-                lambda rhs: _solve(rho, rhs), X_jax, _matvec_W, n, k, _deg
+                lambda rhs: _solve(_rho_safe, rhs), X_jax, _matvec_W, n, k, _deg
             )
             _eta = V[0] @ beta
-            return V, rho, _eta
+            return V, _rho_safe, _eta
 
         def _reuse_basis(_):
             _U = _eval_U_from_basis_jax(V_stack_prev, _drho_check)
@@ -161,10 +205,20 @@ def _make_reduced_logit_gibbs_step(
         h = jnp.ones_like(z)  # per-device (n,)
         omega = _draw_pg(h, z, key_pg)
 
-        # ── Block 1: ρ — Krylov-only slice ──
+        # ── Block 1: ρ — slice with Krylov basis + direct-solve fallback ──
         def _dens(rv):
             return _rho_log_density_logit(
-                rv, V_stack, rho_basis, omega, y_jax, V0_inv_diag, mu0, _ic, dmax
+                rv,
+                V_stack,
+                rho_basis,
+                omega,
+                y_jax,
+                V0_inv_diag,
+                mu0,
+                _ic,
+                dmax,
+                X_jax=X_jax,
+                solve_at=lambda rho_val, rhs: _solve(rho_val, rhs),
             )
 
         rho_new, _ = jax_slice_sample_1d(
@@ -172,8 +226,18 @@ def _make_reduced_logit_gibbs_step(
         )
 
         # ── Block 2: β | ρ, ω, y — conjugate normal ──
+        # Evaluate X̃ = (I−ρ_new W)⁻¹X: Krylov basis when within safe radius,
+        # direct sparsax solve otherwise.  Clamp ρ to avoid KLU failures.
         drho_new = rho_new - rho_basis
-        Xtilde = _eval_U_from_basis_jax(V_stack, drho_new)  # within dmax (Krylov-only)
+        _safe_dmax_beta = jnp.minimum(dmax, _series_radius_jax(V_stack))
+        _use_krylov_beta = jnp.abs(drho_new) <= _safe_dmax_beta
+        _rho_new_clamped = jnp.clip(rho_new, -0.995, 0.995)
+        Xtilde = jax.lax.cond(
+            _use_krylov_beta,
+            lambda _: _eval_U_from_basis_jax(V_stack, drho_new),
+            lambda _: _solve(_rho_new_clamped, X_jax),
+            operand=None,
+        )
 
         reparam_beta = (_ic >= 0) & (jnp.abs(rho_new) > 1e-8)
         scale_beta = 1.0 - rho_new
