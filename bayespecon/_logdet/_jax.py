@@ -357,6 +357,28 @@ def make_logdet_jax_fn(
 
         return _jax_chol_aaa
 
+    if method == "grid_spline":
+        from ._grid_spline import (
+            grid_spline_breaks_coeffs,
+            grid_spline_eval_jax,
+            grid_spline_logdet_precompute,
+        )
+
+        # Incumbent practice: precompute the exact LU grid and fit the cubic
+        # spline in numpy, then evaluate its piecewise-cubic form JAX-natively
+        # (differentiable, JIT-compatible), mirroring the "aaa" split above.
+        pre = grid_spline_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+        breaks_np, coeffs_np = grid_spline_breaks_coeffs(pre)
+
+        def _jax_grid_spline(rho):
+            import jax.numpy as jnp
+
+            return grid_spline_eval_jax(
+                rho, jnp.asarray(breaks_np), jnp.asarray(coeffs_np), T=T
+            )
+
+        return _jax_grid_spline
+
     if method == "cholmod":
         # JAX-native exact logdet via sparsax sparse CHOLMOD.
         # Requires W to be D-symmetrizable (row-standardized undirected

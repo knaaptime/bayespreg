@@ -39,7 +39,10 @@ coarse grid).
 
 from __future__ import annotations
 
+import importlib
 import os
+import time
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -74,12 +77,21 @@ class AAAPrecompute:
     n: int
 
 
-def _klu_logdet_from_factor(factor) -> float:
-    """Recover ``log|det(A)|`` from a ``sksparse.klu`` factor.
+def _lu_logdet_from_factor(factor) -> float:
+    """Recover ``log|det(A)|`` from a ``scikit-sparse`` LU factor.
 
-    KLU factorizes ``P R A Q = L U`` with a diagonal row scaling ``R``; the
-    permutations affect only the sign, so
+    Both bindings factorize ``P R A Q = L U`` with a diagonal row scaling ``R``;
+    the permutations affect only the sign, so
     ``log|det(A)| = Σ log|diag(U)| + Σ log|diag(L)| - Σ log|diag(R)|``.
+    Verified identical between ``sksparse.klu`` and ``sksparse.umfpack``.
+
+    **This is not free.**  ``factor.U`` and ``factor.L`` build whole scipy
+    matrices in order to read ``n`` numbers off their diagonals, at a cost that
+    scales with ``nnz(L) + nnz(U)`` — i.e. with fill-in.  Measured at
+    ``n = 3,000`` on a directed graph, it is **52% of KLU's per-node cost at
+    mean degree 2**, 20% at degree 8, and 3% at degree 65.  UMFPACK escapes it
+    via :func:`_umf_logdet_from_factor`; KLU exposes no equivalent, so this is
+    the only route there.
     """
     logdet = float(np.sum(np.log(np.abs(factor.U.diagonal()))))
     l_diag = factor.L.diagonal()
@@ -90,61 +102,302 @@ def _klu_logdet_from_factor(factor) -> float:
     return logdet
 
 
+# Retained under its original name: the diagonal formula is shared by both
+# backends, and this alias keeps existing importers working.
+_klu_logdet_from_factor = _lu_logdet_from_factor
+
+
+def _umf_logdet_from_factor(factor) -> float:
+    """Recover ``log|det(A)|`` from a ``sksparse.umfpack`` factor via UMFPACK.
+
+    ``UMFFactor.slogdet`` calls ``umfpack_di_get_determinant``, which returns
+    the determinant split into mantissa and base-10 exponent and costs ``O(n)``
+    inside the library.  It therefore avoids the scipy ``L``/``U``
+    materialization that :func:`_lu_logdet_from_factor` pays for — measured
+    10-20% of UMFPACK's per-node cost at ``n = 3,000``, and constant at ~0.04ms
+    against an extraction that grows to 7ms at mean degree 65.
+
+    The split form is what keeps it usable where the determinant itself is far
+    outside double range: verified against the diagonal formula to 2e-11 at
+    ``n = 300,000`` with ``log|det| = -8155`` (``det ≈ 1e-3542``), with no
+    overflow or underflow warning raised.
+    """
+    return float(factor.slogdet()[1])
+
+
+# name -> (module, factory attribute, logdet extractor).  Order is the
+# preference order used when routing is disabled or only one backend imports.
+_LU_BACKENDS: dict[str, tuple[str, str, object]] = {
+    "klu": ("sksparse.klu", "klu_factor", _lu_logdet_from_factor),
+    "umfpack": ("sksparse.umfpack", "umf_factor", _umf_logdet_from_factor),
+}
+
+
+def _lu_backend_preference() -> str:
+    """Resolve the LU backend policy for the AAA/spline coarse grids.
+
+    Environment
+    -----------
+    BAYESPECON_LOGDET_LU_BACKEND : {"auto", "klu", "umfpack", "scipy"}
+        Default ``auto``, which times both backends on the grid itself and
+        keeps the faster (see :class:`_ReusableLULogdet`).  Naming a backend
+        pins it and skips the probe; ``scipy`` forces SuperLU.
+    """
+    requested = os.environ.get("BAYESPECON_LOGDET_LU_BACKEND", "auto").strip().lower()
+    if requested in {"", "auto"}:
+        return "auto"
+    if requested in {"scipy", "superlu"}:
+        return "scipy"
+    if requested in _LU_BACKENDS:
+        return requested
+    warnings.warn(
+        f"Unknown BAYESPECON_LOGDET_LU_BACKEND={requested!r}. Valid values are: "
+        "auto, klu, umfpack, scipy. Falling back to auto.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return "auto"
+
+
+def _load_lu_backend(name: str):
+    """Import one backend, returning ``(factory, logdet_fn)``."""
+    module_name, attr, logdet_fn = _LU_BACKENDS[name]
+    module = importlib.import_module(module_name)
+    return getattr(module, attr), logdet_fn
+
+
+def _superlu_logdet(A: sp.csc_matrix) -> float:
+    """``log|det(A)|`` via scipy SuperLU — the backend-of-last-resort."""
+    from scipy.sparse.linalg import splu as scipy_splu
+
+    lu = scipy_splu(A)
+    return float(
+        np.sum(np.log(np.abs(lu.L.diagonal())))
+        + np.sum(np.log(np.abs(lu.U.diagonal())))
+    )
+
+
 def _lu_logdet(A: sp.csc_matrix) -> float:
     """Compute ``log|det(A)|`` via sparse LU factorization (single shot).
 
-    Prefers KLU (``sksparse.klu``), then falls back to scipy SuperLU.  For
-    repeated factorizations of matrices sharing a sparsity pattern (the AAA
-    coarse grid), use :func:`_make_reusable_lu_logdet`, which reuses KLU's
-    symbolic analysis.
+    Walks the backend ladder — KLU, then UMFPACK, then scipy SuperLU — taking
+    the first that imports and factorizes.  For repeated factorizations of
+    matrices sharing a sparsity pattern (the AAA coarse grid), use
+    :func:`_make_reusable_lu_logdet` instead: it reuses the symbolic analysis
+    *and* routes between the two SuiteSparse backends by measurement.
     """
     A = A.tocsc()
-    try:
-        from sksparse.klu import klu_factor
-
-        return _klu_logdet_from_factor(klu_factor(A))
-    except Exception:
-        from scipy.sparse.linalg import splu as scipy_splu
-
-        lu = scipy_splu(A)
-        logdet = np.sum(np.log(np.abs(lu.L.diagonal()))) + np.sum(
-            np.log(np.abs(lu.U.diagonal()))
-        )
-        return float(logdet)
+    for name in _LU_BACKENDS:
+        try:
+            factory, logdet_fn = _load_lu_backend(name)
+            return logdet_fn(factory(A))
+        except Exception:
+            continue
+    return _superlu_logdet(A)
 
 
-def _make_reusable_lu_logdet():
+class _ReusableLULogdet:
+    """``A -> log|det(A)|`` reusing symbolic analysis, routed by measurement.
+
+    Two independent things happen here.
+
+    **Symbolic reuse.**  The first call for a given backend pays symbolic
+    analysis plus a numeric factorization; every later call refactorizes
+    numerically only (``factorize``), which is valid because every ``I - ρW``
+    on the grid shares one sparsity pattern.  This mirrors the CHOLMOD symbolic
+    reuse in :func:`chol_cheb_logdet_precompute`.
+
+    **Backend routing.**  KLU and UMFPACK trade places on this workload, and
+    the crossover is a property of the graph, not a constant.  Measured at
+    ``n = 3,000`` over a 16-node Chebyshev grid on a directed graph, total grid
+    time in ms:
+
+    ==========  =========  =========  ===========
+    mean deg          KLU    UMFPACK  winner
+    ==========  =========  =========  ===========
+    2                 6.2       17.4  KLU 2.8×
+    5                23.4       64.6  KLU 2.8×
+    8                92.5       98.3  KLU 1.1×
+    12              251.3      152.5  UMF 1.7×
+    21             1025.1      224.0  UMF 4.6×
+    40             4414.5      333.6  UMF 13.2×
+    65            11763.5      628.8  UMF 18.7×
+    ==========  =========  =========  ===========
+
+    So a pinned backend is wrong by up to 18.7× at one end or 2.8× at the
+    other, and **a mean-degree cutoff is wrong too** — the crossover moves with
+    ``n``, so a constant calibrated at one size misroutes at every other size.
+    Instead the grid times itself: the **first** call factorizes with every
+    surviving backend, and the fastest keeps the work.  Later calls refactorize
+    on the winner alone.
+
+    The timings cover extraction as well as factorization, because the two
+    backends do not extract alike: KLU must materialize ``L`` and ``U`` to read
+    their diagonals, which is 52% of its per-node cost at mean degree 2, while
+    UMFPACK reads the determinant out of the library in ``O(n)``
+    (:func:`_umf_logdet_from_factor`).  Timing factorization alone would route
+    on the wrong quantity.
+
+    **Why one probe call and not two.**  A first call also pays symbolic
+    analysis, so it overstates steady-state cost — by 1.1-3.8× for KLU and
+    1.2-4.7× for UMFPACK — and the tempting fix is to route on a second,
+    numeric-only call instead.  It is not worth it.  Measured across nine
+    densities, the first call already picks the same backend as the
+    steady-state cost everywhere except mean degree 8, where the true gap is
+    1.04× and misrouting therefore costs 4%.  The inflation largely cancels
+    because it falls hardest on whichever backend has the cheaper numeric
+    phase, which is the winner.
+
+    A second call would double the one cost that actually bites.  The probe's
+    overhead is one factorization on each losing backend, and at mean degree 65
+    a single KLU factorization (812ms) already exceeds the entire 16-node
+    UMFPACK grid (634ms) — so the probe is bounded by roughly one node, but a
+    node can be a large fraction of the grid precisely where the backends
+    diverge most.  Measured end to end on the same grids, against the KLU-only
+    path this replaces:
+
+    ==========  =========  =========  ===========
+    mean deg      routed    KLU-only  change
+    ==========  =========  =========  ===========
+    2                 7.2        4.6  1.6× slower
+    5                28.9       22.9  1.3× slower
+    8               107.7       89.9  1.2× slower
+    12              181.0      250.3  1.4× faster
+    21              340.1     1010.4  3.0× faster
+    40              645.8     4431.5  6.9× faster
+    65             1439.1    12084.7  8.4× faster
+    ==========  =========  =========  ===========
+
+    The regression is confined to the regime where the grid is a few
+    milliseconds outright, so it is bounded in absolute terms (+2.6ms at degree
+    2, +18ms at degree 8) against savings of seconds at the dense end.  That
+    asymmetry is the whole case for probing: the measurement costs the most
+    exactly where it matters least.
+
+    One numeric factor per candidate is held during the first call, so peak
+    memory there is that of the candidates together; the losers are freed as
+    soon as the decision is taken.
+
+    Parameters
+    ----------
+    backend : {"auto", "klu", "umfpack", "scipy"} or None, optional
+        Overrides ``BAYESPECON_LOGDET_LU_BACKEND``.  Naming a backend pins it
+        and skips the probe entirely.
+
+    Attributes
+    ----------
+    backend : str
+        The backend in use: ``"klu"``, ``"umfpack"``, ``"scipy"``, or
+        ``"probing"`` before the routing decision is taken.
+    """
+
+    __slots__ = ("_candidates", "_factors", "_timings", "_probing")
+
+    def __init__(self, backend: str | None = None) -> None:
+        preference = backend if backend is not None else _lu_backend_preference()
+        if preference == "scipy":
+            candidates: list[str] = []
+        elif preference == "auto":
+            candidates = list(_LU_BACKENDS)
+        else:
+            candidates = [preference]
+        self._candidates = candidates
+        self._factors: dict[str, object] = {}
+        self._timings: dict[str, float] = {}
+        # Only worth probing when there is an actual choice to make.
+        self._probing = preference == "auto" and len(candidates) > 1
+
+    @property
+    def backend(self) -> str:
+        if self._probing:
+            return "probing"
+        return self._candidates[0] if self._candidates else "scipy"
+
+    def _drop(self, name: str, exc: Exception) -> None:
+        """Retire a backend that failed, saying so rather than failing silently.
+
+        The distinction this preserves is the one a bare ``except Exception``
+        loses: a backend that is merely absent, and a backend that broke on
+        *this* matrix, both retire — but only to the next SuiteSparse backend,
+        never straight past it to SuperLU.
+        """
+        if name in self._candidates:
+            self._candidates.remove(name)
+        self._factors.pop(name, None)
+        self._timings.pop(name, None)
+        remaining = self._candidates[0] if self._candidates else "scipy SuperLU"
+        if not isinstance(exc, ImportError):
+            warnings.warn(
+                f"Sparse LU backend {name!r} failed during log-determinant "
+                f"evaluation ({type(exc).__name__}: {exc}); falling back to "
+                f"{remaining}.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+
+    def _evaluate_one(self, name: str, A) -> tuple[float, float]:
+        """Factorize with ``name`` and return ``(logdet, elapsed_seconds)``."""
+        factory, logdet_fn = _load_lu_backend(name)
+        factor = self._factors.get(name)
+        start = time.perf_counter()
+        if factor is None:
+            factor = factory(A)
+        else:
+            factor.factorize(A)
+        value = logdet_fn(factor)
+        elapsed = time.perf_counter() - start
+        self._factors[name] = factor
+        return value, elapsed
+
+    def __call__(self, A) -> float:
+        A = A.tocsc()
+        value: float | None = None
+
+        # Probe phase (first call only): every candidate factorizes, fastest wins.
+        if self._probing:
+            for name in list(self._candidates):
+                try:
+                    result, elapsed = self._evaluate_one(name, A)
+                except Exception as exc:  # noqa: BLE001 - retire, don't abort
+                    self._drop(name, exc)
+                    continue
+                if value is None:
+                    value = result
+                self._timings[name] = elapsed
+            self._settle()
+            if value is not None:
+                return value
+            return _superlu_logdet(A)
+
+        # Settled: the chosen backend, with the ladder still beneath it.
+        while self._candidates:
+            name = self._candidates[0]
+            try:
+                return self._evaluate_one(name, A)[0]
+            except Exception as exc:  # noqa: BLE001 - retire, don't abort
+                self._drop(name, exc)
+        return _superlu_logdet(A)
+
+    def _settle(self) -> None:
+        """Keep the backend that was fastest on the probe call."""
+        self._probing = False
+        if not self._timings:
+            return
+        winner = min(self._timings, key=self._timings.__getitem__)
+        self._candidates = [winner] + [n for n in self._candidates if n != winner]
+        for name in list(self._factors):
+            if name != winner:
+                # Free the losers' factors; fill-in makes these large.
+                del self._factors[name]
+
+
+def _make_reusable_lu_logdet(backend: str | None = None):
     """Return a callable ``A -> log|det(A)|`` that reuses symbolic analysis.
 
-    On the first call it computes KLU's symbolic + numeric factorization; on
-    subsequent calls it refactorizes numerically only (``KLUFactor.factorize``),
-    valid because every ``I - ρW`` shares one sparsity pattern.  This mirrors
-    the CHOLMOD symbolic reuse in :func:`chol_cheb_logdet_precompute` and is
-    measured 1.6-3.4× faster than a fresh scipy SuperLU factorization per node.
-
-    Falls back to the single-shot :func:`_lu_logdet` (scipy SuperLU) when
-    ``sksparse.klu`` is unavailable or its first factorization fails.
+    Thin constructor for :class:`_ReusableLULogdet`; see that class for the
+    symbolic-reuse and backend-routing behaviour.
     """
-    state = {"factor": None, "use_klu": True}
-
-    def _evaluate(A) -> float:
-        A = A.tocsc()
-        if state["use_klu"]:
-            try:
-                if state["factor"] is None:
-                    from sksparse.klu import klu_factor
-
-                    state["factor"] = klu_factor(A)
-                else:
-                    state["factor"].factorize(A)
-                return _klu_logdet_from_factor(state["factor"])
-            except Exception:
-                # KLU unavailable or failed — drop to single-shot fallback.
-                state["use_klu"] = False
-                state["factor"] = None
-        return _lu_logdet(A)
-
-    return _evaluate
+    return _ReusableLULogdet(backend=backend)
 
 
 def _aaa_algorithm(

@@ -9,6 +9,8 @@ Five methods are supported:
 * ``"cheb_stochastic"`` — stochastic Chebyshev expansion (Han et al. 2015);
   operator-valued Chebyshev polynomials with geometric convergence via
   Bernstein ellipse.  Same matvec cost as ``chebyshev`` but better accuracy at high |ρ|.
+* ``"grid_spline"`` — incumbent baseline: exact sparse-LU log-determinants on
+  an equispaced grid of 100 rho values, then cubic-spline interpolation.
 * ``"traces"`` — multinomial trace expansion for unrestricted 3-parameter
   flow models (the only option when the system matrix doesn't factor).
 
@@ -54,6 +56,7 @@ class LogDetMethod(str, Enum):
     LU_CHEB = "lu_cheb"
     AAA = "aaa"
     CHOL_AAA = "chol_aaa"
+    GRID_SPLINE = "grid_spline"
     TRACES = "traces"
     CHOLMOD = "cholmod"  # JAX-native sparse CHOLMOD logdet (requires sparsax)
 
@@ -69,6 +72,7 @@ LogDetMethodName = Literal[
     "lu_cheb",
     "aaa",
     "chol_aaa",
+    "grid_spline",
     "traces",
     "cholmod",
 ]

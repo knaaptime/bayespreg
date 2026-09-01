@@ -43,6 +43,15 @@ def _klu_available() -> bool:
 
 
 @lru_cache(maxsize=1)
+def _umfpack_available() -> bool:
+    """Return ``True`` when ``sksparse.umfpack`` (scikit-sparse) is importable."""
+    try:
+        return importlib.util.find_spec("sksparse.umfpack") is not None
+    except ModuleNotFoundError:
+        return False
+
+
+@lru_cache(maxsize=1)
 def _warn_sparse_auto_scipy_fallback_once() -> None:
     """Emit a one-time advisory warning for auto fallback to scipy sparse solve."""
     warnings.warn(
@@ -54,18 +63,39 @@ def _warn_sparse_auto_scipy_fallback_once() -> None:
     )
 
 
+_SPARSE_BACKEND_AVAILABLE = {
+    "klu": _klu_available,
+    "umfpack": _umfpack_available,
+}
+
+
 @lru_cache(maxsize=1)
 def _select_sparse_backend() -> str:
     """Resolve sparse solve backend from env vars with robust fallback.
 
     Environment
     -----------
-    BAYESPECON_SPARSE_BACKEND : {"auto", "scipy", "klu"}
+    BAYESPECON_SPARSE_BACKEND : {"auto", "scipy", "klu", "umfpack"}
         Default ``auto``. ``auto`` prefers ``klu`` (fastest for the
-        structured ``I - rho W`` systems), then falls back to scipy's
-        SuperLU.  ``klu`` is provided by ``scikit-sparse``.
+        structured ``I - rho W`` systems at the mean degrees typical of
+        contiguity and KNN weights), then falls back to scipy's SuperLU.
+        ``klu`` and ``umfpack`` are both provided by ``scikit-sparse``.
     BAYESPECON_SPARSE_STRICT : {"0", "1", "false", "true"}
         If truthy, missing requested optional backends raise ImportError.
+
+    Notes
+    -----
+    Unlike the log-determinant coarse grid — where
+    :class:`~bayespecon._logdet._aaa._ReusableLULogdet` times KLU against
+    UMFPACK and keeps the winner — ``auto`` here does **not** measure.  That
+    crossover was established on *factorization*, and this selector feeds
+    repeated *solves* (:func:`_solve_sparse_vector`,
+    :func:`_solve_sparse_matrix`, :class:`_SparseFactorSolver`, and the flow
+    resolvent's ``P`` probe vectors per call), where the backends' relative
+    standing has not been measured and iterative-refinement settings differ.
+    ``umfpack`` is exposed so that comparison can be run, and so dense weights
+    can be routed by hand; promoting it into ``auto`` should follow the
+    measurement, not precede it.
     """
     requested = os.environ.get("BAYESPECON_SPARSE_BACKEND", "auto").strip().lower()
     strict = os.environ.get("BAYESPECON_SPARSE_STRICT", "0").strip().lower() in {
@@ -84,13 +114,13 @@ def _select_sparse_backend() -> str:
     if requested in {"scipy", "superlu"}:
         return "scipy"
 
-    if requested == "klu":
-        if _klu_available():
-            return "klu"
+    if requested in _SPARSE_BACKEND_AVAILABLE:
+        if _SPARSE_BACKEND_AVAILABLE[requested]():
+            return requested
         msg = (
-            "BAYESPECON_SPARSE_BACKEND=klu requested, but 'sksparse.klu' is not "
-            "available. Install 'scikit-sparse' for this backend. Falling back to "
-            "scipy backend."
+            f"BAYESPECON_SPARSE_BACKEND={requested} requested, but "
+            f"'sksparse.{requested}' is not available. Install 'scikit-sparse' "
+            "for this backend. Falling back to scipy backend."
         )
         if strict:
             raise ImportError(msg)
@@ -99,7 +129,7 @@ def _select_sparse_backend() -> str:
 
     msg = (
         f"Unknown BAYESPECON_SPARSE_BACKEND='{requested}'. "
-        "Valid values are: auto, scipy, klu. Falling back to auto."
+        "Valid values are: auto, scipy, klu, umfpack. Falling back to auto."
     )
     if strict:
         raise ValueError(msg)
@@ -113,18 +143,31 @@ def _get_klu_factor():
     return importlib.import_module("sksparse.klu").klu_factor
 
 
+@lru_cache(maxsize=1)
+def _get_umf_factor():
+    """Import and return ``sksparse.umfpack.umf_factor``."""
+    return importlib.import_module("sksparse.umfpack").umf_factor
+
+
 def _sparse_factor(A_csc, backend: str):
-    """Factorize ``A_csc`` with the requested KLU backend."""
+    """Factorize ``A_csc`` with the requested SuiteSparse backend."""
     if backend == "klu":
         return _get_klu_factor()(A_csc)
+    if backend == "umfpack":
+        return _get_umf_factor()(A_csc)
     raise ValueError(f"Unknown sparse backend: {backend!r}")
+
+
+def _is_suitesparse(backend: str) -> bool:
+    """Return ``True`` for backends that yield a reusable ``scikit-sparse`` factor."""
+    return backend in _SPARSE_BACKEND_AVAILABLE
 
 
 def _solve_sparse_vector(A: sp.spmatrix, rhs: np.ndarray) -> np.ndarray:
     """Solve ``A x = rhs`` for vector RHS using configured sparse backend."""
     backend = _select_sparse_backend()
     rhs64 = np.asarray(rhs, dtype=np.float64)
-    if backend == "klu":
+    if _is_suitesparse(backend):
         factor = _sparse_factor(A.tocsc(), backend)
         return np.asarray(factor.solve(rhs64), dtype=np.float64)
     lu = sp.linalg.splu(A.tocsc())
@@ -135,8 +178,8 @@ def _solve_sparse_matrix(A: sp.spmatrix, rhs: np.ndarray) -> np.ndarray:
     """Solve ``A X = rhs`` for matrix RHS using configured sparse backend."""
     backend = _select_sparse_backend()
     rhs64 = np.asarray(rhs, dtype=np.float64)
-    if backend == "klu":
-        # KLU factors accept a 2-D RHS directly (single
+    if _is_suitesparse(backend):
+        # KLU and UMFPACK factors both accept a 2-D RHS directly (single
         # factorization, batched solve).
         factor = _sparse_factor(A.tocsc(), backend)
         return np.asarray(factor.solve(rhs64), dtype=np.float64)
@@ -147,22 +190,23 @@ def _solve_sparse_matrix(A: sp.spmatrix, rhs: np.ndarray) -> np.ndarray:
 def _factor_solve_logdet(A: sp.spmatrix, rhs: np.ndarray) -> tuple[np.ndarray, float]:
     """Factorize ``A``, solve ``A x = rhs``, and return ``(x, log|det A|)``.
 
-    Uses KLU (scikit-sparse) when available, falling back to
-    scipy SuperLU.  The logdet is recovered from the factor's diagonal(s).
+    Uses a ``scikit-sparse`` backend (KLU or UMFPACK) when available, falling
+    back to scipy SuperLU.  The logdet comes from UMFPACK's own determinant
+    routine where that backend is selected, and from the factor diagonals
+    otherwise; see :mod:`bayespecon._logdet._aaa` for why the distinction is
+    worth making.
     """
     backend = _select_sparse_backend()
     rhs64 = np.asarray(rhs, dtype=np.float64)
     A_csc = A.tocsc() if not sp.isspmatrix_csc(A) else A
-    if backend == "klu":
+    if _is_suitesparse(backend):
+        from .._logdet._aaa import _lu_logdet_from_factor, _umf_logdet_from_factor
+
         factor = _sparse_factor(A_csc, backend)
         x = np.asarray(factor.solve(rhs64), dtype=np.float64)
-        logdet = float(np.sum(np.log(np.abs(factor.U.diagonal()))))
-        l_diag = factor.L.diagonal()
-        logdet += float(np.sum(np.log(np.abs(l_diag))))
-        rscale = factor.rscale
-        if rscale is not None:
-            logdet -= float(np.sum(np.log(np.abs(rscale))))
-        return x, logdet
+        if backend == "umfpack":
+            return x, _umf_logdet_from_factor(factor)
+        return x, _lu_logdet_from_factor(factor)
     lu = sp.linalg.splu(A_csc)
     x = np.asarray(lu.solve(rhs64), dtype=np.float64)
     logdet = float(np.sum(np.log(np.abs(lu.U.diagonal()))))
@@ -170,12 +214,14 @@ def _factor_solve_logdet(A: sp.spmatrix, rhs: np.ndarray) -> tuple[np.ndarray, f
 
 
 class _SparseFactorSolver:
-    """Adapter exposing a ``SuperLU``-like ``solve`` over a KLU factor.
+    """Adapter exposing a ``SuperLU``-like ``solve`` over a ``scikit-sparse`` factor.
 
     ``sksparse`` KLU factors solve ``A x = rhs`` for both 1-D and
     2-D right-hand sides but do not accept a ``trans`` argument.  Callers
     that need the adjoint build ``A^T`` explicitly and solve with
-    ``trans="N"``.
+    ``trans="N"``.  UMFPACK factors *do* take ``trans``, but this adapter
+    holds the KLU restriction for both so the two backends stay
+    interchangeable at every call site.
     """
 
     __slots__ = ("_factor",)
@@ -193,24 +239,24 @@ class _SparseFactorSolver:
 def _make_cached_sparse_solver(
     A: sp.spmatrix, backend: str | None = None
 ) -> _SparseFactorSolver | None:
-    """Build a reusable KLU factor solver for repeated solves.
+    """Build a reusable SuiteSparse factor solver for repeated solves.
 
     Parameters
     ----------
     A : scipy.sparse matrix
         Matrix to factorize.
-    backend : {"klu", "scipy"} or None, optional
+    backend : {"klu", "umfpack", "scipy"} or None, optional
         Backend to use.  When ``None`` the configured backend is resolved.
 
     Returns
     -------
     _SparseFactorSolver | None
         Reusable solver, or ``None`` when the resolved backend is scipy
-        (no reusable KLU factor) or factorization fails.
+        (no reusable SuiteSparse factor) or factorization fails.
     """
     if backend is None:
         backend = _select_sparse_backend()
-    if backend != "klu":
+    if not _is_suitesparse(backend):
         return None
     try:
         return _SparseFactorSolver(_sparse_factor(A.tocsc(), backend))

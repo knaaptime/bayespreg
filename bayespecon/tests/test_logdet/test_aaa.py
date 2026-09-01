@@ -89,6 +89,172 @@ class TestLULogdet:
         assert abs(lu_ld - dense_ld) < 1e-6
 
 
+class TestLUBackendRouting:
+    """KLU/UMFPACK selection, extraction, and the failure ladder."""
+
+    def _grid(self, W, rhos):
+        eye = sp.eye(W.shape[0], format="csc")
+        Wc = sp.csc_matrix(W)
+        return [(eye - r * Wc).tocsc() for r in rhos]
+
+    def test_umf_extractor_matches_diagonal_formula(self, small_nonsymmetric_W):
+        """UMFPACK's determinant routine must agree with the L/U diagonals.
+
+        The two are different code paths to the same number — the library's
+        mantissa/exponent split versus a log-sum over the factor diagonals —
+        so agreement here is what licenses using the cheaper one.
+        """
+        umfpack = pytest.importorskip("sksparse.umfpack")
+        from bayespecon._logdet._aaa import (
+            _lu_logdet_from_factor,
+            _umf_logdet_from_factor,
+        )
+
+        for A in self._grid(small_nonsymmetric_W, (0.15, 0.5, 0.85)):
+            factor = umfpack.umf_factor(A)
+            dense = np.linalg.slogdet(A.toarray())[1]
+            assert abs(_umf_logdet_from_factor(factor) - dense) < 1e-8
+            assert (
+                abs(_umf_logdet_from_factor(factor) - _lu_logdet_from_factor(factor))
+                < 1e-8
+            )
+
+    @pytest.mark.parametrize("backend", ["klu", "umfpack", "scipy"])
+    def test_pinned_backend_is_used_and_exact(self, small_nonsymmetric_W, backend):
+        """Each pinned backend reports itself and returns the exact logdet."""
+        if backend != "scipy":
+            pytest.importorskip(f"sksparse.{backend}")
+        from bayespecon._logdet._aaa import _make_reusable_lu_logdet
+
+        evaluate = _make_reusable_lu_logdet(backend=backend)
+        for A in self._grid(small_nonsymmetric_W, (0.1, 0.4, 0.7, 0.2)):
+            assert abs(evaluate(A) - np.linalg.slogdet(A.toarray())[1]) < 1e-8
+        assert evaluate.backend == backend
+
+    def test_pinned_backend_skips_the_probe(self, small_nonsymmetric_W):
+        """Pinning a backend must not factorize with the other one."""
+        pytest.importorskip("sksparse.umfpack")
+        import bayespecon._logdet._aaa as aaa_mod
+        from bayespecon._logdet._aaa import _make_reusable_lu_logdet
+
+        seen = []
+        real = aaa_mod._load_lu_backend
+
+        def spy(name):
+            seen.append(name)
+            return real(name)
+
+        aaa_mod._load_lu_backend = spy
+        try:
+            evaluate = _make_reusable_lu_logdet(backend="umfpack")
+            for A in self._grid(small_nonsymmetric_W, (0.2, 0.5)):
+                evaluate(A)
+        finally:
+            aaa_mod._load_lu_backend = real
+        assert set(seen) == {"umfpack"}
+
+    def test_auto_probes_once_then_uses_the_winner(self, small_nonsymmetric_W):
+        """Auto factorizes with every candidate on call 1 and one thereafter.
+
+        This is the probe's whole cost model: one extra factorization per
+        losing backend, never one per node.
+        """
+        pytest.importorskip("sksparse.klu")
+        pytest.importorskip("sksparse.umfpack")
+        import bayespecon._logdet._aaa as aaa_mod
+        from bayespecon._logdet._aaa import _LU_BACKENDS, _ReusableLULogdet
+
+        # _evaluate_one resolves the backend on every factorization, so
+        # counting here counts factorizations per backend.
+        counts: dict[str, int] = {}
+        real = aaa_mod._load_lu_backend
+
+        def counting(name):
+            counts[name] = counts.get(name, 0) + 1
+            return real(name)
+
+        aaa_mod._load_lu_backend = counting
+        try:
+            evaluate = _ReusableLULogdet(backend=None)
+            grid = self._grid(small_nonsymmetric_W, (0.1, 0.3, 0.5, 0.7))
+            values = [evaluate(A) for A in grid]
+        finally:
+            aaa_mod._load_lu_backend = real
+
+        for A, value in zip(grid, values, strict=True):
+            assert abs(value - np.linalg.slogdet(A.toarray())[1]) < 1e-8
+        winner = evaluate.backend
+        assert winner in _LU_BACKENDS
+        assert counts[winner] == len(grid)
+        for loser in set(_LU_BACKENDS) - {winner}:
+            assert counts.get(loser, 0) == 1
+
+    def test_broken_klu_falls_to_umfpack_not_superlu(self, small_nonsymmetric_W):
+        """A KLU failure must demote to the other SuiteSparse backend, loudly.
+
+        The trap this guards is a catch-all that treats any KLU hiccup as
+        "no SuiteSparse available" and drops straight to SuperLU, the slowest
+        of the three.
+        """
+        pytest.importorskip("sksparse.umfpack")
+        import bayespecon._logdet._aaa as aaa_mod
+        from bayespecon._logdet._aaa import _make_reusable_lu_logdet
+
+        real = aaa_mod._load_lu_backend
+
+        def broken_klu(name):
+            if name == "klu":
+                raise RuntimeError("klu wedged for test")
+            return real(name)
+
+        aaa_mod._load_lu_backend = broken_klu
+        try:
+            evaluate = _make_reusable_lu_logdet(backend="klu")
+            with pytest.warns(RuntimeWarning, match="klu"):
+                first = evaluate(self._grid(small_nonsymmetric_W, (0.3,))[0])
+        finally:
+            aaa_mod._load_lu_backend = real
+
+        A = self._grid(small_nonsymmetric_W, (0.3,))[0]
+        assert abs(first - np.linalg.slogdet(A.toarray())[1]) < 1e-8
+
+    def test_env_var_pins_backend(self, small_nonsymmetric_W, monkeypatch):
+        """BAYESPECON_LOGDET_LU_BACKEND selects without an explicit argument."""
+        pytest.importorskip("sksparse.umfpack")
+        from bayespecon._logdet._aaa import _make_reusable_lu_logdet
+
+        monkeypatch.setenv("BAYESPECON_LOGDET_LU_BACKEND", "umfpack")
+        evaluate = _make_reusable_lu_logdet()
+        A = self._grid(small_nonsymmetric_W, (0.4,))[0]
+        assert abs(evaluate(A) - np.linalg.slogdet(A.toarray())[1]) < 1e-8
+        assert evaluate.backend == "umfpack"
+
+    def test_unknown_env_var_warns_and_falls_back_to_auto(self, monkeypatch):
+        """A typo in the env var must not silently pin the wrong thing."""
+        from bayespecon._logdet._aaa import _lu_backend_preference
+
+        monkeypatch.setenv("BAYESPECON_LOGDET_LU_BACKEND", "umfpak")
+        with pytest.warns(RuntimeWarning, match="BAYESPECON_LOGDET_LU_BACKEND"):
+            assert _lu_backend_preference() == "auto"
+
+    def test_routing_agrees_across_backends_on_a_directed_graph(self):
+        """All three backends must return the same curve, not merely a number."""
+        pytest.importorskip("sksparse.klu")
+        pytest.importorskip("sksparse.umfpack")
+        from bayespecon._logdet._aaa import _make_reusable_lu_logdet
+
+        W = _knn_W(300, k=6)
+        rhos = np.linspace(0.05, 0.85, 9)
+        grids = {
+            b: [_make_reusable_lu_logdet(backend=b)] for b in ("klu", "umfpack", None)
+        }
+        curves = {}
+        for name, (evaluate,) in grids.items():
+            curves[name] = np.array([evaluate(A) for A in self._grid(W, rhos)])
+        assert np.max(np.abs(curves["klu"] - curves["umfpack"])) < 1e-8
+        assert np.max(np.abs(curves["klu"] - curves[None])) < 1e-8
+
+
 class TestReusableLULogdet:
     def test_reuse_matches_single_shot(self, small_nonsymmetric_W):
         """Symbolic-reuse evaluator must match single-shot LU across ρ values.

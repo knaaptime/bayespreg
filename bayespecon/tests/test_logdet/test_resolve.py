@@ -17,6 +17,7 @@ CANONICAL_METHODS = {
     "lu_cheb",
     "aaa",
     "chol_aaa",
+    "grid_spline",
     "traces",
     "cholmod",
 }
@@ -182,3 +183,46 @@ def test_fillin_guard_env_var_override():
             os.environ.pop("BAYESPECON_LOGDET_MAX_FILLIN_RATIO", None)
         else:
             os.environ["BAYESPECON_LOGDET_MAX_FILLIN_RATIO"] = old
+
+
+def test_grid_spline_matches_exact_and_across_backends():
+    """The incumbent baseline is wired into every factory and agrees across them."""
+    import numpy as np
+    import scipy.sparse as sp
+
+    from bayespecon._logdet import (
+        make_logdet_grad_numpy_fn,
+        make_logdet_numpy_fn,
+        make_logdet_numpy_vec_fn,
+    )
+
+    side = 20
+    n = side * side
+    rows, cols = [], []
+    for i in range(side):
+        for j in range(side):
+            for di, dj in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                ni, nj = i + di, j + dj
+                if 0 <= ni < side and 0 <= nj < side:
+                    rows.append(i * side + j)
+                    cols.append(ni * side + nj)
+    A = sp.coo_matrix((np.ones(len(rows)), (rows, cols)), shape=(n, n)).tocsr()
+    deg = np.asarray(A.sum(axis=1)).ravel()
+    W = sp.csr_matrix(sp.diags(1.0 / deg) @ A)
+
+    f = make_logdet_numpy_fn(W, None, "grid_spline", -0.99, 0.99)
+    fv = make_logdet_numpy_vec_fn(W, None, "grid_spline", -0.99, 0.99)
+    fg = make_logdet_grad_numpy_fn(W, None, "grid_spline", -0.99, 0.99)
+
+    rhos = np.linspace(-0.9, 0.9, 11)
+    eigs = np.linalg.eigvals(W.toarray())
+    exact = np.array([np.sum(np.log(np.abs(1.0 - r * eigs))) for r in rhos])
+    approx = np.array([f(r) for r in rhos])
+
+    # Interpolation error only; the spline is far looser than AAA but not wrong.
+    assert np.abs(approx - exact).max() < 1e-3
+    # Scalar and vectorised factories must agree exactly.
+    np.testing.assert_allclose(approx, np.asarray(fv(rhos)), rtol=0, atol=0)
+    # Gradient is the analytic spline derivative.
+    fd = (f(0.5 + 1e-6) - f(0.5 - 1e-6)) / 2e-6
+    assert abs(fg(0.5) - fd) < 1e-6

@@ -171,6 +171,19 @@ def make_logdet_numpy_fn(
 
         return _chol_aaa_numpy
 
+    if method == "grid_spline":
+        from ._grid_spline import grid_spline_logdet_eval, grid_spline_logdet_precompute
+
+        # Incumbent practice: exact LU on an equispaced grid + cubic spline.
+        # Node count fixed by convention, not derived from the interval.
+        pre = grid_spline_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+
+        def _grid_spline_numpy(r):
+            val = grid_spline_logdet_eval(pre, float(r))
+            return val if T == 1 else T * val
+
+        return _grid_spline_numpy
+
     if method == "slq":
         # SLQ precompute → Chebyshev coefficients → Clenshaw evaluation
         pre = slq_logdet_precompute(W_sparse)
@@ -267,6 +280,15 @@ def make_logdet_grad_numpy_fn(
         sp_f = pre.support_values
         w = pre.weights
         return lambda r: _scale(logdet_grad_aaa(float(r), sp_z, sp_f, w))
+
+    if method == "grid_spline":
+        from ._grid_spline import grid_spline_logdet_precompute
+
+        pre = grid_spline_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+        deriv = pre.spline.derivative()
+        return lambda r: _scale(
+            float(deriv(min(max(float(r), pre.rho_min), pre.rho_max)))
+        )
 
     if method == "slq":
         # Match make_logdet_numpy_fn: its slq value form is the Chebyshev-
@@ -397,6 +419,18 @@ def make_logdet_grad_numpy_vec_fn(
 
         return _vec_chol_aaa_grad
 
+    if method == "grid_spline":
+        from ._grid_spline import grid_spline_logdet_precompute
+
+        pre = grid_spline_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+        deriv = pre.spline.derivative()
+
+        def _vec_grid_spline_grad(rho_arr):
+            r = np.clip(np.asarray(rho_arr, dtype=np.float64), pre.rho_min, pre.rho_max)
+            return _scale(np.asarray(deriv(r), dtype=np.float64))
+
+        return _vec_grid_spline_grad
+
     raise ValueError(f"Unsupported logdet method: {method!r}")
 
 
@@ -477,6 +511,18 @@ def make_logdet_numpy_vec_fn(
             return vals if T == 1 else T * vals
 
         return _vec_chol_aaa
+
+    if method == "grid_spline":
+        from ._grid_spline import grid_spline_logdet_precompute
+
+        pre = grid_spline_logdet_precompute(W_sparse, rho_min=rho_min, rho_max=rho_max)
+
+        def _vec_grid_spline(rho_arr: np.ndarray) -> np.ndarray:
+            r = np.clip(np.asarray(rho_arr, dtype=np.float64), pre.rho_min, pre.rho_max)
+            vals = np.asarray(pre.spline(r), dtype=np.float64)
+            return vals if T == 1 else T * vals
+
+        return _vec_grid_spline
 
     if method == "slq":
         # SLQ precompute → Chebyshev coefficients → vectorized Clenshaw
