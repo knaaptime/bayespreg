@@ -22,7 +22,6 @@ dependencies:
   - fastprogress
   - polyagamma
   - scikit-sparse
-  - jax
   - pip
   - pip:
     - sparsax
@@ -31,6 +30,7 @@ dependencies:
     - nutpie
     - numpyro
     - equinox
+    - jax
 
   # docs
   - numpydoc
