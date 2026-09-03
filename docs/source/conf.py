@@ -30,13 +30,13 @@ try:
 except Exception:
     pass
 
-import bayespecon
+import neighbayes
 
-project = "bayespecon"
+project = "neighbayes"
 copyright = "2018-, pysal developers"  # noqa: A001 - shadowing a Python builtin
 author = "pysal developers"
 
-version = Version(bayespecon.__version__).public  # remove commit hash
+version = Version(neighbayes.__version__).public  # remove commit hash
 release = version
 
 language = "en"
@@ -111,10 +111,10 @@ html_theme_options = {
         "repo": "fontawesome/brands/github",
         "edit": "material/file-code",
     },
-    "site_url": "https://pysal.org/bayespecon",
-    "repo_url": "https://github.com/pysal/bayespecon/",
+    "site_url": "https://pysal.org/neighbayes",
+    "repo_url": "https://github.com/pysal/neighbayes/",
     "edit_uri": "blob/main/docs",
-    "repo_name": "pysal/bayespecon",
+    "repo_name": "pysal/neighbayes",
     "features": [
         # "navigation.expand",
         # "navigation.tabs",
@@ -168,7 +168,7 @@ html_theme_options = {
         },
     ],
     "version_dropdown": True,
-    "version_json": "https://pysal.org/bayespecon/versions.json",
+    "version_json": "https://pysal.org/neighbayes/versions.json",
 }
 nb_execution_mode = "force"
 nb_execution_timeout = -1
@@ -189,15 +189,15 @@ def linkcode_resolve(domain, info):
         import os
 
         fn = inspect.getsourcefile(obj)
-        fn = os.path.relpath(fn, start=os.path.dirname(bayespecon.__file__))
+        fn = os.path.relpath(fn, start=os.path.dirname(neighbayes.__file__))
         source, lineno = inspect.getsourcelines(obj)
         return fn, lineno, lineno + len(source) - 1
 
     if domain != "py" or not info["module"]:
         return None
     try:
-        filename = "bayespecon/%s#L%d-L%d" % find_source()  # noqa: UP031
+        filename = "neighbayes/%s#L%d-L%d" % find_source()  # noqa: UP031
     except Exception:
         filename = info["module"].replace(".", "/") + ".py"
     tag = "main" if "dev" in release else ("v" + release)
-    return f"https://github.com/pysal/bayespecon/blob/{tag}/{filename}"
+    return f"https://github.com/pysal/neighbayes/blob/{tag}/{filename}"

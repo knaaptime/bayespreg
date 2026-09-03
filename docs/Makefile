@@ -12,7 +12,7 @@ help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 clearnbs:
-	jupyter nbconvert --clear-output --inplace source/user-guide/*.ipynb
+	jupyter nbconvert --clear-output --inplace source/tutorial/*.ipynb source/how-to/*.ipynb
 
 
 .PHONY: help Makefile 

@@ -1,4 +1,4 @@
 ignore:
-  - "bayespecon/tests/"
+  - "neighbayes/tests/"
   - "docs/"
   - "ci/"

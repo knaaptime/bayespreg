@@ -20,17 +20,17 @@ dependencies:
   - openpyxl
   - lazy_loader
   - fastprogress
-  - nutpie
-  - blackjax
-  - numpyro
   - polyagamma
   - scikit-sparse
-  - equinox
-  - jax
   - pip
   - pip:
     - sparsax
     - pgjax
+    - blackjax
+    - nutpie
+    - numpyro
+    - equinox
+    - jax
 
   # docs
   - numpydoc

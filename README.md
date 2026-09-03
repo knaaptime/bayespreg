@@ -1,21 +1,59 @@
-# bayespecon
+# neighbayes
 
-[![Continuous Integration](https://github.com/knaaptime/bayespecon/actions/workflows/unittests.yml/badge.svg)](https://github.com/knaaptime/bayespecon/actions/workflows/unittests.yml)
-[![codecov](https://codecov.io/gh/knaaptime/bayespecon/branch/main/graph/badge.svg?token=XO4SilfBEb)](https://codecov.io/gh/knaaptime/bayespecon)
+[![Continuous Integration](https://github.com/knaaptime/neighbayes/actions/workflows/unittests.yml/badge.svg)](https://github.com/knaaptime/neighbayes/actions/workflows/unittests.yml)
+[![codecov](https://codecov.io/gh/knaaptime/neighbayes/branch/main/graph/badge.svg?token=XO4SilfBEb)](https://codecov.io/gh/knaaptime/neighbayes)
 
+`neighbayes` is a Python package for Bayesian estimation of spatial econometric models. Every model is a class, and specified with a Wilkinson formula via
+[`formulaic`](https://matthew.wardrop.casa/formulaic/latest/) and a PySAL
+[`Graph`](https://pysal.org/libpysal/stable/generated/libpysal.graph.Graph.html)
+(or any `scipy.sparse` matrix) for the spatial weights $W$; `fit()` returns an
+`arviz.InferenceData`, so the standard posterior tooling (`az.plot_trace`,
+`az.compare`, `az.loo`) works without translation (though exercise caution as WAIC/LOO diagnostics aren't valid for spatial models).
 
-**Bayesian Spatial Econometric Models**
+```python
+import libpysal
+from neighbayes.dgp import simulate_sar
+from neighbayes.models import OLS, SAR
 
-The `bayespecon` package is designed to make it simpler to fit, diagnose, and interpret Bayesian spatial econometric regression models. It provides a suite of classes for building commmonly-used models using a straightforward API. Each model is implemented as a class that defines how spatial effects are represented, and the 'main' portion of the model specification is given using the familiar Wilkinson format via [`formulaic`](https://matthew.wardrop.casa/formulaic/latest/) (but you can pass design matrices if you prefer).
+gdf = simulate_sar(n=400, beta=[1, 0.4, 2.5], rho=0.6, create_gdf=True)
+G = libpysal.graph.Graph.build_contiguity(gdf).transform("r")
+form = "y ~ -1 + X_0 + X_1 + X_2"
 
-Each model class uses PySAL [`graph`](https://pysal.org/libpysal/stable/generated/libpysal.graph.Graph.html#libpysal.graph.Graph) objects to represent spatial weights, $W$, (or sparse matrices if you prefer) providing thorough integration with the scientific Python and spatial analysis ecosystems. Estimation is handled by a custom Gibbs sampler tuned for spatial models, or passed to [`pymc`](https://www.pymc.io/welcome.html) to sample with NUTS instead.
+# start with a baseline OLS and test the residuals for spatial dependence
+ols = OLS(formula=form, W=G, data=gdf)
+ols.fit()
+print(ols.spatial_diagnostics_decision(format="ascii"))
 
+# the diagnostics point to SAR here, so fit it and decompose the spillovers
+sar = SAR(formula=form, W=G, data=gdf)
+sar.fit(draws=2000, chains=4, random_seed=42)
+sar.summary()
+sar.spatial_effects()
+```
 
-**Main Features**:
+`neighbayes` provides roughly fifty model classes behind one formula interface, each
+with a matching simulator in `neighbayes.dgp`. Every fit comes with Bayesian LM
+diagnostics (with a decision tree for specification search) and posterior decompositions
+of direct, indirect, and total effects. Every model (almost) has a custom Gibbs sampler
+for [better mixing](https://onlinelibrary.wiley.com/doi/abs/10.1111/gean.12135) (with both numby and jax implementations), but can fall back to PyMC if requested.
 
-- Wide variety of spatial econometric models using Wilkinson formulas and PySAL `Graph` objects
-- [Bayesian spatial diagnostics](https://www.sciencedirect.com/science/article/abs/pii/S0304407620303018)
-- Marginal (direct and indirect) effects for models with spatial terms
-- Fast [log-determinant functions]() for evaluating spatial terms
-- Custom Gibbs sampler & PyMC/NUTS alternative
-- Generate synthetic datasets using a known data-generating process for each model
+## Installation
+
+```bash
+conda install -c conda-forge neighbayes   # or: pip install neighbayes
+```
+
+Requires Python 3.12+. The [installation guide](https://pysal.org/neighbayes/installation.html)
+covers development installs and the optional JAX backend.
+
+## Documentation
+
+Model-by-model user guides, the diagnostics battery, effects interpretation, and the
+API reference are at [pysal.org/neighbayes](https://pysal.org/neighbayes).
+
+## LLM Use
+
+`neighbayes` has been developed using assistance from Language Models, both
+open source and closed. All code is human-reviewed before integration into the codebase.
+Every model includes thorough parameter recovery tests, and samplers have been validated
+against maximum likelihood estimators as well as published results (see docs).

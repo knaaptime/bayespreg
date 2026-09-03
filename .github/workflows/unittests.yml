@@ -75,12 +75,12 @@ jobs:
 
       - name: run tests
         run: |
-          pytest bayespecon -m '' \
+          pytest neighbayes -m '' \
           -v \
           -r a \
           -n auto \
           --color yes \
-          --cov bayespecon \
+          --cov neighbayes \
           --cov-append \
           --cov-report term-missing \
           --cov-report=xml .

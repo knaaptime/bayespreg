@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 
 [project]
-name = "bayespecon"
+name = "neighbayes"
 dynamic = ["version"]
 description = "Bayesian spatial econometric regression models in Python"
 readme = "README.md"
@@ -30,13 +30,13 @@ backend = ['dm-tree', 'blackjax', 'numpyro', 'nutpie', 'equinox', 'sparsax', 'pg
 cv = ["spml"]
 
 [tool.setuptools.packages.find]
-include = ["bayespecon", "bayespecon.*"]
+include = ["neighbayes", "neighbayes.*"]
 
 [tool.setuptools.package-data]
-bayespecon = ["py.typed", "*.pyi", "**/*.pyi"]
+neighbayes = ["py.typed", "*.pyi", "**/*.pyi"]
 
 [tool.pytest.ini_options]
-testpaths = ["bayespecon/tests"]
+testpaths = ["neighbayes/tests"]
 addopts = "-m 'not slow'"   # run fast tests by default; use -m slow or -m '' to include all
 markers = [
     "slow: marks tests as slow (MCMC parameter recovery — deselected by default)",
@@ -45,15 +45,15 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["bayespecon"]
+source = ["neighbayes"]
 omit = [
-    "bayespecon/tests/*",
+    "neighbayes/tests/*",
     "*/tests/*",
 ]
 
 [tool.coverage.report]
 omit = [
-    "bayespecon/tests/*",
+    "neighbayes/tests/*",
     "*/tests/*",
 ]
 
@@ -63,7 +63,7 @@ target-version = "py312"
 extend-exclude = [
     "docs/build",
     "reference",
-    "bayespecon.egg-info",
+    "neighbayes.egg-info",
 ]
 
 [tool.ruff.lint]
@@ -79,7 +79,7 @@ extend-select = ["I"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "__init__.pyi" = ["F401", "F403"]
-"bayespecon/tests/*" = ["F401", "F811", "F841"]
+"neighbayes/tests/*" = ["F401", "F811", "F841"]
 
 [tool.ruff.format]
 docstring-code-format = false
