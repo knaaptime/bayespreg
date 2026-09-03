@@ -1,4 +1,4 @@
-name: bayespecon
+name: neighbayes
 channels:
   - conda-forge
 dependencies:
