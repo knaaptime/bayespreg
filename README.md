@@ -51,9 +51,7 @@ covers development installs and the optional JAX backend.
 Model-by-model user guides, the diagnostics battery, effects interpretation, and the
 API reference are at [pysal.org/neighbayes](https://pysal.org/neighbayes).
 
-## LLM Use
+## Validation
 
-`neighbayes` has been developed using assistance from Language Models, both
-open source and closed. All code is human-reviewed before integration into the codebase.
 Every model includes thorough parameter recovery tests, and samplers have been validated
 against maximum likelihood estimators as well as published results (see docs).

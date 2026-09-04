@@ -1531,44 +1531,6 @@ def jax_chebyshev_sample(
     return SpatialNormalDraw(x=np.asarray(x), factor=None)
 
 
-def _jax_chebyshev_coeffs_inv_sqrt(
-    lambda_min: float,
-    lambda_max: float,
-    degree: int,
-) -> "jnp.ndarray":  # noqa: F821
-    """Compute Chebyshev coefficients for f(x) = x^{-1/2} on [a, b].
-
-    JAX-compatible version of :func:`_chebyshev_coeffs_inv_sqrt`.
-    Returns a jax.numpy array instead of a numpy array.
-    """
-    _check_jax_available()
-    import jax.numpy as jnp
-
-    if lambda_min <= 0:
-        raise ValueError(
-            f"lambda_min must be positive for x^{{-1/2}}, got {lambda_min}"
-        )
-
-    m = degree + 1
-    k = jnp.arange(1, m + 1)
-    nodes = jnp.cos((2 * k - 1) * jnp.pi / (2 * m))
-
-    mid = 0.5 * (lambda_min + lambda_max)
-    half_range = 0.5 * (lambda_max - lambda_min)
-    lam_nodes = mid + half_range * nodes
-
-    f_vals = lam_nodes ** (-0.5)
-
-    coeffs = jnp.zeros(m)
-    for j in range(m):
-        scale = 2.0 / m if j > 0 else 1.0 / m
-        coeffs = coeffs.at[j].set(
-            scale * jnp.sum(f_vals * jnp.cos(j * (2 * k - 1) * jnp.pi / (2 * m)))
-        )
-
-    return coeffs
-
-
 def jax_build_P_dense(
     rho: float,
     sigma2: float,
@@ -1612,13 +1574,6 @@ def jax_build_P_dense(
         + rho**2 * WtW_dense * inv_s2
     )
     return P
-
-
-def _jax_logdet_W(rho, W_eigs):
-    """Compute log|I - rho*W| from eigenvalues (JAX-compatible)."""
-    import jax.numpy as jnp
-
-    return jnp.sum(jnp.log(jnp.abs(1.0 - rho * W_eigs)))
 
 
 def _jax_log_density_core(

@@ -412,21 +412,17 @@ def _make_gibbs_step_with_data(
 
 
 def _logit_loglik_pointwise_jax(y, eta):
-    """Compute pointwise logit log-likelihood (numpy, for storage).
+    """Pointwise logit log-likelihood for storage (host-side, returns NumPy).
 
-    Uses the numerically stable log-sum-exp trick.
+    Delegates to the single NumPy source in :mod:`..logit._core`: this runs
+    off-device on already-materialized draws, so there is nothing for JAX to
+    do here and no reason to keep a second copy of the formula.
     """
-    import jax.numpy as jnp
+    from ._core import _logit_loglik_pointwise
 
-    y_jax = jnp.asarray(y, dtype=jnp.float64)
-    eta_jax = jnp.asarray(eta, dtype=jnp.float64)
-    # log p(y|η) = y*η - max(η, 0) - log(1 + exp(-|η|))
-    result = (
-        y_jax * eta_jax
-        - jnp.maximum(eta_jax, 0)
-        - jnp.log1p(jnp.exp(-jnp.abs(eta_jax)))
+    return _logit_loglik_pointwise(
+        np.asarray(y, dtype=np.float64), np.asarray(eta, dtype=np.float64)
     )
-    return np.asarray(result)
 
 
 def run_chain_jax(
@@ -1069,10 +1065,15 @@ def run_chain_jax_sem(
 
 
 def _logit_loglik_pointwise_jax_op(y_jax, eta):
-    """Pointwise logit log-likelihood as a pure-JAX op (vmap-safe)."""
+    """Pointwise logit log-likelihood as a pure-JAX op (vmap-safe).
+
+    The one copy of this formula that must stay JAX-native: it runs inside
+    the jitted, vmapped Gibbs step.  Keep it equal to
+    :func:`..logit._core._logit_loglik_pointwise`.
+    """
     import jax.numpy as jnp
 
-    return y_jax * eta - jnp.maximum(eta, 0) - jnp.log1p(jnp.exp(-jnp.abs(eta)))
+    return y_jax * eta - jnp.logaddexp(0.0, eta)
 
 
 def _run_chain_logit_warmup(gibbs_step, init_state, key, n_iters, slice_width):

@@ -582,8 +582,14 @@ class TestMaybeSubtractAlpha:
 
 
 class TestFlowScoreInfo:
-    """Smoke-test that _flow_score_info returns symmetric, positive-definite J
-    of the right shape for a SARFlow null."""
+    """``_flow_score_info`` returns a symmetric, positive-definite J of the
+    right shape for a SARFlow null.
+
+    These used to wrap their setup in ``except Exception: pytest.skip(...)``.
+    Nothing here is an optional dependency — ``flow_trace_blocks`` and the
+    model builder are both in-package — so a break in either would have
+    silently removed the tests from the suite instead of failing it.
+    """
 
     def _make_flow_model(self, N=4, k=1, draws=2, seed=0):
         from neighbayes.graph import flow_trace_blocks
@@ -598,10 +604,7 @@ class TestFlowScoreInfo:
         X = np.column_stack([np.ones(n), rng.normal(size=n)])
         beta = rng.normal(size=X.shape[1])
         y = X @ beta + rng.normal(scale=0.5, size=n)
-        try:
-            T_flow = flow_trace_blocks(Wn_sp)
-        except Exception as exc:  # pragma: no cover - defensive
-            pytest.skip(f"flow_trace_blocks unavailable: {exc}")
+        T_flow = flow_trace_blocks(Wn_sp)
 
         model = MagicMock()
         model._y = y
@@ -615,10 +618,7 @@ class TestFlowScoreInfo:
         return model
 
     def test_J_symmetric_pd_shape_for_full_block(self):
-        try:
-            model = self._make_flow_model()
-        except Exception as exc:  # pragma: no cover - dependency on graph helpers
-            pytest.skip(f"flow helper unavailable: {exc}")
+        model = self._make_flow_model()
 
         G, J = _flow_score_info(model, restrict_keys=("d", "o", "w"))
         assert G.shape[1] == 3
@@ -628,10 +628,7 @@ class TestFlowScoreInfo:
         assert np.all(eigs > -1e-8)
 
     def test_J_marginal_block_is_positive(self):
-        try:
-            model = self._make_flow_model()
-        except Exception as exc:  # pragma: no cover
-            pytest.skip(f"flow helper unavailable: {exc}")
+        model = self._make_flow_model()
 
         for key in ("d", "o", "w"):
             G, J = _flow_score_info(model, restrict_keys=(key,))

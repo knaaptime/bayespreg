@@ -1,13 +1,30 @@
+# Oldest supported environment.
+#
+# This file exists to make the lower bounds in pyproject.toml real: an
+# untested floor is not a floor.  Pins here must track the ``dependencies``
+# there — if you raise one, raise the other.
+#
+# It previously pinned only ``python=3.12`` and listed ``arviz`` twice (once
+# capped, once free), so it tested "3.12 plus latest everything" and no
+# minimum was ever exercised.
 name: test
 channels:
   - conda-forge
 dependencies:
   - python=3.12
-  - libpysal
-  - arviz < 1
-  - formulaic
-  - pymc
-  - arviz
+  # runtime floors — keep in sync with pyproject.toml
+  - pymc=5.16
+  - arviz=0.18
+  - libpysal=4.9
+  - formulaic=1.0
+  - lazy_loader=0.4
+  - numpy=1.26
+  - scipy=1.11
+  - pandas=2.1
+  - polyagamma=2.0
+  - scikit-sparse=0.5
+  # test-only and optional extras float: this job pins the runtime floor,
+  # not the developer toolchain
   - spreg
   - statsmodels
   - geopandas
@@ -19,14 +36,11 @@ dependencies:
   - pytest-mpl
   - pytest-xdist
   - openpyxl
-  - lazy_loader
   - fastprogress
   - nutpie
-  - polyagamma
-  - scikit-sparse
   - pip
   - pip:
-    - jax # force from pip to allow windows 
+    - jax # force from pip to allow windows
     - pgjax
     - blackjax
     - numpyro

@@ -380,6 +380,19 @@ def test_sar_logit_backend_mixing(sar_logit_data, backend):
 # Cross-backend *agreement* — the two backends against each other
 # ======================================================================
 #
+# Tolerances below are calibrated, not guessed.  Measured inter-backend
+# difference in posterior means over these same fixtures (2 chains x 1000
+# draws, n = 900/1024):
+#
+#     SARLogit             rho 0.0006   beta 0.0060
+#     SARLogitStructural   rho 0.0007   beta 0.0098
+#     SEMLogit             lam 0.0161   beta 0.0064
+#     SARNegBin            rho 0.0020   beta 0.0029   alpha 0.0054
+#     SARNegBinStructural  rho 0.0013   beta 0.0018   alpha 0.0038
+#
+# The tolerances sit ~3-30x above that noise and one to two orders of
+# magnitude below the bugs this class of test exists to catch.
+#
 # The recovery tests above check each backend against truth with tolerances
 # wide enough to absorb NB dispersion attenuation (TOL_ALPHA_ZINB = 1.5).
 # That is the right tolerance for a recovery check and the wrong one for
@@ -460,3 +473,135 @@ def test_sar_zinb_backends_agree(sar_zinb_small_data):
             f"ZINB backends disagree on {name}: numpy={np.round(a, 3)} "
             f"jax={np.round(b, 3)} (atol={tol})"
         )
+
+
+def _assert_backends_agree(posteriors, tols, label):
+    """Assert two backends' posterior means match, parameter by parameter."""
+    a_post, b_post = posteriors["numpy"], posteriors["jax"]
+    for name, tol in tols.items():
+        a = np.atleast_1d(a_post[name].mean(("chain", "draw")).values)
+        b = np.atleast_1d(b_post[name].mean(("chain", "draw")).values)
+        assert np.allclose(a, b, atol=tol), (
+            f"{label} backends disagree on {name}: "
+            f"numpy={np.round(a, 4)} jax={np.round(b, 4)} (atol={tol})"
+        )
+
+
+# (model name, fixture, builder, tolerances)
+_AGREEMENT_CASES = [
+    ("SARLogit", "sar_logit_data", {"rho": 0.05, "beta": 0.05}),
+    ("SARLogitStructural", "sar_logit_struct_data", {"rho": 0.05, "beta": 0.05}),
+    ("SEMLogit", "sem_logit_data", {"lam": 0.06, "beta": 0.05}),
+    ("SARNegBin", "sar_negbin_data", {"rho": 0.05, "beta": 0.05, "alpha": 0.15}),
+    (
+        "SARNegBinStructural",
+        "sar_negbin_struct_data",
+        {"rho": 0.05, "beta": 0.05, "alpha": 0.15},
+    ),
+]
+
+
+@pytest.mark.parametrize("model_name,fixture_name,tols", _AGREEMENT_CASES)
+def test_backends_agree(request, model_name, fixture_name, tols):
+    """Every dual-backend family must sample the *same* posterior.
+
+    The recovery tests above compare each backend to truth, at tolerances
+    wide enough to absorb real statistical attenuation.  Only a
+    backend-vs-backend comparison can be tight enough to catch a backend
+    that has drifted onto a different target.
+    """
+    import neighbayes.models as models
+
+    data = request.getfixturevalue(fixture_name)
+    cls = getattr(models, model_name)
+
+    if isinstance(data, tuple):  # logit fixtures: (y, X, W)
+        y, X, W = data
+        kwargs = dict(y=y, X=X, W=W)
+    else:  # NB fixtures: dgp dict on the NB grid
+        W = W_to_graph(make_rook_W(SIDE_NB))
+        kwargs = dict(y=data["y"], X=data["X"], W=W)
+
+    posteriors = {
+        b: cls(**kwargs).fit(gibbs_backend=b, **_fit_kwargs(b)).posterior
+        for b in BACKENDS
+    }
+    _assert_backends_agree(posteriors, tols, model_name)
+
+
+# ----------------------------------------------------------------------
+# Separable NB flow
+# ----------------------------------------------------------------------
+#
+# This one is not decoration.  Until 2026-09-03 the JAX flow backend was
+# simply wrong: ``_kron_solve_jax`` returned ``vec(Hᵀ)`` and both Kronecker
+# matvecs applied a stray transpose, so the sampler fit a permuted system
+# and reported rho_d = -0.21 against a true +0.35 with R-hat = 1.00 —
+# converged, and wrong.  The operators are pinned directly in
+# ``test_kron_krylov_matvec.py``; this test is the end-to-end backstop, and
+# the only recovery coverage the flow JAX path has.
+
+
+@pytest.fixture(scope="module")
+def nb_flow_sep_data():
+    """Separable NB flow counts on a 20x20 origin-destination grid (N=400)."""
+    from neighbayes.dgp.flows import generate_negbin_flow_data_separable
+
+    return generate_negbin_flow_data_separable(
+        n=20, rho_d=0.35, rho_o=0.25, alpha=2.0, seed=7
+    )
+
+
+def test_nb_flow_separable_backends_agree(nb_flow_sep_data):
+    """Both separable-flow backends must sample the same posterior."""
+    from neighbayes.models.flow import SARNegBinFlowSeparable
+
+    d = nb_flow_sep_data
+    posteriors = {}
+    for backend in BACKENDS:
+        model = SARNegBinFlowSeparable(
+            d["y_vec"], d["X"], d["G"], col_names=d["col_names"]
+        )
+        posteriors[backend] = model.fit(
+            draws=DRAWS,
+            tune=TUNE // 2,
+            chains=CHAINS,
+            random_seed=11,
+            gibbs_backend=backend,
+            progressbar=False,
+        ).posterior
+
+    _assert_backends_agree(
+        posteriors,
+        {"rho_d": 0.08, "rho_o": 0.08, "alpha": 0.30},
+        "SARNegBinFlowSeparable",
+    )
+
+
+def test_nb_flow_separable_jax_recovers_and_mixes(nb_flow_sep_data):
+    """The JAX flow backend must recover rho and actually mix.
+
+    The pre-fix sampler produced ESS in the single digits with sign-flipped
+    rho; both halves of that failure are pinned here.
+    """
+    import arviz as az
+
+    from neighbayes.models.flow import SARNegBinFlowSeparable
+
+    d = nb_flow_sep_data
+    idata = SARNegBinFlowSeparable(
+        d["y_vec"], d["X"], d["G"], col_names=d["col_names"]
+    ).fit(
+        draws=DRAWS,
+        tune=TUNE // 2,
+        chains=CHAINS,
+        random_seed=11,
+        gibbs_backend="jax",
+        progressbar=False,
+    )
+
+    for name, truth in (("rho_d", 0.35), ("rho_o", 0.25)):
+        hat = float(idata.posterior[name].mean())
+        assert abs(hat - truth) < 0.20, f"flow[jax] {name}: {hat:.3f} vs {truth}"
+        ess = float(az.ess(idata, var_names=[name])[name])
+        assert ess > 100, f"flow[jax] {name} ESS={ess:.0f} too low (sampler stuck?)"

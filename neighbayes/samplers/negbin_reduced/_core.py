@@ -398,18 +398,6 @@ def _make_cholmod_pattern(
     return W_sym, WtW, pattern
 
 
-def _build_A_rho(rho: float, W_csc: sp.csc_matrix, n: int) -> sp.csr_matrix:
-    """Build the sparse matrix A_ρ = I − ρW in CSR format.
-
-    CSR format is preferred for the matvec operations inside
-    :func:`scipy.sparse.linalg.cg` — the C-level sparse matvec
-    avoids the Python callback overhead of :class:`LinearOperator`,
-    making CG competitive with CHOLMOD for n ≤ 2500 and strictly
-    faster for n ≥ 2500.
-    """
-    return (sp.eye(n, format="csc") - rho * W_csc).tocsr()
-
-
 def _make_solver(
     rho: float,
     W_csc: sp.csc_matrix,
@@ -738,23 +726,6 @@ class ReducedGibbsCache(NamedTuple):
 
 
 # ``_factor_A`` is defined above (alongside the CHOLMOD solver).
-
-
-def _compute_eta(
-    rho: float,
-    Xbeta: np.ndarray,
-    W_csc: sp.csc_matrix,
-    n: int,
-    cholmod_solver: _CholmodNormalEqSolver | None = None,
-) -> tuple[np.ndarray, _CholmodNormalEqSolver | spla.SuperLU]:
-    """Return :math:`\\eta = (I - \\rho W)^{-1} X\\beta` and the solver.
-
-    The solver is returned so callers can reuse it (e.g. to compute
-    :math:`\\tilde X = A^{-1} X` without re-factorizing).
-    """
-    solver = _make_solver(rho, W_csc, n, cholmod_solver=cholmod_solver)
-    eta = solver.solve(Xbeta)
-    return eta
 
 
 # ---------------------------------------------------------------------------

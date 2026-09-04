@@ -663,23 +663,66 @@ def _kron_solve_jax(solve_Ld, solve_Lo, B, n):
 
     Uses the vec-permutation identity:
     ``(L_o ⊗ L_d) vec(H) = vec(L_d H L_o^T)``.
-    """
 
+    Every reshape here is Fortran-order and every axis permutation matters.
+    This is a verbatim port of the NumPy reference and is pinned against a
+    dense ``inv(L_o ⊗ L_d)``.  Two earlier deviations from it — a C-order
+    ``reshape(n, k, n)`` and a missing ``transpose(1, 0, 2)`` before the
+    final flatten — made this return ``vec(Hᵀ)`` rather than ``vec(H)``,
+    silently fitting a permuted system.
+    """
     k = B.shape[1]
     # R = B reshaped as (n, n*k) column-major (Fortran order)
     R = B.reshape(n, n * k, order="F")
     # Step 1: L_d^{-1} R  →  (n, n*k)
     Hp = solve_Ld(R)
-    # Reshape to (n, n, k) Fortran, transpose to (k, n, n), flatten to (k*n, n)
+    # (n, n, k) Fortran → (k, n, n) → (k*n, n) → transpose to the (n, k*n) RHS.
     Hp3 = Hp.reshape(n, n, k, order="F")
-    RHS2 = Hp3.transpose(2, 0, 1).reshape(k * n, n)
-    # Step 2: L_o^{-1} RHS2^T  →  solve L_o Z = RHS2^T  (but we need Z^T)
-    # Actually: we solve L_o * Z = (RHS2)^T, so Z = L_o^{-1} * RHS2^T
-    # RHS2 is (k*n, n), so RHS2.T is (n, k*n)
-    Z_h = solve_Lo(RHS2.T)  # (n, k*n)
-    # Reshape back: Z_h is (n, k*n) → (n, k, n) → transpose → (n, n, k)
-    Z3 = Z_h.reshape(n, k, n).transpose(0, 2, 1)
-    return Z3.reshape(n * n, k, order="F")
+    RHS2 = Hp3.transpose(2, 0, 1).reshape(k * n, n).T  # (n, k*n)
+    # Step 2: solve L_o Z = RHS2.
+    Z_h = solve_Lo(RHS2)  # (n, k*n)
+    # Back to (n, n, k) Fortran, then swap the two n axes before flattening.
+    Z3 = Z_h.reshape(n, n, k, order="F")
+    return Z3.transpose(1, 0, 2).reshape(n * n, k, order="F")
+
+
+# Axis 0 of the (n, n, k) Fortran view is the *destination* index and axis 1
+# the *origin* index, so with ``(B ⊗ A) vec(H) = vec(A H Bᵀ)`` the left factor
+# acts on axis 0 and the right factor on axis 1.
+#
+# These two operators have been wrong twice.  They are pinned end-to-end
+# against a dense perturbed solve by ``test_kron_krylov_series_matches_dense``
+# — an earlier version applied ``Wᵀ`` where ``W`` belongs and put ``L_d`` on
+# the wrong axis, computing ``(L_oᵀ ⊗ W)`` and ``(L_d ⊗ Wᵀ)``.  A wrong matvec
+# does not raise; it silently distorts the ρ conditional.  **Do not adjust
+# these by reasoning — change them only against that test.**
+
+
+def kron_matvec_d_jax(W_bcoo, rho_o, v, n, k):
+    """``(L_o ⊗ W) v = vec(W H L_oᵀ)`` where ``v = vec(H)``, ``L_o = I − ρ_o W``."""
+    N = n * n
+    v3 = v.reshape(n, n, k, order="F")
+    # W on axis 0 (destination): W H
+    Wv3 = (W_bcoo @ v3.reshape(n, -1, order="F")).reshape(n, n, k, order="F")
+    # L_oᵀ on axis 1 (origin): right-multiplication by L_oᵀ is, on the
+    # axis-swapped view, left-multiplication by L_o = I − ρ_o W.
+    T = Wv3.transpose(1, 0, 2).reshape(n, -1, order="F")
+    out = T - rho_o * (W_bcoo @ T)
+    return out.reshape(n, n, k, order="F").transpose(1, 0, 2).reshape(N, k, order="F")
+
+
+def kron_matvec_o_jax(W_bcoo, rho_d, v, n, k):
+    """``(W ⊗ L_d) v = vec(L_d H Wᵀ)`` where ``v = vec(H)``, ``L_d = I − ρ_d W``."""
+    N = n * n
+    v3 = v.reshape(n, n, k, order="F")
+    # L_d on axis 0 (destination): L_d H
+    flat = v3.reshape(n, -1, order="F")
+    Ldv3 = (flat - rho_d * (W_bcoo @ flat)).reshape(n, n, k, order="F")
+    # Wᵀ on axis 1 (origin): right-multiplication by Wᵀ is, on the
+    # axis-swapped view, left-multiplication by W.
+    T = Ldv3.transpose(1, 0, 2).reshape(n, -1, order="F")
+    out = W_bcoo @ T
+    return out.reshape(n, n, k, order="F").transpose(1, 0, 2).reshape(N, k, order="F")
 
 
 def _make_flow_sep_gibbs_step(
@@ -726,9 +769,9 @@ def _make_flow_sep_gibbs_step(
     solve_Ld = _build_sar_solver_jax(W_csc, n)
     solve_Lo = _build_sar_solver_jax(W_csc, n)
 
-    # BCOO W and W^T for Kronecker matvecs
+    # BCOO W for the Kronecker matvecs (Wᵀ is not needed: both directions
+    # reduce to left-multiplication by W on an axis-swapped view).
     W_bcoo = jsparse.BCOO.from_scipy_sparse(W_csc.tocsr())
-    WT_bcoo = jsparse.BCOO.from_scipy_sparse(W_csc.T.tocsr())
 
     # Priors
     beta_sigma = priors.beta_sigma
@@ -790,40 +833,10 @@ def _make_flow_sep_gibbs_step(
         V0 = _kron_solve_rhs(X_jax)
 
         def _matvec_d(v):
-            """(L_o ⊗ W) v = vec(W H L_o^T) where v = vec(H)."""
-            v3 = v.reshape(n, n, k, order="F")
-            # W @ v3 on axis 0
-            Wv = W_bcoo @ v3.reshape(n, -1, order="F")
-            Wv3 = Wv.reshape(n, n, k, order="F")
-            # L_o^T @ Wv3 on axis 1
-            solve_Lo.__wrapped__(
-                ro, Wv3.transpose(1, 0, 2).reshape(n, -1, order="F")
-            ) if hasattr(solve_Lo, "__wrapped__") else None
-            # Can't use solve for matvec — need actual matvec, not solve.
-            # L_o^T @ M: we need to compute L_o^T times the matrix.
-            # sparsax only does solves, not matvecs. Use BCOO for L_o.
-            # Build L_o as dense-ish? No — use the COO values directly.
-            # Actually, we can compute L_o @ M by constructing it from
-            # the pattern: L_o = I - ρ_o W, so L_o @ M = M - ρ_o (W @ M).
-            # And L_o^T @ M = M - ρ_o (W^T @ M).
-            WT_Wv = WT_bcoo @ Wv3.transpose(1, 0, 2).reshape(n, -1, order="F")
-            LoT_Wv = Wv3.transpose(1, 0, 2).reshape(n, -1, order="F") - ro * WT_Wv
-            result = LoT_Wv.reshape(n, n, k, order="F").transpose(1, 0, 2)
-            return result.reshape(N, k, order="F")
+            return kron_matvec_d_jax(W_bcoo, ro, v, n, k)
 
         def _matvec_o(v):
-            """(W ⊗ L_d) v = vec(L_d H W^T) where v = vec(H)."""
-            v3 = v.reshape(n, n, k, order="F")
-            # L_d @ v3 on axis 1: L_d = I - ρ_d W, so L_d @ M = M - ρ_d (W @ M)
-            # v3 is (n, n, k), axis 1 is the second n.
-            v3_T = v3.transpose(1, 0, 2).reshape(n, -1, order="F")  # (n, n*k)
-            W_v3T = W_bcoo @ v3_T
-            Ld_v3T = v3_T - rd * W_v3T  # L_d @ v3_T
-            Ld_v3 = Ld_v3T.reshape(n, n, k, order="F").transpose(1, 0, 2)
-            # W^T @ Ld_v3 on axis 0
-            WT_Ld = WT_bcoo @ Ld_v3.reshape(n, -1, order="F")
-            result = WT_Ld.reshape(n, n, k, order="F")
-            return result.reshape(N, k, order="F")
+            return kron_matvec_o_jax(W_bcoo, rd, v, n, k)
 
         matvec_fn = _matvec_d if direction == "rho_d" else _matvec_o
 

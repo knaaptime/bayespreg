@@ -16,7 +16,6 @@ Import a model class from the ``models`` submodule::
         from neighbayes.models import SAR
 """
 
-import contextlib
 import os as _os
 import sys as _sys
 from importlib.metadata import PackageNotFoundError, version
@@ -51,5 +50,7 @@ import lazy_loader as _lazy
 
 __getattr__, __dir__, __all__ = _lazy.attach_stub(__name__, __file__)
 
-with contextlib.suppress(PackageNotFoundError):
+try:
     __version__ = version("neighbayes")
+except PackageNotFoundError:  # running from a source tree with no metadata
+    __version__ = "unknown"

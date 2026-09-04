@@ -375,13 +375,14 @@ def run_chains_jax_reduced_logit(
     eta_all = np.asarray(eta_all)
 
     # Pointwise Bernoulli-logit log-likelihood from the fitted η (no post-hoc solves).
+    from ._core import _logit_loglik_pointwise
+
     sl = slice(None, None, thin) if thin > 1 else slice(None)
     y_np = np.asarray(y, dtype=np.float64)
     results = []
     for c in range(chains):
         eta_c = eta_all[c, sl]  # (n_keep, n)
-        # log p(y|η) = yη − softplus(η), softplus stable via logaddexp.
-        log_lik = y_np * eta_c - np.logaddexp(0.0, eta_c)
+        log_lik = _logit_loglik_pointwise(y_np, eta_c)
         results.append(
             {
                 "rho": rho_all[c, sl],
