@@ -621,39 +621,6 @@ def _trace_WtW_WW(W_sparse) -> float:
     return float(W_sparse.power(2).sum() + W_sparse.multiply(W_sparse.T).sum())
 
 
-def _mx_project(X: np.ndarray, v: np.ndarray) -> np.ndarray:
-    r"""Return :math:`M_X v = v - X(X^\top X)^{-1} X^\top v`.
-
-    The OLS annihilator applied to a vector (or batch of vectors).
-    Complements :func:`_mx_quadratic` (which returns the scalar quadratic
-    form) and :func:`_mx_cross` (which returns a cross product) by
-    returning the *projected vector* itself — needed when the projected
-    residuals enter a score calculation.
-
-    Parameters
-    ----------
-    X : np.ndarray, shape (n, k)
-        Design matrix.
-    v : np.ndarray, shape (n,) or (draws, n)
-        Vector(s) to project.
-
-    Returns
-    -------
-    np.ndarray
-        :math:`M_X v` with the same shape as *v*.
-    """
-    XtX = X.T @ X
-    if v.ndim == 1:
-        Xv = X.T @ v
-        sol, *_ = np.linalg.lstsq(XtX, Xv, rcond=None)
-        return v - X @ sol
-    else:
-        # (draws, n) → project each draw
-        Xv = v @ X  # (draws, k)
-        sol, *_ = np.linalg.lstsq(XtX, Xv.T, rcond=None)  # (k, draws)
-        return v - (X @ sol).T
-
-
 def _resolve_lam_name(idata) -> str:
     """Return the posterior variable name for the SEM/SDEM spatial parameter.
 

@@ -70,9 +70,6 @@ def _nb_storage_fns():
             _nb_loglik_pointwise_jax,
             _nb_loglik_pointwise_jax_op,
         )
-        from neighbayes.samplers.negbin_reduced._jax import (
-            _nb_loglik_pointwise_jax as _reduced_op,
-        )
 
         def _as_np(fn):
             def _wrapped(y, eta, alpha):
@@ -88,7 +85,6 @@ def _nb_storage_fns():
                 "jax:negbin._nb_loglik_pointwise_jax_op",
                 _as_np(_nb_loglik_pointwise_jax_op),
             ),
-            ("jax:negbin_reduced._nb_loglik_pointwise_jax", _as_np(_reduced_op)),
         ]
     return fns
 

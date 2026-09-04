@@ -655,11 +655,17 @@ def _logit_loglik_pointwise(
     -------
     log_lik : ndarray of shape (n,)
         Pointwise log-likelihood values.
+
+    Notes
+    -----
+    This is the single NumPy source for the Bernoulli-logit pointwise
+    log-likelihood; the reduced-form sampler imports it rather than
+    re-deriving it.  ``np.logaddexp(0, η)`` is the stable softplus — it is
+    exactly the ``max(η, 0) + log1p(exp(-|η|))`` form this used to spell
+    out by hand (agreeing to ~1e-15 and finite at |η| = 800), with less to
+    get wrong.
     """
-    # log p(y|η) = y*η - log(1 + exp(η))
-    # = y*η - max(η, 0) - log(1 + exp(-|η|))  [stable form]
-    log_lik = y * eta - np.maximum(eta, 0) - np.log1p(np.exp(-np.abs(eta)))
-    return log_lik
+    return y * eta - np.logaddexp(0.0, eta)
 
 
 # ---------------------------------------------------------------------------
